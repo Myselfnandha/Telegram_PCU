@@ -1,0 +1,51 @@
+# Telegram Web Uploader - Git Ignore Policy
+
+# Python Environments & Caches
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Sensitive Telegram Credentials & Sessions
+.env
+*.env
+!.env.example
+backend/.env
+backend/*.env
+!backend/.env.example
+backend/sessions/*.session
+backend/sessions/*.session-journal
+backend/sessions/*.session*
+*.session
+
+# Local Database & Storage
+backend/data/*.db
+backend/data/*.sqlite*
+backend/data/*.sqlite3
+backend/data/*.db-wal
+backend/data/*.db-shm
+*.db
+*.sqlite3
+
+# Temporary Buffers & Download Directories
+backend/temp_uploads/*
+!backend/temp_uploads/.gitkeep
+backend/downloads/*
+!backend/downloads/.gitkeep
+
+# Operating System & IDE Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

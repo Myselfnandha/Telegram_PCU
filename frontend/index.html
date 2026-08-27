@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telegram Web Uploader — Fast & Large File Transfers</title>
+  <meta name="description" content="Upload any size file (up to 2GB+ with auto-splitting) directly to your Telegram chats, channels, or Saved Messages via high-speed MTProto.">
+  <!-- Local Instant Socket.IO Client (Zero CDN Latency) -->
+  <script src="/js/socket.io.min.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Header -->
+    <header class="app-header glass-panel">
+      <div class="brand-section">
+        <div class="logo-badge">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/>
+          </svg>
+        </div>
+        <div class="brand-title">
+          <h1>Telegram Web Uploader</h1>
+        </div>
+      </div>
+
+      <div class="header-right-actions" style="display: flex; align-items: center; gap: 12px;">
+        <button class="btn-theme-customizer" id="btnThemeCustomizer" title="Customize Theme & Aesthetics" type="button">
+          🎨 Theme
+        </button>
+        <div class="auth-badge" id="authStatusBadge" title="Telegram MTProto Connection">
+          <span class="auth-status-dot"></span>
+          <span id="authUserName">Checking Connection...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main 2-Column Responsive Workspace Layout -->
+    <div class="workspace-layout" id="workspaceLayout">
+      
+      <!-- Left Column: Active Upload Queue -->
+      <div class="layout-left-column" id="layoutLeftColumn">
+        <!-- Active Upload Queue Section -->
+        <section class="glass-panel queue-panel" style="padding: 24px;">
+          <div class="section-header">
+            <div class="section-title">
+              <span>Active Upload Queue</span>
+              <span class="count-badge" id="queueCountBadge">0</span>
+            </div>
+            <div class="header-actions" style="display: flex; gap: 8px;">
+              <button class="btn-secondary" id="btnPauseResumeAllUploads" style="padding: 6px 12px; font-size: 0.8rem;" type="button">
+                ⏸️ Pause All
+              </button>
+              <button class="btn-secondary danger-hover" id="btnStopAllUploads" style="padding: 6px 12px; font-size: 0.8rem;" type="button">
+                ⏹️ Stop All
+              </button>
+            </div>
+          </div>
+
+          <div id="queueEmptyState" style="text-align: center; padding: 48px 16px; color: var(--text-muted);">
+            <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">📥</div>
+            <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Queue is Empty</p>
+            <p style="font-size: 0.85rem;">Select or drop files on the right to start uploading.</p>
+          </div>
+
+          <div class="queue-list" id="queueListContainer">
+            <!-- Rendered reactively via ui.js -->
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column: Destination Bar + Filter Tabs + Dropzone + Upload History -->
+      <div class="layout-right-column" id="layoutRightColumn">
+        
+        <!-- Destination Selector Bar -->
+        <div class="destination-bar glass-panel">
+          <div class="dest-info">
+            <div class="dest-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div class="dest-text">
+              <div class="label">Destination Telegram Chat</div>
+              <div class="target-name">
+                <span id="currentChatName">Saved Messages (Personal Cloud)</span>
+                <span class="chat-type-tag" id="currentChatType">CLOUD</span>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn-choose-chat" id="btnChooseChat" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            Change Destination
+          </button>
+        </div>
+
+        <!-- Upload Dropzone -->
+        <div class="dropzone-container glass-panel" id="dropzone">
+          <div class="dropzone-content">
+            <div class="dropzone-icon-wrapper">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </div>
+            <div class="dropzone-title">Drag & Drop files here</div>
+            <div class="dropzone-subtitle">
+              Supports any file format. Files over 1.9GB are automatically split into sequence parts.
+            </div>
+
+            <div class="dropzone-actions">
+              <button class="btn-primary" id="btnBrowseFiles" type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                Select Files
+              </button>
+              <button class="btn-secondary" id="btnBrowseFolder" type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                Select Folder
+              </button>
+            </div>
+          </div>
+
+          <!-- Hidden standard file inputs -->
+          <input type="file" id="fileInput" multiple style="display: none;">
+          <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+        </div>
+
+        <!-- Upload History Section -->
+        <section class="glass-panel history-container">
+          <div class="section-header">
+            <div class="section-title">
+              <span>Recent Upload History</span>
+            </div>
+            <button class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;" onclick="window._app.clearHistory()" type="button">
+              Clear History
+            </button>
+          </div>
+
+          <div class="history-list" id="historyListContainer">
+            <div class="history-empty">
+              <p>Loading history...</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Chat Selection Modal -->
+  <div class="modal-backdrop" id="chatModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; font-weight: 600;">Select Destination Chat</h3>
+        <button class="icon-btn" id="btnCloseChatModal" type="button">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-search">
+        <input type="text" class="modal-search-input" id="chatSearchInput" placeholder="Search chats, channels, groups by name or @username...">
+      </div>
+      <div class="modal-body" id="chatListContainer">
+        <!-- Injected via chat-picker.js -->
+      </div>
+      <div style="padding: 12px 24px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Saved Messages is always available</span>
+        <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._app.refreshChats()" type="button">
+          🔄 Refresh Dialogs
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Theme & Aesthetic Customizer Modal -->
+  <div class="theme-modal-backdrop" id="themeModalBackdrop">
+    <div class="theme-modal glass-panel">
+      <div class="theme-modal-header">
+        <div class="modal-title">🎨 Theme & Aesthetics</div>
+        <button class="close-btn" id="btnCloseThemeModal" type="button">&times;</button>
+      </div>
+      <div class="theme-modal-body">
+        <div class="theme-presets-grid">
+          <button class="preset-card active" data-theme="deep-space" type="button">
+            <div class="swatch" style="background: linear-gradient(135deg, #0f111a 0%, #6c5ce7 100%);"></div>
+            <span>Deep Space</span>
+          </button>
+          <button class="preset-card" data-theme="cyberpunk" type="button">
+            <div class="swatch" style="background: linear-gradient(135deg, #ff007f 0%, #00f0ff 100%);"></div>
+            <span>Cyberpunk</span>
+          </button>
+          <button class="preset-card" data-theme="nord" type="button">
+            <div class="swatch" style="background: linear-gradient(135deg, #242933 0%, #88c0d0 100%);"></div>
+            <span>Nord Frost</span>
+          </button>
+          <button class="preset-card" data-theme="oled" type="button">
+            <div class="swatch" style="background: linear-gradient(135deg, #000000 0%, #10b981 100%);"></div>
+            <span>Midnight OLED</span>
+          </button>
+          <button class="preset-card" data-theme="sunset" type="button">
+            <div class="swatch" style="background: linear-gradient(135deg, #140e1b 0%, #fd79a8 100%);"></div>
+            <span>Sunset Glow</span>
+          </button>
+        </div>
+
+        <div class="glass-slider-section">
+          <div class="slider-label-row">
+            <span>Glass Intensity / Blur</span>
+            <span id="glassIntensityValue" style="color: var(--accent-secondary); font-family: var(--font-mono);">16px</span>
+          </div>
+          <input type="range" class="glass-range-slider" id="glassIntensitySlider" min="0" max="32" value="16" step="2">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- App Bootstrap JS -->
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

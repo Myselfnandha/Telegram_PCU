@@ -1,0 +1,151 @@
+/**
+ * Theme & Aesthetic Engine.
+ * Manages color presets, glass intensity, and persistent localStorage state.
+ */
+
+const THEMES = {
+  'deep-space': {
+    '--bg-primary': '#0f111a',
+    '--bg-secondary': '#161926',
+    '--bg-card': 'rgba(26, 31, 46, 0.65)',
+    '--bg-card-hover': 'rgba(34, 40, 60, 0.85)',
+    '--accent-primary': '#6c5ce7',
+    '--accent-secondary': '#00cec9',
+    '--accent-gradient': 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)',
+    '--accent-gradient-hover': 'linear-gradient(135deg, #5b4cc4 0%, #8c82f8 100%)',
+    '--border-glass': 'rgba(255, 255, 255, 0.08)'
+  },
+  'cyberpunk': {
+    '--bg-primary': '#080811',
+    '--bg-secondary': '#121124',
+    '--bg-card': 'rgba(20, 16, 38, 0.75)',
+    '--bg-card-hover': 'rgba(32, 24, 60, 0.9)',
+    '--accent-primary': '#ff007f',
+    '--accent-secondary': '#00f0ff',
+    '--accent-gradient': 'linear-gradient(135deg, #ff007f 0%, #00f0ff 100%)',
+    '--accent-gradient-hover': 'linear-gradient(135deg, #e60072 0%, #00d4e0 100%)',
+    '--border-glass': 'rgba(255, 0, 127, 0.2)'
+  },
+  'nord': {
+    '--bg-primary': '#242933',
+    '--bg-secondary': '#2e3440',
+    '--bg-card': 'rgba(46, 52, 64, 0.7)',
+    '--bg-card-hover': 'rgba(59, 66, 82, 0.85)',
+    '--accent-primary': '#88c0d0',
+    '--accent-secondary': '#81a1c1',
+    '--accent-gradient': 'linear-gradient(135deg, #88c0d0 0%, #5e81ac 100%)',
+    '--accent-gradient-hover': 'linear-gradient(135deg, #78b0c0 0%, #4e719c 100%)',
+    '--border-glass': 'rgba(255, 255, 255, 0.1)'
+  },
+  'oled': {
+    '--bg-primary': '#000000',
+    '--bg-secondary': '#080808',
+    '--bg-card': 'rgba(14, 14, 14, 0.85)',
+    '--bg-card-hover': 'rgba(22, 22, 22, 0.95)',
+    '--accent-primary': '#10b981',
+    '--accent-secondary': '#059669',
+    '--accent-gradient': 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    '--accent-gradient-hover': 'linear-gradient(135deg, #0ea271 0%, #047857 100%)',
+    '--border-glass': 'rgba(255, 255, 255, 0.09)'
+  },
+  'sunset': {
+    '--bg-primary': '#140e1b',
+    '--bg-secondary': '#1e1428',
+    '--bg-card': 'rgba(35, 22, 48, 0.7)',
+    '--bg-card-hover': 'rgba(48, 30, 66, 0.85)',
+    '--accent-primary': '#fd79a8',
+    '--accent-secondary': '#e17055',
+    '--accent-gradient': 'linear-gradient(135deg, #fd79a8 0%, #e17055 100%)',
+    '--accent-gradient-hover': 'linear-gradient(135deg, #e86a98 0%, #cf634a 100%)',
+    '--border-glass': 'rgba(253, 121, 168, 0.18)'
+  }
+};
+
+class ThemeManager {
+  constructor() {
+    this.currentTheme = localStorage.getItem('tg_theme_preset') || 'deep-space';
+    this.glassIntensity = parseInt(localStorage.getItem('tg_glass_intensity') || '16', 10);
+  }
+
+  init() {
+    this.applyTheme(this.currentTheme);
+    this.applyGlassIntensity(this.glassIntensity);
+    this._setupUI();
+  }
+
+  applyTheme(themeKey) {
+    if (!THEMES[themeKey]) themeKey = 'deep-space';
+    this.currentTheme = themeKey;
+    localStorage.setItem('tg_theme_preset', themeKey);
+
+    const root = document.documentElement;
+    const colors = THEMES[themeKey];
+    for (const [prop, val] of Object.entries(colors)) {
+      root.style.setProperty(prop, val);
+    }
+
+    // Update active class on preset cards
+    document.querySelectorAll('.preset-card').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.theme === themeKey);
+    });
+  }
+
+  applyGlassIntensity(blurPx) {
+    this.glassIntensity = blurPx;
+    localStorage.setItem('tg_glass_intensity', blurPx);
+    document.documentElement.style.setProperty('--glass-blur', `${blurPx}px`);
+
+    const valElem = document.getElementById('glassIntensityValue');
+    if (valElem) {
+      valElem.textContent = `${blurPx}px`;
+    }
+
+    const slider = document.getElementById('glassIntensitySlider');
+    if (slider) {
+      slider.value = blurPx;
+    }
+  }
+
+  _setupUI() {
+    const btnOpen = document.getElementById('btnThemeCustomizer');
+    const backdrop = document.getElementById('themeModalBackdrop');
+    const btnClose = document.getElementById('btnCloseThemeModal');
+    const slider = document.getElementById('glassIntensitySlider');
+
+    if (btnOpen && backdrop) {
+      btnOpen.addEventListener('click', () => {
+        backdrop.classList.add('visible');
+      });
+    }
+
+    if (btnClose && backdrop) {
+      btnClose.addEventListener('click', () => {
+        backdrop.classList.remove('visible');
+      });
+    }
+
+    if (backdrop) {
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) {
+          backdrop.classList.remove('visible');
+        }
+      });
+    }
+
+    document.querySelectorAll('.preset-card').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const theme = btn.dataset.theme;
+        this.applyTheme(theme);
+      });
+    });
+
+    if (slider) {
+      slider.value = this.glassIntensity;
+      slider.addEventListener('input', (e) => {
+        this.applyGlassIntensity(parseInt(e.target.value, 10));
+      });
+    }
+  }
+}
+
+export const themeManager = new ThemeManager();
