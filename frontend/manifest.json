@@ -1,0 +1,60 @@
+{
+  "name": "TG Power Suite",
+  "short_name": "TG Power",
+  "description": "High-Performance MTProto Uploader, Channel Media Sniffer & Streaming Proxy for Telegram",
+  "start_url": "/?pwa=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0c16",
+  "theme_color": "#6c5ce7",
+  "icons": [
+    {
+      "src": "/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/maskable-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Uploader",
+      "short_name": "Upload",
+      "description": "Upload files and folders directly to Telegram Cloud",
+      "url": "/#uploader",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Channel Sniffer",
+      "short_name": "Sniffer",
+      "description": "Monitor watched channels and auto-dispatch to FDM",
+      "url": "/#sniffer",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Transfer History",
+      "short_name": "History",
+      "description": "View upload history and export audit logs",
+      "url": "/#history",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -3,11 +3,64 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Telegram Web Uploader — Fast & Large File Transfers</title>
-  <meta name="description" content="Upload any size file (up to 2GB+ with auto-splitting) directly to your Telegram chats, channels, or Saved Messages via high-speed MTProto.">
+  <title>TG Power Suite — Turbo MTProto Uploader & FDM Proxy</title>
+  <meta name="description" content="Upload any size file (up to 2GB+ with auto-splitting) directly to Telegram and high-speed FDM HTTP streaming proxy with channel sniffer.">
+  
+  <!-- PWA Manifest & App Icons -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#6c5ce7">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/assets/icon-192.png">
+  <link rel="icon" type="image/png" href="/assets/icon-192.png">
+
   <!-- Local Instant Socket.IO Client (Zero CDN Latency) -->
-  <script src="/js/socket.io.min.js"></script>
-  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/socket.io.min.js?v=2.6.0"></script>
+  <link rel="stylesheet" href="/css/style.css?v=2.6.0">
+  <script>
+    // Early instantaneous auth status check & tab switching logic
+    window._earlyCheckAuth = function() {
+      fetch('/api/auth/status')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          var badge = document.getElementById('authStatusBadge');
+          var userText = document.getElementById('authUserName');
+          if (badge && userText) {
+            if (data.authenticated) {
+              badge.classList.add('authorized');
+              var name = data.first_name || 'Authorized';
+              var handle = data.username ? ' (@' + data.username + ')' : '';
+              userText.textContent = name + handle;
+            } else {
+              badge.classList.remove('authorized');
+              userText.textContent = 'Not Authorized';
+            }
+          }
+        })
+        .catch(function() {});
+    };
+    window._switchTab = function(tabName) {
+      window.location.hash = tabName;
+      var buttons = document.querySelectorAll(".header-nav-tabs .tab-btn");
+      for (var i = 0; i < buttons.length; i++) {
+        var btn = buttons[i];
+        if (btn.getAttribute("data-tab") === tabName) {
+          btn.classList.add("active");
+        } else {
+          btn.classList.remove("active");
+        }
+      }
+
+      var panes = document.querySelectorAll(".tab-pane");
+      for (var j = 0; j < panes.length; j++) {
+        panes[j].classList.remove("active");
+      }
+      var target = document.getElementById("tabPane" + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+      if (target) target.classList.add("active");
+    };
+    window._earlyCheckAuth();
+  </script>
 </head>
 <body>
   <div class="app-container">
@@ -21,142 +74,526 @@
           </svg>
         </div>
         <div class="brand-title">
-          <h1>Telegram Web Uploader</h1>
+          <h1>TG Power Suite</h1>
         </div>
       </div>
 
-      <div class="header-right-actions" style="display: flex; align-items: center; gap: 12px;">
-        <button class="btn-theme-customizer" id="btnThemeCustomizer" title="Customize Theme & Aesthetics" type="button">
-          🎨 Theme
+      <!-- Top Navigation Tabs -->
+      <nav class="header-nav-tabs">
+        <button class="tab-btn active" data-tab="uploader" type="button" id="tabBtnUploader" onclick="window._switchTab('uploader')">
+          <span class="tab-icon">📤</span>
+          <span class="tab-text">Uploader</span>
+          <span class="count-badge" id="tabUploaderBadge">0</span>
         </button>
-        <div class="auth-badge" id="authStatusBadge" title="Telegram MTProto Connection">
+        <button class="tab-btn" data-tab="sniffer" type="button" id="tabBtnSniffer" onclick="window._switchTab('sniffer')">
+          <span class="tab-icon">📥</span>
+          <span class="tab-text">Sniffer & FDM Proxy</span>
+          <span class="tab-status-dot" id="snifferStatusDot" title="Sniffer Status"></span>
+        </button>
+        <button class="tab-btn" data-tab="history" type="button" id="tabBtnHistory" onclick="window._switchTab('history')">
+          <span class="tab-icon">📜</span>
+          <span class="tab-text">History</span>
+        </button>
+        <button class="tab-btn" data-tab="settings" type="button" id="tabBtnSettings" onclick="window._switchTab('settings')">
+          <span class="tab-icon">⚙️</span>
+          <span class="tab-text">Settings</span>
+        </button>
+      </nav>
+
+      <!-- Right Header Actions (PWA Install, Theme, Auth) -->
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button class="btn-secondary" id="btnPwaInstall" type="button" style="display: none; padding: 6px 14px; font-size: 0.82rem; border-color: rgba(0, 206, 201, 0.4); color: var(--accent-secondary); align-items: center; gap: 6px;">
+          <span>📲</span><span>Install App</span>
+        </button>
+        <button class="theme-toggle-btn btn-theme-customizer" id="btnThemeToggle" title="Customize Theme & Aesthetics" type="button">
+          <span id="themeIcon">🎨</span>
+          <span style="font-size: 0.8rem; font-weight: 500;">Theme</span>
+        </button>
+        <div class="auth-badge" id="authStatusBadge">
           <span class="auth-status-dot"></span>
-          <span id="authUserName">Checking Connection...</span>
+          <span id="authUserName">Checking...</span>
         </div>
       </div>
     </header>
 
-    <!-- Main 2-Column Responsive Workspace Layout -->
-    <div class="workspace-layout" id="workspaceLayout">
-      
-      <!-- Left Column: Active Upload Queue -->
-      <div class="layout-left-column" id="layoutLeftColumn">
-        <!-- Active Upload Queue Section -->
-        <section class="glass-panel queue-panel" style="padding: 24px;">
-          <div class="section-header">
-            <div class="section-title">
-              <span>Active Upload Queue</span>
-              <span class="count-badge" id="queueCountBadge">0</span>
-            </div>
-            <div class="header-actions" style="display: flex; gap: 8px;">
-              <button class="btn-secondary" id="btnPauseResumeAllUploads" style="padding: 6px 12px; font-size: 0.8rem;" type="button">
-                ⏸️ Pause All
-              </button>
-              <button class="btn-secondary danger-hover" id="btnStopAllUploads" style="padding: 6px 12px; font-size: 0.8rem;" type="button">
-                ⏹️ Stop All
-              </button>
-            </div>
-          </div>
-
-          <div id="queueEmptyState" style="text-align: center; padding: 48px 16px; color: var(--text-muted);">
-            <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">📥</div>
-            <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Queue is Empty</p>
-            <p style="font-size: 0.85rem;">Select or drop files on the right to start uploading.</p>
-          </div>
-
-          <div class="queue-list" id="queueListContainer">
-            <!-- Rendered reactively via ui.js -->
-          </div>
-        </section>
+    <!-- Real-Time Telemetry & Throughput Bar -->
+    <div class="telemetry-bar glass-panel" id="telemetryBar">
+      <div class="telemetry-item">
+        <div class="telemetry-icon-pulse" style="color: var(--accent-secondary);">⚡</div>
+        <div class="telemetry-meta">
+          <span class="telemetry-label">Upload Rate</span>
+          <span class="telemetry-val" id="telemUploadSpeed">0.0 KB/s</span>
+        </div>
       </div>
 
-      <!-- Right Column: Destination Bar + Filter Tabs + Dropzone + Upload History -->
-      <div class="layout-right-column" id="layoutRightColumn">
+      <div class="telemetry-item">
+        <div class="telemetry-icon-pulse" style="color: #6c5ce7;">📥</div>
+        <div class="telemetry-meta">
+          <span class="telemetry-label">Proxy Streams</span>
+          <span class="telemetry-val" id="telemProxyStreams">0 Active</span>
+        </div>
+      </div>
+
+      <div class="telemetry-sparkline-box" title="Real-Time Network Activity (Last 60s)">
+        <canvas id="telemetryCanvas" width="220" height="34" style="width: 220px; height: 34px;"></canvas>
+      </div>
+
+      <div class="telemetry-item">
+        <div class="telemetry-icon-pulse" style="color: #fdcb6e;">💾</div>
+        <div class="telemetry-meta">
+          <span class="telemetry-label">RAM Usage</span>
+          <span class="telemetry-val" id="telemRam">0 MB</span>
+        </div>
+      </div>
+
+      <div class="telemetry-item">
+        <div class="telemetry-icon-pulse" style="color: #00b894;">⚡</div>
+        <div class="telemetry-meta">
+          <span class="telemetry-label">CPU Load</span>
+          <span class="telemetry-val" id="telemCpu">0%</span>
+        </div>
+      </div>
+
+      <div class="telemetry-item">
+        <div class="telemetry-icon-pulse" style="color: #74b9ff;">⏱️</div>
+        <div class="telemetry-meta">
+          <span class="telemetry-label">Uptime</span>
+          <span class="telemetry-val" id="telemUptime">00:00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 1: UPLOADER (Exact original layout & components preserved) -->
+    <div class="tab-pane active" id="tabPaneUploader">
+      <!-- Main 2-Column Responsive Workspace Layout -->
+      <div class="workspace-layout" id="workspaceLayout">
         
-        <!-- Destination Selector Bar -->
-        <div class="destination-bar glass-panel">
-          <div class="dest-info">
-            <div class="dest-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-              </svg>
-            </div>
-            <div class="dest-text">
-              <div class="label">Destination Telegram Chat</div>
-              <div class="target-name">
-                <span id="currentChatName">Saved Messages (Personal Cloud)</span>
-                <span class="chat-type-tag" id="currentChatType">CLOUD</span>
+        <!-- Left Column: Active Upload Queue -->
+        <div class="layout-left-column" id="layoutLeftColumn">
+          <!-- Active Upload Queue Section -->
+          <section class="glass-panel queue-panel" style="padding: 24px;">
+            <div class="section-header" style="flex-wrap: wrap; gap: 10px;">
+              <div class="section-title">
+                <span>Active Upload Queue</span>
+                <span class="count-badge" id="queueCountBadge">0</span>
+              </div>
+              <div class="header-actions" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button class="btn-secondary" id="btnBatchPause" style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Pause all active uploads">
+                  ⏸️ Pause All
+                </button>
+                <button class="btn-secondary" id="btnBatchResume" style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Resume paused uploads">
+                  ▶️ Resume All
+                </button>
+                <button class="btn-secondary" id="btnBatchClear" style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Clear completed tasks">
+                  🧹 Clear Done
+                </button>
+                <button class="btn-secondary danger-hover" id="btnBatchCancel" style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Cancel all uploads">
+                  ❌ Cancel All
+                </button>
               </div>
             </div>
-          </div>
 
-          <button class="btn-choose-chat" id="btnChooseChat" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            Change Destination
-          </button>
+            <div id="queueEmptyState" style="text-align: center; padding: 48px 16px; color: var(--text-muted);">
+              <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">📥</div>
+              <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Queue is Empty</p>
+              <p style="font-size: 0.85rem;">Select or drop files on the right to start uploading.</p>
+            </div>
+
+            <div class="queue-list" id="queueListContainer">
+              <!-- Rendered reactively via ui.js -->
+            </div>
+          </section>
         </div>
 
-        <!-- Upload Dropzone -->
-        <div class="dropzone-container glass-panel" id="dropzone">
-          <div class="dropzone-content">
-            <div class="dropzone-icon-wrapper">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
+        <!-- Right Column: Destination Bar + Filter Tabs + Dropzone + Upload History -->
+        <div class="layout-right-column" id="layoutRightColumn">
+          
+          <!-- Destination Selector Bar -->
+          <div class="destination-bar glass-panel">
+            <div class="dest-info">
+              <div class="dest-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </div>
+              <div class="dest-text">
+                <div class="label">Destination Telegram Chat</div>
+                <div class="target-name">
+                  <span id="currentChatName">Saved Messages (Personal Cloud)</span>
+                  <span class="chat-type-tag" id="currentChatType">CLOUD</span>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn-choose-chat" id="btnChooseChat" type="button">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-            </div>
-            <div class="dropzone-title">Drag & Drop files here</div>
-            <div class="dropzone-subtitle">
-              Supports any file format. Files over 1.9GB are automatically split into sequence parts.
-            </div>
-
-            <div class="dropzone-actions">
-              <button class="btn-primary" id="btnBrowseFiles" type="button">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="12" y1="18" x2="12" y2="12"></line>
-                  <line x1="9" y1="15" x2="15" y2="15"></line>
-                </svg>
-                Select Files
-              </button>
-              <button class="btn-secondary" id="btnBrowseFolder" type="button">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                </svg>
-                Select Folder
-              </button>
-            </div>
-          </div>
-
-          <!-- Hidden standard file inputs -->
-          <input type="file" id="fileInput" multiple style="display: none;">
-          <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
-        </div>
-
-        <!-- Upload History Section -->
-        <section class="glass-panel history-container">
-          <div class="section-header">
-            <div class="section-title">
-              <span>Recent Upload History</span>
-            </div>
-            <button class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;" onclick="window._app.clearHistory()" type="button">
-              Clear History
+              Change Destination
             </button>
           </div>
 
-          <div class="history-list" id="historyListContainer">
-            <div class="history-empty">
-              <p>Loading history...</p>
-            </div>
-          </div>
-        </section>
-      </div>
+          <!-- Upload Dropzone -->
+          <div class="dropzone-container glass-panel" id="dropzone">
+            <div class="dropzone-content">
+              <div class="dropzone-icon-wrapper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </div>
+              <div class="dropzone-title">Drag & Drop files here</div>
+              <div class="dropzone-subtitle">
+                Supports any file format. Files over 1.9GB are automatically split into sequence parts.
+              </div>
 
+              <div class="dropzone-actions">
+                <button class="btn-primary" id="btnBrowseFiles" type="button">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                  </svg>
+                  Select Files
+                </button>
+                <button class="btn-secondary" id="btnBrowseFolder" type="button">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  Select Folder
+                </button>
+              </div>
+            </div>
+
+            <!-- Hidden standard file inputs -->
+            <input type="file" id="fileInput" multiple style="display: none;">
+            <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+          </div>
+
+          <!-- Quick Upload History preview on right column -->
+          <section class="glass-panel history-container">
+            <div class="section-header">
+              <div class="section-title">
+                <span>Recent Uploads</span>
+              </div>
+              <button class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;" onclick="window._app.clearHistory()" type="button">
+                Clear History
+              </button>
+            </div>
+
+            <div class="history-list" id="historyListContainer">
+              <div class="history-empty">
+                <p>Loading history...</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB 2: SNIFFER & FDM PROXY (Focused on Watched Channels & Auto-Dispatch) -->
+    <div class="tab-pane" id="tabPaneSniffer">
+      <div class="sniffer-dashboard-grid">
+        
+        <!-- Left: Watched Channels & Controls -->
+        <div class="sniffer-left-pane">
+          <!-- Monitored Channels Card -->
+          <section class="glass-panel" style="padding: 24px;">
+            <div class="section-header">
+              <div class="section-title">
+                <span>📡 Watched Channels</span>
+                <span class="count-badge" id="watchedChannelsCount">0</span>
+              </div>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+              Incoming media from these channels/groups is automatically detected and pushed to your download manager.
+            </p>
+
+            <!-- Watched Channels Selection Bar (Like Change Destination in Uploader) -->
+            <div class="destination-bar glass-panel" style="margin-bottom: 14px; padding: 14px 18px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; width: 100%; box-sizing: border-box;">
+              <div class="dest-info" style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
+                <div class="dest-icon" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                  </svg>
+                </div>
+                <div class="dest-text" style="min-width: 0;">
+                  <div class="label" style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Channel Watchlist</div>
+                  <div class="target-name" style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    <span id="activeWatchedCountLabel">0 Monitored</span>
+                  </div>
+                </div>
+              </div>
+
+              <button class="btn-choose-chat" id="btnOpenWatchModal" type="button" style="flex-shrink: 0; white-space: nowrap; padding: 8px 14px; font-size: 0.82rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="16"></line>
+                  <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+                + Pick Channels
+              </button>
+            </div>
+
+            <!-- Always-Visible Custom Channel ID / Username Form -->
+            <form id="formAddChannel" style="display: flex; gap: 8px; margin-bottom: 14px; width: 100%; box-sizing: border-box;">
+              <input type="text" id="inputChannelId" class="glass-input" placeholder="Enter custom Channel ID, link, or @username..." style="flex: 1; min-width: 0; font-size: 0.84rem;">
+              <button type="submit" class="btn-secondary" style="padding: 8px 14px; font-size: 0.84rem; white-space: nowrap; flex-shrink: 0;">
+                + Add
+              </button>
+            </form>
+
+            <!-- Channel Chips Container -->
+            <div class="channel-chips-list" id="channelChipsList">
+              <div class="empty-hint" style="color: var(--text-muted); font-size: 0.85rem;">No channels watched yet. Pick channels or enter ID above.</div>
+            </div>
+          </section>
+
+          <!-- Auto-Dispatch & Manager Status Card -->
+          <section class="glass-panel" style="padding: 24px; margin-top: 20px;">
+            <div class="section-header">
+              <div class="section-title">
+                <span>⚡ Auto-Dispatch Engine</span>
+              </div>
+              <span class="badge-status-online" id="snifferStatusBadge">Active</span>
+            </div>
+            
+            <div class="manager-status-grid" id="detectedManagersGrid">
+              <!-- Dynamically rendered -->
+            </div>
+
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.85rem; color: var(--text-muted);">Configure filters & threshold in Settings</span>
+              <button class="btn-secondary" id="btnGoToSettings" style="font-size: 0.8rem; padding: 6px 12px;" onclick="window._switchTab('settings')" type="button">
+                ⚙️ Open Settings
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <!-- Right: Live Auto-Dispatched Feed -->
+        <div class="sniffer-right-pane">
+          <section class="glass-panel sniffer-feed-panel">
+            <div class="section-header">
+              <div class="section-title">
+                <span>🚀 Live Dispatched Media Stream</span>
+                <span class="count-badge" id="snifferFeedCount">0</span>
+              </div>
+              <button class="btn-secondary" id="btnRefreshSnifferFeed" style="padding: 6px 12px; font-size: 0.8rem;" type="button">
+                🔄 Refresh
+              </button>
+            </div>
+
+            <div class="sniffer-feed-list" id="snifferFeedContainer">
+              <div class="feed-empty-state">
+                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">📡</div>
+                <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Sniffer Waiting for Media</p>
+                <p style="font-size: 0.85rem;">New media posted to watched channels will automatically appear here and trigger your download manager.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB 3: FULL HISTORY -->
+    <div class="tab-pane" id="tabPaneHistory">
+      <section class="glass-panel" style="padding: 24px;">
+        <div class="section-header" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+          <div class="section-title">
+            <span>📜 Complete Transfer & Upload History</span>
+            <span class="count-badge" id="historyTotalBadge">0</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn-secondary" id="btnExportCSV" type="button" style="padding: 6px 12px; font-size: 0.8rem;">
+              📊 Export CSV
+            </button>
+            <button class="btn-secondary" id="btnExportJSON" type="button" style="padding: 6px 12px; font-size: 0.8rem;">
+              📄 Export JSON
+            </button>
+            <button class="btn-secondary danger-hover" style="padding: 6px 14px; font-size: 0.8rem;" id="btnClearHistoryBtn" type="button">
+              🗑️ Clear History
+            </button>
+          </div>
+        </div>
+
+        <!-- History Controls: Search and Status Filter -->
+        <div class="history-controls-bar glass-panel" style="margin-bottom: 16px; padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+          <div style="display: flex; gap: 10px; flex: 1; min-width: 260px; align-items: center;">
+            <input type="text" id="historySearchInput" class="glass-input" placeholder="🔍 Search history by filename, chat name, ID..." style="flex: 1; min-width: 180px; font-size: 0.85rem;">
+            <select id="historyStatusFilter" class="glass-input" style="width: auto; min-width: 140px; font-size: 0.85rem; cursor: pointer;">
+              <option value="all">All Statuses</option>
+              <option value="completed">Completed ✓</option>
+              <option value="failed">Failed ⚠️</option>
+              <option value="uploading">Uploading ⚡</option>
+            </select>
+          </div>
+          <button class="btn-secondary" id="btnRefreshHistory" type="button" style="padding: 6px 12px; font-size: 0.8rem;">
+            🔄 Refresh
+          </button>
+        </div>
+
+        <div class="history-list full-history" id="fullHistoryContainer">
+          <div class="history-empty">
+            <p>Loading history...</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 4: SETTINGS -->
+    <div class="tab-pane" id="tabPaneSettings">
+      <div class="settings-full-width-container">
+        
+        <!-- Top Action Header Banner -->
+        <div class="settings-header-banner glass-panel" style="padding: 20px 28px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+          <div class="settings-header-info">
+            <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+              <span>⚙️ Configuration & Settings</span>
+            </h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">
+              Configure download manager auto-dispatch, sniffer keyword filters, proxy speed limits, and system automation.
+            </p>
+          </div>
+          <div class="settings-header-actions" style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn-secondary" id="btnTestNotification" type="button" style="padding: 8px 16px; font-size: 0.85rem;">
+              🔔 Test Alert
+            </button>
+            <button class="btn-primary" id="btnSaveSettings" type="button" style="padding: 8px 22px; font-size: 0.88rem;">
+              💾 Save Settings
+            </button>
+          </div>
+        </div>
+
+        <form id="settingsForm" class="settings-cards-grid">
+          
+          <!-- Card 1: Download Managers & Proxy Streaming -->
+          <section class="glass-panel settings-card">
+            <div class="settings-card-header">
+              <span class="settings-card-icon">🚀</span>
+              <div>
+                <h3 class="settings-card-title">Download Managers & Proxy</h3>
+                <p class="settings-card-desc">Auto-dispatch incoming Telegram media to external download engines</p>
+              </div>
+            </div>
+
+            <div class="settings-card-body">
+              <div class="form-group">
+                <label for="setPreferredManager">Preferred Download Manager</label>
+                <select id="setPreferredManager" class="glass-input">
+                  <option value="auto">Auto-Detect (FDM → aria2 → NeatDM)</option>
+                  <option value="fdm">Free Download Manager (FDM)</option>
+                  <option value="aria2">aria2 Multi-Thread Engine</option>
+                  <option value="neat">Neat Download Manager</option>
+                  <option value="persepolis">Persepolis Download Manager</option>
+                  <option value="kget">KGet</option>
+                  <option value="direct">Direct HTTP Stream Only</option>
+                </select>
+                <span class="field-hint">Default tool triggered when you click "Download with FDM"</span>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="setMinFileSize">Minimum File Size (MB)</label>
+                  <input type="number" id="setMinFileSize" class="glass-input" min="0" value="50">
+                  <span class="field-hint">Ignore media smaller than threshold</span>
+                </div>
+                <div class="form-group">
+                  <label for="setProxySpeedLimit">Proxy Speed Limiter</label>
+                  <select id="setProxySpeedLimit" class="glass-input">
+                    <option value="0">Unlimited (Maximum Speed)</option>
+                    <option value="5">5 MB/s (Conservative)</option>
+                    <option value="10">10 MB/s (Standard)</option>
+                    <option value="25">25 MB/s (High Speed)</option>
+                    <option value="50">50 MB/s (Gigabit / Fiber)</option>
+                  </select>
+                  <span class="field-hint">Cap download bandwidth for FDM</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Card 2: Sniffer Filters & Keywords -->
+          <section class="glass-panel settings-card">
+            <div class="settings-card-header">
+              <span class="settings-card-icon">🛡️</span>
+              <div>
+                <h3 class="settings-card-title">Sniffer Filters & Keywords</h3>
+                <p class="settings-card-desc">Control what media gets captured and auto-dispatched from channels</p>
+              </div>
+            </div>
+
+            <div class="settings-card-body">
+              <div class="form-group">
+                <label for="setAllowedExt">Allowed File Extensions</label>
+                <input type="text" id="setAllowedExt" class="glass-input" placeholder=".mkv,.mp4,.avi,.mov,.zip,.rar,.7z,.iso">
+                <span class="field-hint">Comma-separated list of file extensions to capture</span>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="setKeywordBlock">Blocked Keywords</label>
+                  <input type="text" id="setKeywordBlock" class="glass-input" placeholder="sample,trailer,cam,ts,telesync,PRE-DVD">
+                  <span class="field-hint">Skip files matching these words</span>
+                </div>
+                <div class="form-group">
+                  <label for="setKeywordAllow">Allowed Keywords (Whitelist)</label>
+                  <input type="text" id="setKeywordAllow" class="glass-input" placeholder="Leave blank for all">
+                  <span class="field-hint">Only capture if matching (optional)</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Card 3: Notifications & System Automation -->
+          <section class="glass-panel settings-card settings-card-wide">
+            <div class="settings-card-header">
+              <span class="settings-card-icon">⚡</span>
+              <div>
+                <h3 class="settings-card-title">Notifications & System Automation</h3>
+                <p class="settings-card-desc">Desktop alert preferences and upload queue maintenance</p>
+              </div>
+            </div>
+
+            <div class="settings-card-body">
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label for="setNotifications">Desktop Notifications</label>
+                  <select id="setNotifications" class="glass-input">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <span class="field-hint">System notification popups</span>
+                </div>
+                <div class="form-group">
+                  <label for="setNotifMode">Notification Mode</label>
+                  <select id="setNotifMode" class="glass-input">
+                    <option value="downloads_only">Downloads & Dispatches Only</option>
+                    <option value="all">All Events (Uploads & Sniffer)</option>
+                    <option value="none">None</option>
+                  </select>
+                  <span class="field-hint">Choose which events trigger desktop popups</span>
+                </div>
+                <div class="form-group">
+                  <label for="setAutoClearDone">Auto-Clear Upload Tasks</label>
+                  <select id="setAutoClearDone" class="glass-input">
+                    <option value="manual">Manual (Keep in Queue)</option>
+                    <option value="auto_5m">Auto-Clear after 5 minutes</option>
+                    <option value="immediate">Immediate on Completion</option>
+                  </select>
+                  <span class="field-hint">Purge completed tasks from active queue</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </form>
+      </div>
     </div>
 
   </div>
@@ -182,6 +619,40 @@
       <div style="padding: 12px 24px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
         <span style="font-size: 0.75rem; color: var(--text-muted);">Saved Messages is always available</span>
         <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._app.refreshChats()" type="button">
+          🔄 Refresh Dialogs
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Channel Watchlist Modal (Exact same rich structure as Destination Chat Modal) -->
+  <div class="modal-backdrop" id="watchChannelModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; font-weight: 600;">📡 Select Channels to Watch</h3>
+        <button class="icon-btn" id="btnCloseWatchModal" type="button">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-search">
+        <input type="text" class="modal-search-input" id="watchChannelSearchInput" placeholder="🔍 Search channels, groups, bots, or contacts...">
+        <div class="modal-filter-tabs" id="watchModalFilterTabs" style="display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px;">
+          <button class="filter-chip active" data-filter="all" type="button">All Dialogs</button>
+          <button class="filter-chip" data-filter="channel" type="button">📢 Channels</button>
+          <button class="filter-chip" data-filter="group" type="button">👥 Groups</button>
+          <button class="filter-chip" data-filter="bot" type="button">🤖 Bots</button>
+          <button class="filter-chip" data-filter="user" type="button">👤 Contacts</button>
+        </div>
+      </div>
+      <div class="modal-body" id="watchChannelListContainer">
+        <!-- Injected via sniffer-ui.js -->
+      </div>
+      <div style="padding: 12px 24px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Click "+ Watch" on any channel to monitor it in real time</span>
+        <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" id="btnRefreshWatchDialogs" type="button">
           🔄 Refresh Dialogs
         </button>
       </div>
@@ -233,7 +704,7 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- App Bootstrap JS -->
-  <script type="module" src="/js/app.js"></script>
+  <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
+  <script src="/js/app.bundle.js?v=2.7.0"></script>
 </body>
 </html>

@@ -12,6 +12,8 @@ from app.models import UploadStatus
 from app.services.file_detector import detect_mime, categorize_file
 from app.services.splitter import split_large_file, cleanup_files, InsufficientDiskSpaceError
 from app.services.queue_manager import QueueManager, UploadItem
+from app.services.sniffer_service import auto_rename, sniffer_service
+from app.services.manager_detector import detect_managers
 from app.routes.history import init_db, record_task_history, get_history, clear_history
 import httpx
 from app.main import app
@@ -153,7 +155,22 @@ async def test_api_endpoints():
         # Static index
         res = await client.get("/")
         assert res.status_code == 200
-        assert "Telegram Web Uploader" in res.text
+        assert "TG Power Suite" in res.text
+
+        # Sniffer status
+        res = await client.get("/api/sniffer/status")
+        assert res.status_code == 200
+        assert "active_channels" in res.json()
+
+        # Settings
+        res = await client.get("/api/settings")
+        assert res.status_code == 200
+        assert "TG_API_ID" in res.json()
+
+        # Settings managers
+        res = await client.get("/api/settings/managers")
+        assert res.status_code == 200
+        assert "detected" in res.json()
 
 
 @pytest.mark.asyncio
@@ -217,6 +234,27 @@ async def test_socket_item_serialization():
 
 
 @pytest.mark.asyncio
+async def test_auto_rename_helper():
+    raw_name = "Avengers.Endgame.2019.1080p.BluRay.x264.DTS-HD.MA.7.1-FGT.mkv"
+    cleaned = auto_rename(raw_name)
+    assert "Avengers Endgame 2019" in cleaned
+    assert "[1080P]" in cleaned
+    assert cleaned.endswith(".mkv")
+
+
+@pytest.mark.asyncio
+async def test_sniffer_channels_lifecycle():
+    channel_id = "-1009988776655"
+    added = sniffer_service.add_channel(channel_id)
+    assert added is True
+    assert -1009988776655 in sniffer_service.active_channels
+
+    removed = sniffer_service.remove_channel(channel_id)
+    assert removed is True
+    assert -1009988776655 not in sniffer_service.active_channels
+
+
+@pytest.mark.asyncio
 async def test_fast_uploader_part_logic():
     from app.services.fast_uploader import PART_SIZE
     import math
@@ -233,7 +271,6 @@ async def test_fast_uploader_part_logic():
 @pytest.mark.asyncio
 async def test_thumbnail_fallback():
     from app.services.thumbnail import generate_video_thumbnail
-    # Non-existent file should safely return None
     res = await generate_video_thumbnail(Path("/tmp/non_existent_video_123.mp4"))
     assert res is None
 
@@ -242,19 +279,16 @@ async def test_thumbnail_fallback():
 async def test_zero_copy_chunk_config():
     from app.services.fast_uploader import get_optimal_chunk_config, SMALL_PART_SIZE, PART_SIZE
     
-    # <= 10MB -> Small chunk (128KB)
     p_size, workers, is_big = get_optimal_chunk_config(5 * 1024 * 1024)
     assert p_size == SMALL_PART_SIZE
     assert workers == 4
     assert is_big is False
 
-    # 100MB -> Standard Turbo (512KB, 6 workers)
     p_size, workers, is_big = get_optimal_chunk_config(100 * 1024 * 1024)
     assert p_size == PART_SIZE
     assert workers == 6
     assert is_big is True
 
-    # 1.9GB slice -> Max Bandwidth Turbo (512KB, 8 workers)
     p_size, workers, is_big = get_optimal_chunk_config(1900 * 1024 * 1024)
     assert p_size == PART_SIZE
     assert workers == 8
@@ -266,6 +300,3 @@ async def test_concurrent_queue_manager():
     qm = QueueManager(max_concurrent=2)
     assert qm.max_concurrent == 2
     assert len(qm.get_all_tasks()) == 0
-
-
-

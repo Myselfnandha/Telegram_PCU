@@ -135,6 +135,44 @@ class QueueManager:
             return True
         return False
 
+    def pause_all_tasks(self) -> int:
+        """Pauses all active/queued upload tasks."""
+        count = 0
+        for task_id in list(self.tasks.keys()):
+            if self.pause_task(task_id):
+                count += 1
+        logger.info(f"Paused {count} task(s) via batch control.")
+        return count
+
+    def resume_all_tasks(self) -> int:
+        """Resumes all paused upload tasks."""
+        count = 0
+        for task_id in list(self.tasks.keys()):
+            if self.resume_task(task_id):
+                count += 1
+        logger.info(f"Resumed {count} task(s) via batch control.")
+        return count
+
+    def cancel_all_tasks(self) -> int:
+        """Cancels all running/queued upload tasks."""
+        count = 0
+        for task_id in list(self.tasks.keys()):
+            if self.cancel_task(task_id):
+                count += 1
+        logger.info(f"Cancelled {count} task(s) via batch control.")
+        return count
+
+    def clear_completed_tasks(self) -> int:
+        """Removes completed, cancelled, or failed tasks from memory."""
+        to_remove = [
+            tid for tid, item in self.tasks.items()
+            if item.status in (UploadStatus.COMPLETED, UploadStatus.CANCELLED, UploadStatus.FAILED)
+        ]
+        for tid in to_remove:
+            self.tasks.pop(tid, None)
+        logger.info(f"Cleared {len(to_remove)} finished task(s) from memory.")
+        return len(to_remove)
+
     def _notify_update(self, item: UploadItem):
         if self.progress_emitter:
             try:

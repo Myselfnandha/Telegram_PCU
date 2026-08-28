@@ -3,6 +3,7 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from telethon.tl.types import User, Channel, Chat
+from telethon.tl.functions.contacts import GetContactsRequest
 from app.models import ChatItem, AuthStatus
 from app.telegram_client import TelegramClientManager
 
@@ -35,11 +36,18 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
         )
 
     me = await client.get_me()
-    dialogs = await client.get_dialogs(limit=50)
+    
+    # 1. Fetch main dialogs and archived dialogs
+    main_dialogs = await client.get_dialogs(limit=300)
+    try:
+        archived_dialogs = await client.get_dialogs(folder=1, limit=100)
+    except Exception:
+        archived_dialogs = []
 
+    seen_ids = {me.id}
     result: List[ChatItem] = []
 
-    # 1. Always add "Saved Messages" as the very first option
+    # Always add "Saved Messages" as the very first option
     result.append(ChatItem(
         id=me.id,
         name="Saved Messages (Personal Cloud)",
@@ -49,20 +57,21 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
         pinned=True
     ))
 
-    for d in dialogs:
-        # Skip own user entity as it's already added as Saved Messages
-        if d.entity.id == me.id:
+    for d in list(main_dialogs) + list(archived_dialogs):
+        if not d.entity or d.entity.id in seen_ids:
             continue
+        seen_ids.add(d.entity.id)
 
-        entity_type = "user"
         username = getattr(d.entity, "username", None)
+        entity_type = "user"
 
         if isinstance(d.entity, Channel):
             entity_type = "channel" if d.is_channel and not d.is_group else "supergroup"
         elif isinstance(d.entity, Chat):
             entity_type = "group"
         elif isinstance(d.entity, User):
-            entity_type = "user"
+            is_bot = bool(getattr(d.entity, "bot", False)) or (username and username.lower().endswith("bot"))
+            entity_type = "bot" if is_bot else "user"
 
         name = d.name or "Unknown Chat"
         result.append(ChatItem(
@@ -73,6 +82,29 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
             unread_count=d.unread_count,
             pinned=bool(d.pinned)
         ))
+
+    # 2. Fetch all Telegram Contacts from user address book
+    try:
+        contacts_res = await client(GetContactsRequest(hash=0))
+        if hasattr(contacts_res, "users"):
+            for u in contacts_res.users:
+                if not u or u.id in seen_ids:
+                    continue
+                seen_ids.add(u.id)
+                full_name = f"{u.first_name or ''} {u.last_name or ''}".strip()
+                if not full_name:
+                    full_name = u.username or f"Contact {u.id}"
+                is_bot = bool(getattr(u, "bot", False)) or (u.username and u.username.lower().endswith("bot"))
+                result.append(ChatItem(
+                    id=u.id,
+                    name=full_name,
+                    username=u.username,
+                    type="bot" if is_bot else "user",
+                    unread_count=0,
+                    pinned=False
+                ))
+    except Exception as contact_err:
+        logger.debug(f"Could not fetch contacts list: {contact_err}")
 
     _chats_cache = result
     _cache_time = time.time()

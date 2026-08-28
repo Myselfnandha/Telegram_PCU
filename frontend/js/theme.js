@@ -107,19 +107,31 @@ class ThemeManager {
   }
 
   _setupUI() {
-    const btnOpen = document.getElementById('btnThemeCustomizer');
+    const btnOpen = document.getElementById('btnThemeCustomizer') || document.getElementById('btnThemeToggle') || document.querySelector('.btn-theme-customizer') || document.querySelector('.theme-toggle-btn');
     const backdrop = document.getElementById('themeModalBackdrop');
     const btnClose = document.getElementById('btnCloseThemeModal');
     const slider = document.getElementById('glassIntensitySlider');
 
     if (btnOpen && backdrop) {
-      btnOpen.addEventListener('click', () => {
+      btnOpen.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         backdrop.classList.add('visible');
       });
     }
 
+    // Attach to all theme buttons in page just in case
+    document.querySelectorAll('#btnThemeCustomizer, #btnThemeToggle, .btn-theme-customizer, .theme-toggle-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (backdrop) backdrop.classList.add('visible');
+      });
+    });
+
     if (btnClose && backdrop) {
-      btnClose.addEventListener('click', () => {
+      btnClose.addEventListener('click', (e) => {
+        e.preventDefault();
         backdrop.classList.remove('visible');
       });
     }

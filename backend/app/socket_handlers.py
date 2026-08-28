@@ -28,6 +28,11 @@ async def connect(sid, environ):
     from app.services.download_manager import download_manager
     await sio.emit("download:snapshot", download_manager.get_all_tasks(), room=sid)
 
+    # Send sniffer snapshot
+    from app.services.sniffer_service import sniffer_service
+    await sio.emit("sniffer:status", sniffer_service.get_status(), room=sid)
+    await sio.emit("sniffer:feed_snapshot", sniffer_service.recent_feed, room=sid)
+
 @sio.event
 async def disconnect(sid):
     logger.debug(f"Socket client disconnected: {sid}")
@@ -113,3 +118,12 @@ def broadcast_download_progress(data: dict):
     except RuntimeError:
         pass
 
+
+def broadcast_sniffer_event(event_name: str, data: Any):
+    """Broadcasts sniffer feed/status events to connected clients."""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(sio.emit(f"sniffer:{event_name}", data))
+    except RuntimeError:
+        pass

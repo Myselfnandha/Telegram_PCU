@@ -262,51 +262,216 @@ export function renderQueue(queue) {
   });
 }
 
+let _cachedHistory = [];
+let _historyFilterStatus = 'all';
+let _historySearchQuery = '';
+
+export function initHistoryControls() {
+  const searchInput = document.getElementById('historySearchInput');
+  const statusFilter = document.getElementById('historyStatusFilter');
+  const btnExportCSV = document.getElementById('btnExportCSV');
+  const btnExportJSON = document.getElementById('btnExportJSON');
+  const btnClearHistory = document.getElementById('btnClearHistoryBtn');
+  const btnRefreshHistory = document.getElementById('btnRefreshHistory');
+
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      _historySearchQuery = (e.target.value || '').toLowerCase().trim();
+      renderFilteredHistory();
+    });
+  }
+
+  if (statusFilter) {
+    statusFilter.addEventListener('change', (e) => {
+      _historyFilterStatus = e.target.value;
+      renderFilteredHistory();
+    });
+  }
+
+  if (btnExportCSV) {
+    btnExportCSV.addEventListener('click', () => exportHistoryCSV());
+  }
+
+  if (btnExportJSON) {
+    btnExportJSON.addEventListener('click', () => exportHistoryJSON());
+  }
+
+  if (btnClearHistory) {
+    btnClearHistory.addEventListener('click', () => {
+      if (window._app && window._app.clearHistory) {
+        window._app.clearHistory();
+      }
+    });
+  }
+
+  if (btnRefreshHistory) {
+    btnRefreshHistory.addEventListener('click', () => {
+      loadHistory();
+      showToast('History refreshed', 'info');
+    });
+  }
+}
+
+function renderFilteredHistory() {
+  const fullContainer = document.getElementById('fullHistoryContainer');
+  const badge = document.getElementById('historyTotalBadge');
+  if (!fullContainer) return;
+
+  let filtered = _cachedHistory;
+
+  if (_historyFilterStatus !== 'all') {
+    filtered = filtered.filter(item => item.status === _historyFilterStatus);
+  }
+
+  if (_historySearchQuery) {
+    filtered = filtered.filter(item => {
+      const fn = (item.filename || '').toLowerCase();
+      const cn = (item.chat_name || '').toLowerCase();
+      const cid = String(item.chat_id || '').toLowerCase();
+      const dt = (item.created_at || '').toLowerCase();
+      return fn.includes(_historySearchQuery) || cn.includes(_historySearchQuery) || cid.includes(_historySearchQuery) || dt.includes(_historySearchQuery);
+    });
+  }
+
+  if (badge) {
+    badge.textContent = filtered.length;
+  }
+
+  if (filtered.length === 0) {
+    fullContainer.innerHTML = `
+      <div class="history-empty">
+        <p>No matching transfers found.</p>
+      </div>
+    `;
+    return;
+  }
+
+  fullContainer.innerHTML = filtered.map((item) => {
+    const isOk = item.status === 'completed';
+    const isFail = item.status === 'failed';
+    const partsBadge = item.parts_count > 1 ? `<span class="history-parts-tag">📦 ${item.parts_count} Parts</span>` : '';
+    
+    let statusLabel = '⚡ UPLOADING';
+    if (isOk) statusLabel = '✓ COMPLETED';
+    else if (isFail) statusLabel = '✕ FAILED';
+
+    return `
+      <div class="history-item ${isOk ? 'status-ok' : (isFail ? 'status-err' : 'status-pending')}">
+        <div class="history-item-top">
+          <div class="history-file-info">
+            <span class="history-file-icon">📄</span>
+            <span class="history-filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</span>
+          </div>
+          <span class="badge ${isOk ? 'completed' : (isFail ? 'failed' : 'uploading')}">
+            ${statusLabel}
+          </span>
+        </div>
+        <div class="history-item-sub">
+          <span class="history-sub-meta">💾 ${formatBytes(item.file_size)}</span>
+          <span class="history-dot">•</span>
+          <span class="history-sub-meta" title="${escapeHtml(item.chat_name || item.chat_id)}">💬 ${escapeHtml(item.chat_name || item.chat_id)}</span>
+          ${partsBadge ? `<span class="history-dot">•</span>` + partsBadge : ''}
+          <span class="history-dot">•</span>
+          <span class="history-date">${escapeHtml(item.created_at || '')}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+export function exportHistoryCSV() {
+  if (_cachedHistory.length === 0) {
+    showToast('No history records to export', 'warning');
+    return;
+  }
+
+  const headers = ['ID', 'Filename', 'File Size (Bytes)', 'Chat ID', 'Chat Name', 'Status', 'Parts Count', 'Created At'];
+  const rows = _cachedHistory.map(item => [
+    `"${item.id || ''}"`,
+    `"${(item.filename || '').replace(/"/g, '""')}"`,
+    item.file_size || 0,
+    `"${item.chat_id || ''}"`,
+    `"${(item.chat_name || '').replace(/"/g, '""')}"`,
+    `"${item.status || ''}"`,
+    item.parts_count || 1,
+    `"${item.created_at || ''}"`
+  ]);
+
+  const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', `tg_power_suite_history_${Date.now()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  showToast('Transfer history exported as CSV ✓', 'success');
+}
+
+export function exportHistoryJSON() {
+  if (_cachedHistory.length === 0) {
+    showToast('No history records to export', 'warning');
+    return;
+  }
+
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(_cachedHistory, null, 2));
+  const link = document.createElement('a');
+  link.setAttribute('href', dataStr);
+  link.setAttribute('download', `tg_power_suite_history_${Date.now()}.json`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  showToast('Transfer history exported as JSON ✓', 'success');
+}
+
 export async function loadHistory() {
   const container = document.getElementById('historyListContainer');
-  if (!container) return;
+  const fullContainer = document.getElementById('fullHistoryContainer');
+  const badge = document.getElementById('historyTotalBadge');
+  if (!container && !fullContainer) return;
 
   try {
     const res = await fetch('/api/history');
     if (!res.ok) return;
     const history = await res.json();
+    _cachedHistory = history || [];
 
-    if (history.length === 0) {
-      container.innerHTML = `
-        <div class="history-empty">
-          <p>No uploads recorded yet.</p>
-        </div>
-      `;
-      return;
+    if (badge) {
+      badge.textContent = _cachedHistory.length;
     }
 
-    container.innerHTML = history.map((item) => {
-      const isOk = item.status === 'completed';
-      const partsBadge = item.parts_count > 1 ? `<span class="history-parts-tag">📦 ${item.parts_count} Parts</span>` : '';
-      
-      return `
-        <div class="history-item ${isOk ? 'status-ok' : 'status-err'}">
-          <div class="history-item-top">
-            <div class="history-file-info">
-              <span class="history-file-icon">📄</span>
-              <span class="history-filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</span>
+    renderFilteredHistory();
+
+    // Side list for uploader right pane
+    if (container) {
+      if (_cachedHistory.length === 0) {
+        container.innerHTML = `<div class="history-empty"><p>No uploads recorded yet.</p></div>`;
+      } else {
+        container.innerHTML = _cachedHistory.slice(0, 5).map((item) => {
+          const isOk = item.status === 'completed';
+          return `
+            <div class="history-item ${isOk ? 'status-ok' : 'status-err'}">
+              <div class="history-item-top">
+                <div class="history-file-info">
+                  <span class="history-file-icon">📄</span>
+                  <span class="history-filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</span>
+                </div>
+                <span class="badge ${isOk ? 'completed' : 'failed'}">
+                  ${isOk ? '✓ SENT' : '✕ FAILED'}
+                </span>
+              </div>
+              <div class="history-item-sub">
+                <span class="history-sub-meta">💾 ${formatBytes(item.file_size)}</span>
+                <span class="history-dot">•</span>
+                <span class="history-date">${escapeHtml(item.created_at || '')}</span>
+              </div>
             </div>
-            <span class="badge ${isOk ? 'completed' : 'failed'}">
-              ${isOk ? '✓ SENT' : '✕ FAILED'}
-            </span>
-          </div>
-          <div class="history-item-sub">
-            <span class="history-sub-meta">💾 ${formatBytes(item.file_size)}</span>
-            <span class="history-dot">•</span>
-            <span class="history-sub-meta" title="${escapeHtml(item.chat_name || item.chat_id)}">💬 ${escapeHtml(item.chat_name || item.chat_id)}</span>
-            ${partsBadge ? `<span class="history-dot">•</span>` + partsBadge : ''}
-            <span class="history-dot">•</span>
-            <span class="history-date">${escapeHtml(item.created_at || '')}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
+          `;
+        }).join('');
+      }
+    }
   } catch (e) {
     console.error('Error loading history:', e);
   }
 }
+

@@ -1,0 +1,19 @@
+[Desktop Entry]
+Name=TG Power Suite
+Comment=Turbo MTProto Uploader & High-Speed FDM Proxy for Telegram
+Exec=/usr/bin/env xdg-open http://localhost:8088
+Icon=tg-power-suite
+Terminal=false
+Type=Application
+Categories=Network;FileTransfer;Utility;
+Keywords=Telegram;Uploader;FDM;Proxy;Downloader;MTProto;
+StartupNotify=true
+Actions=OpenSettings;RestartService;
+
+[Desktop Action OpenSettings]
+Name=Settings
+Exec=/usr/bin/env xdg-open http://localhost:8088#settings
+
+[Desktop Action RestartService]
+Name=Restart Background Service
+Exec=systemctl --user restart tg-power-suite.service

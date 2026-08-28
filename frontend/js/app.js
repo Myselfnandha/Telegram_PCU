@@ -1,16 +1,18 @@
 /**
- * Application Core Controller.
- * Initializes modules, event listeners, drag & drop, and global app state.
+ * TG Power Suite Application Core Controller.
+ * Initializes modules, event listeners, drag & drop, tab switching, and global state.
  */
 
 import { socketManager } from './socket.js';
 import { chatPicker } from './chat-picker.js';
 import { uploader } from './uploader.js';
-import { renderQueue, loadHistory, showToast } from './ui.js';
+import { renderQueue, loadHistory, showToast, initHistoryControls } from './ui.js';
 import { networkWatchdog } from './network-watchdog.js';
 import { themeManager } from './theme.js';
-
-let activeCategoryFilter = 'all';
+import { tabController } from './tabs.js';
+import { snifferUI } from './sniffer-ui.js';
+import { settingsUI } from './settings-ui.js';
+import { telemetryController } from './telemetry.js';
 
 async function checkAuthStatus() {
   const badge = document.getElementById('authStatusBadge');
@@ -19,6 +21,7 @@ async function checkAuthStatus() {
 
   try {
     const res = await fetch('/api/auth/status');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
     if (data.authenticated) {
@@ -31,6 +34,7 @@ async function checkAuthStatus() {
       userText.textContent = 'Not Authorized (Run setup_auth.py)';
     }
   } catch (e) {
+    console.debug('Auth check status notice:', e);
     badge.classList.remove('authorized');
     userText.textContent = 'Backend Offline';
   }
@@ -54,6 +58,16 @@ function setupDragAndDrop() {
     btnBrowseFolder.addEventListener('click', (e) => {
       e.stopPropagation();
       folderInput.click();
+    });
+  }
+
+  if (dropzone && fileInput) {
+    dropzone.addEventListener('click', (e) => {
+      // If user clicked the folder button, let it handle its own click
+      if (btnBrowseFolder && (btnBrowseFolder === e.target || btnBrowseFolder.contains(e.target))) {
+        return;
+      }
+      fileInput.click();
     });
   }
 
@@ -119,7 +133,7 @@ function setupGlobalHooks() {
     updateCaption: (id, val) => uploader.updateTaskConfig(id, { caption: val }),
     updateSendAs: (id, val) => uploader.updateTaskConfig(id, { sendAs: val }),
     clearHistory: async () => {
-      if (confirm('Are you sure you want to clear all upload history?')) {
+      if (confirm('Are you sure you want to clear all history?')) {
         await fetch('/api/history/clear', { method: 'DELETE' });
         loadHistory();
         showToast('History cleared', 'success');
@@ -132,44 +146,118 @@ function setupGlobalHooks() {
   };
 }
 
-// Bootstrap Application
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('Initializing Telegram Web Uploader Frontend...');
+function initApp() {
+  console.log('Initializing TG Power Suite Frontend...');
 
-  setupGlobalHooks();
-  setupDragAndDrop();
+  try {
+    setupGlobalHooks();
+  } catch (e) {
+    console.error('Hooks setup error:', e);
+  }
+
+  try {
+    setupDragAndDrop();
+  } catch (e) {
+    console.error('Drag & Drop setup error:', e);
+  }
+
+  // Initialize Tab Navigation
+  try {
+    tabController.init();
+  } catch (e) {
+    console.error('Tab controller error:', e);
+  }
 
   // Initialize Theme Engine
-  themeManager.init();
+  try {
+    themeManager.init();
+  } catch (e) {
+    console.error('Theme manager error:', e);
+  }
 
   // Initialize Socket.IO
-  socketManager.init();
+  try {
+    socketManager.init();
+  } catch (e) {
+    console.error('Socket manager error:', e);
+  }
 
-  // Initialize Network Watchdog & Auto-Recovery
-  networkWatchdog.init();
+  // Initialize Network Watchdog
+  try {
+    networkWatchdog.init();
+  } catch (e) {
+    console.error('Watchdog error:', e);
+  }
 
-  // Initialize Destination Chat Picker
-  chatPicker.init((selectedChat) => {
-    console.log('Selected destination chat:', selectedChat);
-  });
+  // Initialize Chat Picker
+  try {
+    chatPicker.init((selectedChat) => {
+      console.log('Selected destination chat:', selectedChat);
+    });
+  } catch (e) {
+    console.error('Chat picker error:', e);
+  }
 
-  // Batch Upload Controls
-  const btnPauseResumeAllUploads = document.getElementById('btnPauseResumeAllUploads');
-  const btnStopAllUploads = document.getElementById('btnStopAllUploads');
+  // Initialize Sniffer UI
+  try {
+    snifferUI.init(socketManager.socket, tabController);
+  } catch (e) {
+    console.error('Sniffer UI error:', e);
+  }
 
-  if (btnPauseResumeAllUploads) {
-    btnPauseResumeAllUploads.addEventListener('click', () => {
-      uploader.togglePauseResumeAll();
-      const hasActive = uploader.queue.some((t) => t.status === 'uploading' || t.status === 'streaming' || t.status === 'queued');
-      btnPauseResumeAllUploads.textContent = hasActive ? '⏸️ Pause All' : '▶️ Resume All';
+  // Initialize Settings UI
+  try {
+    settingsUI.init(tabController);
+  } catch (e) {
+    console.error('Settings UI error:', e);
+  }
+
+  // Initialize Real-Time Telemetry & Throughput Sparkline
+  try {
+    telemetryController.init(socketManager.socket);
+  } catch (e) {
+    console.error('Telemetry Controller error:', e);
+  }
+
+  // Initialize History Search, Filter & CSV/JSON Export Controls
+  try {
+    initHistoryControls();
+  } catch (e) {
+    console.error('History Controls error:', e);
+  }
+
+  // Batch Upload Action Buttons
+  const btnBatchPause = document.getElementById('btnBatchPause');
+  const btnBatchResume = document.getElementById('btnBatchResume');
+  const btnBatchClear = document.getElementById('btnBatchClear');
+  const btnBatchCancel = document.getElementById('btnBatchCancel');
+
+  if (btnBatchPause) {
+    btnBatchPause.addEventListener('click', () => {
+      uploader.pauseAll();
+      showToast('All active uploads paused', 'info');
     });
   }
 
-  if (btnStopAllUploads) {
-    btnStopAllUploads.addEventListener('click', () => {
-      if (confirm('Are you sure you want to stop and cancel all active uploads?')) {
-        uploader.stopAll();
-        showToast('All uploads stopped and cleared', 'info');
+  if (btnBatchResume) {
+    btnBatchResume.addEventListener('click', () => {
+      uploader.resumeAll();
+      showToast('Resuming uploads...', 'info');
+    });
+  }
+
+  if (btnBatchClear) {
+    btnBatchClear.addEventListener('click', () => {
+      uploader.clearCompleted();
+      showToast('Completed tasks cleared', 'info');
+    });
+  }
+
+  if (btnBatchCancel) {
+    btnBatchCancel.addEventListener('click', () => {
+      if (confirm('Cancel and stop all active uploads in the queue?')) {
+        uploader.cancelAll();
+        showToast('All uploads cancelled', 'warning');
       }
     });
   }
@@ -177,7 +265,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Connect Uploader with UI and Socket.IO
   uploader.onQueueChange((queue) => {
     renderQueue(queue);
-    // Sync button text
+    
+    // Sync tab badge
+    const tabUploaderBadge = document.getElementById('tabUploaderBadge');
+    if (tabUploaderBadge) {
+      tabUploaderBadge.textContent = queue.length;
+    }
+
     if (btnPauseResumeAllUploads) {
       const hasActive = queue.some((t) => t.status === 'uploading' || t.status === 'streaming' || t.status === 'queued');
       btnPauseResumeAllUploads.textContent = hasActive ? '⏸️ Pause All' : '▶️ Resume All';
@@ -195,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
     uploader.syncWithSnapshot(tasks);
   });
 
-  // Rehydrate initial active tasks from backend immediately on page load
+  // Rehydrate initial active tasks from backend
   fetch('/api/tasks')
     .then((res) => res.json())
     .then((tasks) => {
@@ -205,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     .catch((err) => console.debug('Could not pre-fetch tasks:', err));
 
-  // Check Telegram auth status
+  // Check Telegram auth status immediately
   checkAuthStatus();
 
   // Load initial upload history
@@ -216,4 +310,55 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAuthStatus();
     loadHistory();
   }, 30000);
-});
+
+  // Register PWA Service Worker (Instant Load & Desktop App Support)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        console.log('TG Power Suite PWA Service Worker active:', reg.scope);
+      }).catch((err) => {
+        console.debug('Service Worker notice:', err);
+      });
+    });
+  }
+
+  // PWA Desktop / Mobile Install Prompt
+  let deferredInstallPrompt = null;
+  const btnPwaInstall = document.getElementById('btnPwaInstall');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    if (btnPwaInstall) {
+      btnPwaInstall.style.display = 'inline-flex';
+    }
+  });
+
+  if (btnPwaInstall) {
+    btnPwaInstall.addEventListener('click', async () => {
+      if (!deferredInstallPrompt) {
+        showToast('App is already installed or your browser handles installation in the address bar (➕)', 'info');
+        return;
+      }
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      if (outcome === 'accepted') {
+        btnPwaInstall.style.display = 'none';
+        showToast('TG Power Suite installed to your desktop!', 'success');
+      }
+      deferredInstallPrompt = null;
+    });
+  }
+
+  window.addEventListener('appinstalled', () => {
+    if (btnPwaInstall) btnPwaInstall.style.display = 'none';
+    showToast('Welcome to TG Power Suite Desktop App!', 'success');
+  });
+}
+
+// Bootstrap Application reliably
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}

@@ -1,0 +1,15 @@
+[Unit]
+Description=TG Power Suite (Telegram MTProto Turbo Uploader & FDM Proxy)
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Desktop/TG_TOOL
+ExecStart=%h/Desktop/TG_TOOL/venv/bin/python %h/Desktop/TG_TOOL/backend/run.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

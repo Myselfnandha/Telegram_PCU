@@ -240,55 +240,60 @@ class Uploader {
     }
   }
 
-  pauseAll() {
+  async pauseAll() {
+    try {
+      await fetch('/api/upload/batch/pause', { method: 'POST' });
+    } catch (e) {
+      console.warn('Could not pause all tasks:', e);
+    }
     this.queue.forEach((task) => {
-      if (task.status === 'uploading' || task.status === 'streaming' || task.status === 'queued') {
+      if (['uploading', 'streaming', 'queued', 'splitting'].includes(task.status)) {
         task.status = 'paused';
-        socketManager.pauseTask(task.id);
       }
     });
     this._notify();
   }
 
-  resumeAll() {
+  async resumeAll() {
+    try {
+      await fetch('/api/upload/batch/resume', { method: 'POST' });
+    } catch (e) {
+      console.warn('Could not resume all tasks:', e);
+    }
     this.queue.forEach((task) => {
       if (task.status === 'paused') {
         task.status = task.transferredToServer ? 'uploading' : 'queued';
-        socketManager.resumeTask(task.id);
       }
     });
     this._notify();
-    this.processNext();
+    this.processQueue();
   }
 
-  togglePauseResumeAll() {
-    const hasActive = this.queue.some((t) => t.status === 'uploading' || t.status === 'streaming' || t.status === 'queued');
-    if (hasActive) {
-      this.pauseAll();
-    } else {
-      this.resumeAll();
+  async cancelAll() {
+    try {
+      await fetch('/api/upload/batch/cancel', { method: 'POST' });
+    } catch (e) {
+      console.warn('Could not cancel all tasks:', e);
     }
-  }
-
-  stopAll() {
-    // Abort all active XHRs
-    this.activeXhrs.forEach((xhr) => {
-      try { xhr.abort(); } catch (_) {}
-    });
+    this.activeXhrs.forEach((xhr) => xhr.abort());
     this.activeXhrs.clear();
-
-    // Cancel all backend tasks and previews
     this.queue.forEach((task) => {
       if (task.status !== 'completed') {
-        socketManager.cancelTask(task.id);
-        revokePreview(task.id);
         task.status = 'cancelled';
+        revokePreview(task.id);
       }
     });
-
-    this.queue = this.queue.filter((t) => t.status === 'completed');
     this.isProcessing = false;
-    this.activeTask = null;
+    this._notify();
+  }
+
+  async clearCompleted() {
+    try {
+      await fetch('/api/upload/batch/clear', { method: 'POST' });
+    } catch (e) {
+      console.warn('Could not clear completed tasks on server:', e);
+    }
+    this.queue = this.queue.filter((t) => !['completed', 'cancelled', 'failed'].includes(t.status));
     this._notify();
   }
 

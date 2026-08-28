@@ -162,3 +162,27 @@ async def cancel_task(task_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Task not found or already finished")
     return {"status": "success", "task_id": task_id, "action": "cancelled"}
+
+
+@router.post("/upload/batch/pause")
+async def batch_pause_tasks():
+    count = queue_manager.pause_all_tasks()
+    return {"status": "success", "count": count, "action": "paused_all"}
+
+
+@router.post("/upload/batch/resume")
+async def batch_resume_tasks():
+    count = queue_manager.resume_all_tasks()
+    return {"status": "success", "count": count, "action": "resumed_all"}
+
+
+@router.post("/upload/batch/cancel")
+async def batch_cancel_tasks():
+    count = queue_manager.cancel_all_tasks()
+    return {"status": "success", "count": count, "action": "cancelled_all"}
+
+
+@router.post("/upload/batch/clear")
+async def batch_clear_completed():
+    count = queue_manager.clear_completed_tasks()
+    return {"status": "success", "count": count, "action": "cleared_completed"}

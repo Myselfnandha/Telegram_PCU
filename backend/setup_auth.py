@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Interactive CLI Setup Script for Telegram MTProto Authentication.
-Generates and verifies the Telethon .session file for the web application.
+Interactive CLI Setup Script for TG Power Suite Authentication.
+Generates and verifies the Telethon .session file for the application.
 """
 
 import os
@@ -35,13 +35,13 @@ except ImportError:
 
 async def main():
     print("=" * 65)
-    print("   TELEGRAM WEB UPLOADER - ONE-TIME CLI AUTHENTICATION SETUP")
+    print("   TG POWER SUITE - CLI TELEGRAM AUTHENTICATION SETUP")
     print("=" * 65)
 
-    api_id_str = os.getenv("TG_API_ID", "").strip()
-    api_hash = os.getenv("TG_API_HASH", "").strip()
-    session_name = os.getenv("TG_SESSION_NAME", "tg_uploader").strip()
-    phone = os.getenv("TG_PHONE", "").strip()
+    api_id_str = os.getenv("TG_API_ID", os.getenv("API_ID", "")).strip()
+    api_hash = os.getenv("TG_API_HASH", os.getenv("API_HASH", "")).strip()
+    session_name = os.getenv("TG_SESSION_NAME", "tg_suite_user_session").strip()
+    phone = os.getenv("TG_PHONE", os.getenv("PHONE_NUMBER", "")).strip()
 
     if not api_id_str or not api_hash:
         print("\n[!] Telegram API Credentials not found in environment.")
@@ -121,17 +121,18 @@ async def main():
     print(f" User ID: {me.id}")
     print(f" Session file saved: {session_file}.session")
     print("=" * 65)
-    print("\nYou can now start the web application by running: python run.py\n")
+    print("\nYou can now start the application by running: python backend/run.py\n")
 
-    # Update .env if values were entered manually and .env doesn't have them
-    env_path = SCRIPT_DIR / ".env"
+    env_path = ROOT_DIR / ".env"
+    if not env_path.exists():
+        env_path = SCRIPT_DIR / ".env"
     if not env_path.exists():
         with open(env_path, "w") as f:
             f.write(f"TG_API_ID={api_id}\n")
             f.write(f"TG_API_HASH={api_hash}\n")
             f.write(f"TG_PHONE={phone}\n")
             f.write(f"TG_SESSION_NAME={session_name}\n")
-            f.write("HOST=0.0.0.0\nPORT=8000\n")
+            f.write("HOST=0.0.0.0\nPORT=8088\n")
         print(f"[+] Created default .env file at {env_path}")
 
     await client.disconnect()
