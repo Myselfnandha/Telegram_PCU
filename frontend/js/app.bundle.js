@@ -2428,7 +2428,8 @@
       else if (v.height >= 720 || v.width >= 1280) resLabel = "720p";
       else if (v.height > 0) resLabel = `${v.height}p`;
       const durationStr = v.duration > 0 ? _formatDuration(v.duration) : "";
-      const thumbHtml = v.has_thumb ? `<img class="video-thumb-img" src="${v.thumb_url}" alt="Thumbnail" loading="lazy">` : `<div class="video-thumb-fallback">\u{1F3AC}</div>`;
+      const thumbHtml = v.has_thumb ? `<img class="video-thumb-img" src="${v.thumb_url}" alt="" loading="lazy" onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';">
+         <div class="video-thumb-fallback" style="display: none;">\u{1F3AC}</div>` : `<div class="video-thumb-fallback">\u{1F3AC}</div>`;
       card.innerHTML = `
       <div class="video-thumb-container">
         ${thumbHtml}

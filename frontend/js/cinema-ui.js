@@ -257,7 +257,8 @@ function renderCinemaGrid(videos) {
     const durationStr = v.duration > 0 ? _formatDuration(v.duration) : '';
 
     const thumbHtml = v.has_thumb
-      ? `<img class="video-thumb-img" src="${v.thumb_url}" alt="Thumbnail" loading="lazy">`
+      ? `<img class="video-thumb-img" src="${v.thumb_url}" alt="" loading="lazy" onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';">
+         <div class="video-thumb-fallback" style="display: none;">🎬</div>`
       : `<div class="video-thumb-fallback">🎬</div>`;
 
     card.innerHTML = `
