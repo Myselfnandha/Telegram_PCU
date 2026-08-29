@@ -121,7 +121,7 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
 
 
 @router.post("/api/proxy/trigger")
-async def trigger_proxy_download(chat_id: int, message_id: int, manager: Optional[str] = "auto"):
+async def trigger_proxy_download(chat_id: Union[int, str], message_id: int, manager: Optional[str] = "auto"):
     """1-Click manual trigger to push a Telegram file to external download manager."""
     from app.config import PROXY_HOST, PROXY_PORT
     url = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{chat_id}/{message_id}"

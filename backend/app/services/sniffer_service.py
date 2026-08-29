@@ -143,9 +143,12 @@ class SnifferService:
             return True
         self._processed_messages.add(key)
         if len(self._processed_messages) > 5000:
-            # Pop oldest 1000 items
-            for _ in range(1000):
-                self._processed_messages.pop()
+            # Prune oldest items safely down to 4000
+            while len(self._processed_messages) > 4000:
+                try:
+                    self._processed_messages.pop()
+                except KeyError:
+                    break
         return False
 
     def add_channel(self, channel: Union[int, str]) -> bool:

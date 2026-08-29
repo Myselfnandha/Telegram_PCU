@@ -1,9 +1,10 @@
 import asyncio
 import logging
+import math
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Optional, Callable, List, Any
+from typing import Dict, Optional, Callable, List, Any, Union
 from app.models import UploadStatus, SendMode
 from app.config import SPLIT_THRESHOLD
 from app.services.splitter import split_large_file, cleanup_files
@@ -19,7 +20,7 @@ class UploadItem:
         task_id: str,
         file_path: Path,
         original_filename: str,
-        chat_id: int,
+        chat_id: Union[int, str],
         chat_name: str = "",
         caption: str = "",
         custom_filename: Optional[str] = None,

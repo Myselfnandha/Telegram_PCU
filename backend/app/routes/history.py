@@ -13,9 +13,10 @@ router = APIRouter(prefix="/api/history", tags=["history"])
 
 async def init_db():
     """Initializes SQLite database table with WAL mode, index, and performance PRAGMAs."""
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(DB_PATH), timeout=10.0) as db:
         await db.execute("PRAGMA journal_mode=WAL;")
         await db.execute("PRAGMA synchronous=NORMAL;")
+        await db.execute("PRAGMA busy_timeout=10000;")
         await db.execute("PRAGMA temp_store=MEMORY;")
         await db.execute("PRAGMA cache_size=-64000;")
         await db.execute("""
@@ -24,7 +25,7 @@ async def init_db():
                 filename TEXT NOT NULL,
                 file_size INTEGER NOT NULL,
                 mime_type TEXT,
-                chat_id INTEGER NOT NULL,
+                chat_id TEXT NOT NULL,
                 chat_name TEXT,
                 message_id INTEGER,
                 telegram_file_id TEXT,
@@ -52,7 +53,7 @@ async def record_task_history(item: UploadItem):
         completed_str = datetime.fromtimestamp(item.completed_at).strftime("%Y-%m-%d %H:%M:%S") if item.completed_at else None
         first_msg_id = item.message_ids[0] if item.message_ids else None
 
-        async with aiosqlite.connect(str(DB_PATH)) as db:
+        async with aiosqlite.connect(str(DB_PATH), timeout=10.0) as db:
             await db.execute("""
                 INSERT INTO upload_history (
                     id, filename, file_size, mime_type, chat_id, chat_name,
@@ -70,7 +71,7 @@ async def record_task_history(item: UploadItem):
                 item.display_filename,
                 item.file_size,
                 item.mime_type,
-                item.chat_id,
+                str(item.chat_id),
                 item.chat_name,
                 first_msg_id,
                 item.caption,
@@ -90,7 +91,7 @@ async def record_task_history(item: UploadItem):
 async def get_history(limit: int = 50, offset: int = 0):
     """Fetch upload history ordered by newest first."""
     try:
-        async with aiosqlite.connect(str(DB_PATH)) as db:
+        async with aiosqlite.connect(str(DB_PATH), timeout=10.0) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("""
                 SELECT * FROM upload_history 
@@ -108,7 +109,7 @@ async def get_history(limit: int = 50, offset: int = 0):
 async def clear_history():
     """Clears all upload history records."""
     try:
-        async with aiosqlite.connect(str(DB_PATH)) as db:
+        async with aiosqlite.connect(str(DB_PATH), timeout=10.0) as db:
             await db.execute("DELETE FROM upload_history")
             await db.commit()
         return {"status": "success", "message": "Upload history cleared"}

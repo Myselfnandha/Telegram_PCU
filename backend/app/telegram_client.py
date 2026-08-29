@@ -24,6 +24,7 @@ class TelegramClientManager:
     _bot_client: Optional[TelegramClient] = None
     _lock = asyncio.Lock()
     _is_ready = False
+    _cached_me: Optional[dict] = None
 
     @classmethod
     async def get_client(cls) -> TelegramClient:
@@ -59,6 +60,12 @@ class TelegramClientManager:
                 cls._is_ready = await cls._client.is_user_authorized()
                 if cls._is_ready:
                     me = await cls._client.get_me()
+                    full_name = f"{getattr(me, 'first_name', '') or ''} {getattr(me, 'last_name', '') or ''}".strip()
+                    cls._cached_me = {
+                        "id": getattr(me, "id", None),
+                        "name": full_name or getattr(me, "username", "Telegram User"),
+                        "username": getattr(me, "username", None)
+                    }
                     logger.info(f"Telegram user client authorized as: {getattr(me, 'first_name', '')} (@{getattr(me, 'username', 'N/A')})")
                 elif BOT_TOKEN:
                     logger.info("User session not authorized; attempting Bot login with BOT_TOKEN...")
@@ -66,10 +73,16 @@ class TelegramClientManager:
                         await cls._client.start(bot_token=BOT_TOKEN)
                         cls._is_ready = True
                         me = await cls._client.get_me()
+                        cls._cached_me = {
+                            "id": getattr(me, "id", None),
+                            "name": getattr(me, "first_name", "Telegram Bot"),
+                            "username": getattr(me, "username", None)
+                        }
                         logger.info(f"Telegram client started as Bot: @{getattr(me, 'username', 'N/A')}")
                     except Exception as bot_err:
                         logger.warning(f"Failed bot login on user client: {bot_err}")
                 else:
+                    cls._cached_me = None
                     logger.warning("Telethon client connected but NOT authorized yet. Run setup_auth.py to log in.")
 
         return cls._client

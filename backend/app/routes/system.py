@@ -34,7 +34,7 @@ def get_system_telemetry() -> Dict[str, Any]:
     total_stream_bytes = getattr(sniffer_service, "total_streamed_bytes", 0)
 
     # MTProto info
-    me_info = TelegramClientManager._me_info
+    me_info = getattr(TelegramClientManager, "_cached_me", None)
     auth_status = bool(me_info is not None)
 
     uptime_sec = round(time.time() - SERVER_START_TIME, 1)
