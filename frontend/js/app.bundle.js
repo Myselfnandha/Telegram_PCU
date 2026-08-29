@@ -2862,6 +2862,7 @@
               bingeBtn.classList.add("playing-pulse");
               setTimeout(() => bingeBtn.classList.remove("playing-pulse"), 1200);
               const eps = show.seasonsMap.get(currentSeason) || [];
+              showToast2(`\u{1F37F} Launching ${show.showTitle} (${currentSeason} \u2022 ${eps.length} Episodes) in VLC...`, "info");
               fetch("/api/media/vlc/play_batch", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -2869,6 +2870,10 @@
                   title: `${show.showTitle} - ${currentSeason}`,
                   items: eps
                 })
+              }).then((res) => res.json()).then((data) => {
+                if (data.launched) {
+                  showToast2(`\u{1F3AC} Streaming ${show.showTitle} (${currentSeason}) in VLC Player!`, "success");
+                }
               }).catch((err) => showToast2(`Playback error: ${err.message}`, "error"));
             });
           }
@@ -2998,6 +3003,7 @@
       element.classList.add("playing-pulse");
       setTimeout(() => element.classList.remove("playing-pulse"), 1200);
     }
+    showToast2(`\u{1F3AC} Launching "${v.filename}" in VLC Player...`, "info");
     try {
       const resp = await fetch("/api/media/vlc/play", {
         method: "POST",
@@ -3011,13 +3017,16 @@
         })
       });
       const data = await resp.json();
-      if (!data.launched && data.playlist_url) {
+      if (data.launched) {
+        showToast2(`\u{1F3AC} Streaming "${v.filename}" in VLC Player!`, "success");
+      } else if (data.playlist_url) {
         const a = document.createElement("a");
         a.href = data.playlist_url;
         a.download = `${v.filename}.m3u`;
         document.body.appendChild(a);
         a.click();
         a.remove();
+        showToast2(`\u{1F4E5} VLC not detected locally. Downloaded playlist!`, "info");
       }
     } catch (e) {
       showToast2(`Player launch error: ${e.message}`, "warning");

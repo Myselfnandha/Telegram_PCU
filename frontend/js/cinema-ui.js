@@ -557,7 +557,7 @@ export function renderCinemaGrid(videos) {
           });
         }
 
-        // Binge Active Season Playback in VLC (Silent Instant Launch with Micro Indicator)
+        // Binge Active Season Playback in VLC (with Toast & Ripple Animation)
         const bingeBtn = showCard.querySelector('.btn-binge-all');
         if (bingeBtn) {
           bingeBtn.addEventListener('click', (e) => {
@@ -566,6 +566,7 @@ export function renderCinemaGrid(videos) {
             setTimeout(() => bingeBtn.classList.remove('playing-pulse'), 1200);
 
             const eps = show.seasonsMap.get(currentSeason) || [];
+            showToast(`🍿 Launching ${show.showTitle} (${currentSeason} • ${eps.length} Episodes) in VLC...`, 'info');
             fetch('/api/media/vlc/play_batch', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -573,7 +574,14 @@ export function renderCinemaGrid(videos) {
                 title: `${show.showTitle} - ${currentSeason}`,
                 items: eps
               })
-            }).catch((err) => showToast(`Playback error: ${err.message}`, 'error'));
+            })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.launched) {
+                showToast(`🎬 Streaming ${show.showTitle} (${currentSeason}) in VLC Player!`, 'success');
+              }
+            })
+            .catch((err) => showToast(`Playback error: ${err.message}`, 'error'));
           });
         }
 
@@ -725,6 +733,8 @@ export async function playInVlc(v, playerType = 'auto', element = null) {
     setTimeout(() => element.classList.remove('playing-pulse'), 1200);
   }
 
+  showToast(`🎬 Launching "${v.filename}" in VLC Player...`, 'info');
+
   try {
     const resp = await fetch('/api/media/vlc/play', {
       method: 'POST',
@@ -738,13 +748,16 @@ export async function playInVlc(v, playerType = 'auto', element = null) {
       })
     });
     const data = await resp.json();
-    if (!data.launched && data.playlist_url) {
+    if (data.launched) {
+      showToast(`🎬 Streaming "${v.filename}" in VLC Player!`, 'success');
+    } else if (data.playlist_url) {
       const a = document.createElement('a');
       a.href = data.playlist_url;
       a.download = `${v.filename}.m3u`;
       document.body.appendChild(a);
       a.click();
       a.remove();
+      showToast(`📥 VLC not detected locally. Downloaded playlist!`, 'info');
     }
   } catch (e) {
     showToast(`Player launch error: ${e.message}`, 'warning');

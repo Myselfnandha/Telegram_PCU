@@ -8,7 +8,6 @@ from typing import Optional, Dict, Any, List, Union, cast
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from app.telegram_client import TelegramClientManager
-from app.services.account_shield import account_shield
 from app.services.sniffer_service import auto_rename, sniffer_service
 from app.services.manager_detector import trigger_manager, detect_managers
 
@@ -731,12 +730,11 @@ async def get_media_preview_frame(chat_id: str, message_id: int, frame_idx: int 
     return await get_media_thumbnail(chat_id, message_id)
 
 
-@router.get("/api/media/videos/{chat_id}")
-async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
-    """
-    Fetches video archives from a Telegram channel, group, or Saved Messages for the Cinema tab.
-    Extracts duration, resolution dimensions, file size, and direct stream URLs.
-    """
+_CINEMA_VIDEOS_CACHE: Dict[str, dict] = {}
+CINEMA_CACHE_TTL = 300  # 5 minutes in-memory cache
+
+
+async def _fetch_and_cache_videos(chat_id: str, limit: int = 50, offset_id: int = 0) -> dict:
     try:
         client = await TelegramClientManager.get_client()
         if not client or not client.is_connected() or not await client.is_user_authorized():
@@ -758,23 +756,19 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
     try:
         from telethon.tl.types import InputMessagesFilterVideo, InputMessagesFilterDocument, DocumentAttributeVideo, DocumentAttributeFilename
 
-        # Fetch both native video messages AND videos sent as documents (MKV, MP4, etc.)
+        # Fetch both native video messages AND videos sent as documents (MKV, MP4, etc.) at full raw MTProto speed
         fetch_limit = max(limit, 80)
-        v_task = account_shield.safe_call(
-            client.get_messages,
+        v_task = client.get_messages(
             clean_chat_id,
             limit=fetch_limit,
             offset_id=offset_id,
-            filter=InputMessagesFilterVideo,
-            context="Fetch Video Messages"
+            filter=InputMessagesFilterVideo
         )
-        d_task = account_shield.safe_call(
-            client.get_messages,
+        d_task = client.get_messages(
             clean_chat_id,
             limit=fetch_limit,
             offset_id=offset_id,
-            filter=InputMessagesFilterDocument,
-            context="Fetch Document Messages"
+            filter=InputMessagesFilterDocument
         )
 
         v_msgs, d_msgs = await asyncio.gather(v_task, d_task, return_exceptions=True)
@@ -886,11 +880,36 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
         logger.error(f"Error querying videos for {chat_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to query videos: {str(e)}")
 
-    return {
+    res = {
         "chat_id": str(chat_id),
         "count": len(videos),
         "videos": videos
     }
+
+    cache_key = f"{chat_id}_{offset_id}"
+    _CINEMA_VIDEOS_CACHE[cache_key] = {
+        "data": res,
+        "timestamp": time.time()
+    }
+    return res
+
+
+@router.get("/api/media/videos/{chat_id}")
+async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0, force_refresh: bool = False):
+    """
+    Fetches video archives from a Telegram channel, group, or Saved Messages for the Cinema tab.
+    Implements Stale-While-Revalidate caching for instantaneous (<1ms) response times.
+    """
+    cache_key = f"{chat_id}_{offset_id}"
+    now = time.time()
+
+    if not force_refresh and cache_key in _CINEMA_VIDEOS_CACHE:
+        cached_entry = _CINEMA_VIDEOS_CACHE[cache_key]
+        if (now - cached_entry["timestamp"]) > 60:
+            asyncio.create_task(_fetch_and_cache_videos(chat_id, limit, offset_id))
+        return cached_entry["data"]
+
+    return await _fetch_and_cache_videos(chat_id, limit, offset_id)
 
 
 @router.post("/api/proxy/trigger")
