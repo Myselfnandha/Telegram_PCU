@@ -3,27 +3,12 @@ import { formatBytes, escapeHtml } from './utils.js';
 import { chatPicker } from './chat-picker.js';
 
 let _cinemaVideos = [];
-let _currentPlayingIndex = -1;
 let _currentChatId = 'me';
-let _currentAudioTrack = 0;
-let _currentSubtitleTrack = 'off';
-let _knownDuration = 0;
-let _seekBaseOffset = 0;
-let _isScrubbing = false;
 
 export async function initCinema() {
   const btnChooseChat = document.getElementById('btnCinemaChooseChat');
   const videoSearch = document.getElementById('cinemaSearchInput');
   const btnRefresh = document.getElementById('btnCinemaRefresh');
-  const videoPlayer = document.getElementById('cinemaVideoPlayer');
-  const btnFdm = document.getElementById('btnCinemaFdm');
-  const btnCopyStream = document.getElementById('btnCinemaCopyUrl');
-  const btnNextTrack = document.getElementById('btnCinemaNext');
-  const audioSelect = document.getElementById('cinemaAudioSelect');
-  const subSelect = document.getElementById('cinemaSubtitleSelect');
-  const scrubber = document.getElementById('cinemaScrubber');
-
-  if (!videoPlayer) return;
 
   // 1. Destination Bar & Watched Channels Setup
   _initCinemaDestinationPicker();
@@ -50,243 +35,6 @@ export async function initCinema() {
     });
   }
 
-  // Audio Track Selection Change
-  if (audioSelect) {
-    audioSelect.addEventListener('change', (e) => {
-      _currentAudioTrack = parseInt(e.target.value, 10) || 0;
-      const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
-      _reloadStreamWithParams(currentPos);
-      showToast(`🔊 Audio: ${audioSelect.options[audioSelect.selectedIndex]?.text}`, 'info');
-    });
-  }
-
-  // Subtitle Track Selection Change
-  if (subSelect) {
-    subSelect.addEventListener('change', (e) => {
-      _currentSubtitleTrack = e.target.value;
-      _applySubtitleTrack(_currentSubtitleTrack);
-    });
-  }
-
-  // Custom Full Duration Scrubber
-  if (scrubber) {
-    scrubber.addEventListener('input', () => {
-      _isScrubbing = true;
-      const currentElem = document.getElementById('cinemaCurrentTime');
-      if (currentElem) currentElem.textContent = _formatDuration(parseFloat(scrubber.value));
-    });
-
-    scrubber.addEventListener('change', () => {
-      _isScrubbing = false;
-      const targetSec = parseFloat(scrubber.value);
-      _seekToPosition(targetSec);
-    });
-  }
-
-  // Video Player Time Update Sync
-  videoPlayer.addEventListener('timeupdate', () => {
-    if (_isScrubbing) return;
-    const currentElem = document.getElementById('cinemaCurrentTime');
-    const totalElem = document.getElementById('cinemaTotalDuration');
-    const scrubberElem = document.getElementById('cinemaScrubber');
-
-    const totalDur = _knownDuration || videoPlayer.duration || 0;
-    const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
-
-    if (currentElem) currentElem.textContent = _formatDuration(currentPos);
-    if (totalElem && totalDur > 0) totalElem.textContent = _formatDuration(totalDur);
-    if (scrubberElem && totalDur > 0) {
-      scrubberElem.max = totalDur;
-      scrubberElem.value = currentPos;
-    }
-  });
-
-  // Video Error & Codec Handling
-  const errorNotice = document.getElementById('cinemaPlayerErrorNotice');
-  const btnFdmFallback = document.getElementById('btnCinemaFdmFallback');
-  const btnCopyFallback = document.getElementById('btnCinemaCopyFallback');
-
-  let _stallTimer = null;
-
-  function _clearStallTimer() {
-    if (_stallTimer) {
-      clearTimeout(_stallTimer);
-      _stallTimer = null;
-    }
-  }
-
-  function _startStallTimer() {
-    _clearStallTimer();
-    _stallTimer = setTimeout(() => {
-      if (videoPlayer.readyState < 2 && videoPlayer.currentTime === 0) {
-        console.warn('Video buffer stalled. Displaying VLC / external codec fallback.');
-        if (errorNotice) errorNotice.style.display = 'flex';
-      }
-    }, 4500);
-  }
-
-  videoPlayer.addEventListener('error', () => {
-    _clearStallTimer();
-    if (_currentPlayingIndex >= 0 && _cinemaVideos[_currentPlayingIndex]) {
-      const v = _cinemaVideos[_currentPlayingIndex];
-      const currentSrc = videoPlayer.getAttribute('src') || '';
-      if (!currentSrc.includes('/stream/') && v.stream_transmux_url) {
-        console.log('Native stream unsupported. Auto-switching to real-time transmux stream...');
-        videoPlayer.src = v.stream_transmux_url;
-        videoPlayer.load();
-        videoPlayer.play().catch(() => {});
-        _startStallTimer();
-        return;
-      }
-    }
-    if (errorNotice) errorNotice.style.display = 'flex';
-  });
-
-  videoPlayer.addEventListener('loadstart', () => {
-    _startStallTimer();
-  });
-
-  videoPlayer.addEventListener('waiting', () => {
-    _startStallTimer();
-  });
-
-  videoPlayer.addEventListener('loadeddata', () => {
-    _clearStallTimer();
-    if (errorNotice) errorNotice.style.display = 'none';
-  });
-
-  videoPlayer.addEventListener('playing', () => {
-    _clearStallTimer();
-    if (errorNotice) errorNotice.style.display = 'none';
-  });
-
-  const btnVlc = document.getElementById('btnCinemaVlc');
-  const btnVlcFallback = document.getElementById('btnCinemaVlcFallback');
-
-  async function _triggerVlcStream() {
-    if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) {
-      showToast('Please select a video from the archive first', 'info');
-      return;
-    }
-    const v = _cinemaVideos[_currentPlayingIndex];
-    showToast(`🎬 Launching VLC for "${v.filename}"...`, 'info');
-    try {
-      const resp = await fetch('/api/media/vlc/play', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: v.chat_id,
-          message_id: v.message_id,
-          filename: v.filename,
-          stream_url: v.stream_url
-        })
-      });
-      const data = await resp.json();
-      if (data.launched) {
-        showToast(`🎬 VLC launched for "${v.filename}"!`, 'success');
-      } else if (data.playlist_url) {
-        const a = document.createElement('a');
-        a.href = data.playlist_url;
-        a.download = `${v.filename}.m3u`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        showToast('🎬 Generated VLC .m3u playlist. Opening stream...', 'success');
-      }
-    } catch (e) {
-      showToast(`VLC launch notice: ${e.message}`, 'warning');
-    }
-  }
-
-  if (btnVlc) {
-    btnVlc.addEventListener('click', _triggerVlcStream);
-  }
-
-  if (btnVlcFallback) {
-    btnVlcFallback.addEventListener('click', _triggerVlcStream);
-  }
-
-  if (btnFdmFallback) {
-    btnFdmFallback.addEventListener('click', () => btnFdm?.click());
-  }
-
-  if (btnCopyFallback) {
-    btnCopyFallback.addEventListener('click', () => btnCopyStream?.click());
-  }
-
-  // Next Track / Auto-Play Next
-  if (btnNextTrack) {
-    btnNextTrack.addEventListener('click', _playNextVideo);
-  }
-  videoPlayer.addEventListener('ended', _playNextVideo);
-
-  // Download to FDM
-  if (btnFdm) {
-    btnFdm.addEventListener('click', async () => {
-      if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
-      const v = _cinemaVideos[_currentPlayingIndex];
-      try {
-        const resp = await fetch(`/api/proxy/trigger?chat_id=${encodeURIComponent(v.chat_id)}&message_id=${v.message_id}`, { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-          showToast(`🚀 Dispatched "${v.filename}" to ${data.manager.toUpperCase()}`, 'success');
-        } else {
-          showToast(`⚠️ Could not auto-launch manager. Copied stream link.`, 'warning');
-        }
-      } catch (err) {
-        showToast(`Download trigger error: ${err.message}`, 'error');
-      }
-    });
-  }
-
-  // Copy Stream URL
-  if (btnCopyStream) {
-    btnCopyStream.addEventListener('click', () => {
-      if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
-      const v = _cinemaVideos[_currentPlayingIndex];
-      const fullUrl = `${window.location.origin}${v.stream_url}`;
-      navigator.clipboard.writeText(fullUrl).then(() => {
-        showToast('📋 Stream URL copied to clipboard!', 'success');
-      });
-    });
-  }
-
-  // Keyboard Shortcuts for Video Player
-  document.addEventListener('keydown', (e) => {
-    const cinemaTab = document.getElementById('tabPaneCinema');
-    if (!cinemaTab || !cinemaTab.classList.contains('active')) return;
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
-
-    if (e.code === 'Space' || e.code === 'KeyK') {
-      e.preventDefault();
-      videoPlayer.paused ? videoPlayer.play() : videoPlayer.pause();
-    } else if (e.code === 'ArrowRight' || e.code === 'KeyL') {
-      e.preventDefault();
-      const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
-      const totalDur = _knownDuration || videoPlayer.duration || (currentPos + 60);
-      const newPos = Math.min(totalDur, currentPos + 10);
-      _seekToPosition(newPos);
-    } else if (e.code === 'ArrowLeft' || e.code === 'KeyJ') {
-      e.preventDefault();
-      const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
-      const newPos = Math.max(0, currentPos - 10);
-      _seekToPosition(newPos);
-    } else if (e.code === 'KeyM') {
-      e.preventDefault();
-      videoPlayer.muted = !videoPlayer.muted;
-    } else if (e.code === 'KeyF') {
-      e.preventDefault();
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
-      } else {
-        videoPlayer.requestFullscreen?.();
-      }
-    } else if (e.code === 'KeyV') {
-      e.preventDefault();
-      _triggerVlcStream();
-    }
-  });
-
   // Initial Load
   loadCinemaVideos('me');
 }
@@ -295,141 +43,98 @@ function _initCinemaDestinationPicker() {
   const nameEl = document.getElementById('cinemaCurrentChatName');
   const typeEl = document.getElementById('cinemaCurrentChatType');
   const iconEl = document.getElementById('cinemaCurrentChatIcon');
-  
+
   if (nameEl) nameEl.textContent = 'Saved Messages (Personal Cloud)';
-  if (typeEl) typeEl.textContent = 'CLOUD';
+  if (typeEl) {
+    typeEl.textContent = 'CLOUD';
+    typeEl.className = 'chat-type-tag';
+  }
   if (iconEl) iconEl.textContent = '☁️';
 }
 
 function _onCinemaChatSelected(chat) {
-  if (!chat) return;
   _currentChatId = chat.id;
-
   const nameEl = document.getElementById('cinemaCurrentChatName');
   const typeEl = document.getElementById('cinemaCurrentChatType');
   const iconEl = document.getElementById('cinemaCurrentChatIcon');
 
-  let icon = '💬';
-  if (chat.type === 'saved_messages') icon = '☁️';
-  else if (chat.type === 'channel') icon = '📢';
-  else if (chat.type === 'supergroup' || chat.type === 'group') icon = '👥';
-  else if (chat.type === 'bot') icon = '🤖';
-
-  if (iconEl) iconEl.textContent = icon;
-  if (nameEl) nameEl.textContent = chat.name || 'Chat';
+  if (nameEl) nameEl.textContent = chat.name;
   if (typeEl) {
-    const label = chat.type === 'saved_messages' ? 'CLOUD' : (chat.type || 'CHAT').replace('_', ' ').toUpperCase();
-    typeEl.textContent = label;
+    typeEl.textContent = (chat.type || 'chat').toUpperCase();
+    typeEl.className = `chat-type-tag type-${chat.type || 'chat'}`;
+  }
+  if (iconEl) {
+    const icons = { saved_messages: '☁️', user: '👤', channel: '📢', supergroup: '👥', group: '👥', bot: '🤖' };
+    iconEl.textContent = icons[chat.type] || '💬';
   }
 
-  // Update active chip state
-  const chipContainer = document.getElementById('cinemaWatchedChips');
-  if (chipContainer) {
-    chipContainer.querySelectorAll('.cinema-chip').forEach((el) => {
-      if (el.getAttribute('data-chat-id') === String(chat.id)) {
-        el.classList.add('active');
-      } else {
-        el.classList.remove('active');
-      }
-    });
-  }
+  // Update active chip highlight
+  document.querySelectorAll('.cinema-chip').forEach((c) => {
+    const chipId = c.getAttribute('data-chat-id');
+    c.classList.toggle('active', chipId == chat.id);
+  });
 
-  showToast(`🎬 Source Channel: "${chat.name}"`, 'info');
+  showToast(`🎬 Loaded archive: "${chat.name}"`, 'info');
   loadCinemaVideos(_currentChatId);
 }
 
 async function _loadCinemaWatchedChips() {
-  const chipContainer = document.getElementById('cinemaWatchedChips');
-  if (!chipContainer) return;
+  const chipsContainer = document.getElementById('cinemaWatchedChips');
+  if (!chipsContainer) return;
 
-  const watchedItems = [
-    { id: 'me', name: 'Saved Messages', type: 'saved_messages' }
-  ];
+  chipsContainer.innerHTML = '';
 
-  try {
-    const [chatsResp, snifferResp] = await Promise.allSettled([
-      fetch('/api/chats'),
-      fetch('/api/sniffer/status')
-    ]);
-
-    let allChats = [];
-    if (chatsResp.status === 'fulfilled' && chatsResp.value.ok) {
-      allChats = await chatsResp.value.json();
-    }
-
-    let watchedIds = [];
-    if (snifferResp.status === 'fulfilled' && snifferResp.value.ok) {
-      const snifferData = await snifferResp.value.json();
-      watchedIds = snifferData.watched_channels || [];
-    }
-
-    // Add watched channels
-    watchedIds.forEach((wId) => {
-      if (String(wId) === 'me') return;
-      const matched = allChats.find((c) => String(c.id) === String(wId));
-      if (matched) {
-        watchedItems.push(matched);
-      } else {
-        watchedItems.push({ id: wId, name: `Channel ${wId}`, type: 'channel' });
-      }
-    });
-
-    // Also add top channels from dialogs
-    allChats.forEach((c) => {
-      if (watchedItems.some((w) => String(w.id) === String(c.id))) return;
-      if (watchedItems.length < 7 && (c.type === 'channel' || c.type === 'supergroup')) {
-        watchedItems.push(c);
-      }
-    });
-
-  } catch (err) {
-    console.debug('Error loading watched chips for Cinema:', err);
-  }
-
-  chipContainer.innerHTML = watchedItems.map((c) => {
-    const isActive = String(_currentChatId) === String(c.id);
-    let icon = '💬';
-    if (c.type === 'saved_messages') icon = '☁️';
-    else if (c.type === 'channel') icon = '📢';
-    else if (c.type === 'supergroup' || c.type === 'group') icon = '👥';
-
-    return `
-      <button type="button" class="cinema-chip ${isActive ? 'active' : ''}" data-chat-id="${escapeHtml(String(c.id))}" style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: var(--radius-full); font-size: 0.76rem; font-weight: 600; cursor: pointer; white-space: nowrap; border: 1px solid var(--border-glass); background: var(--bg-card); color: var(--text-muted); transition: all 0.2s; flex-shrink: 0;">
-        <span>${icon}</span>
-        <span>${escapeHtml(c.name)}</span>
-      </button>
-    `;
-  }).join('');
-
-  // Attach chip click listeners
-  chipContainer.querySelectorAll('.cinema-chip').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const chatId = btn.getAttribute('data-chat-id');
-      const item = watchedItems.find((w) => String(w.id) === String(chatId));
-      if (item) {
-        _onCinemaChatSelected(item);
-      }
-    });
+  // 1. Saved Messages Chip
+  const savedChip = document.createElement('button');
+  savedChip.type = 'button';
+  savedChip.className = 'cinema-chip active';
+  savedChip.setAttribute('data-chat-id', 'me');
+  savedChip.innerHTML = `<span>☁️</span><span>Saved Messages</span>`;
+  savedChip.addEventListener('click', () => {
+    _onCinemaChatSelected({ id: 'me', name: 'Saved Messages (Personal Cloud)', type: 'saved_messages' });
   });
+  chipsContainer.appendChild(savedChip);
+
+  // 2. Fetch watched channels from sniffer status
+  try {
+    const resp = await fetch('/api/sniffer/status');
+    const data = await resp.json();
+    const channels = data.watched_channels || [];
+
+    channels.forEach((ch) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'cinema-chip';
+      chip.setAttribute('data-chat-id', ch.id);
+      const icon = ch.type === 'channel' ? '📢' : (ch.type === 'supergroup' || ch.type === 'group' ? '👥' : '💬');
+      chip.innerHTML = `<span>${icon}</span><span>${escapeHtml(ch.name)}</span>`;
+      chip.addEventListener('click', () => {
+        _onCinemaChatSelected({ id: ch.id, name: ch.name, type: ch.type });
+      });
+      chipsContainer.appendChild(chip);
+    });
+  } catch (err) {
+    console.debug('Could not load watched channels for chips:', err);
+  }
 }
 
-export async function loadCinemaVideos(chatId) {
+export async function loadCinemaVideos(chatId = 'me') {
+  _currentChatId = chatId;
   const grid = document.getElementById('cinemaVideoGrid');
   const countBadge = document.getElementById('cinemaVideoCount');
-  if (!grid) return;
 
-  grid.innerHTML = `
-    <div class="cinema-loading">
-      <div class="spinner" style="width: 28px; height: 28px; margin: 0 auto 12px auto;"></div>
-      <span>Fetching video archive from Telegram Cloud...</span>
-    </div>
-  `;
+  if (grid) {
+    grid.innerHTML = `
+      <div class="cinema-loading">
+        <div class="spinner" style="margin-bottom: 12px;"></div>
+        <p style="font-size: 0.9rem; color: var(--text-muted);">Fetching video files from Telegram MTProto...</p>
+      </div>
+    `;
+  }
 
   try {
-    const resp = await fetch(`/api/media/videos/${encodeURIComponent(chatId)}?limit=60`);
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-    }
+    const resp = await fetch(`/api/media/videos/${encodeURIComponent(chatId)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     _cinemaVideos = data.videos || [];
 
@@ -439,70 +144,133 @@ export async function loadCinemaVideos(chatId) {
 
     renderCinemaGrid(_cinemaVideos);
   } catch (err) {
-    grid.innerHTML = `
-      <div class="cinema-empty">
-        <span style="font-size: 2.2rem; margin-bottom: 8px;">⚠️</span>
-        <span style="font-weight: 600; color: var(--text-main);">Could not load video archive</span>
-        <span style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">${err.message}</span>
-      </div>
-    `;
+    if (grid) {
+      grid.innerHTML = `
+        <div class="cinema-empty">
+          <span style="font-size: 2.2rem; margin-bottom: 8px;">⚠️</span>
+          <p style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">Could not load video archive</p>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml(err.message)}</p>
+          <button class="btn-secondary" style="margin-top: 14px; padding: 6px 14px; font-size: 0.8rem;" onclick="window._reloadCinema()">
+            🔄 Try Again
+          </button>
+        </div>
+      `;
+    }
   }
 }
 
-function renderCinemaGrid(videos) {
+window._reloadCinema = () => loadCinemaVideos(_currentChatId);
+
+export function renderCinemaGrid(videos) {
   const grid = document.getElementById('cinemaVideoGrid');
   if (!grid) return;
+
+  grid.innerHTML = '';
 
   if (videos.length === 0) {
     grid.innerHTML = `
       <div class="cinema-empty">
-        <span style="font-size: 2.2rem; margin-bottom: 8px;">🎬</span>
-        <span style="font-weight: 600; color: var(--text-main);">No video media found in this chat</span>
-        <span style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Upload or forward video files to watch them here instantly</span>
+        <span style="font-size: 2.4rem; margin-bottom: 8px;">🎬</span>
+        <p style="font-size: 1rem; font-weight: 600; color: var(--text-main);">No video files found</p>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">This channel does not contain any video documents or movies</p>
       </div>
     `;
     return;
   }
 
-  grid.innerHTML = '';
   videos.forEach((v, idx) => {
     const card = document.createElement('div');
-    card.className = `video-card glass-panel ${_currentPlayingIndex === idx ? 'active' : ''}`;
+    card.className = 'cinema-hub-card';
     card.id = `videoCard_${idx}`;
 
     let resLabel = '';
-    if (v.height >= 2160 || v.width >= 3840) resLabel = '4K UHD';
-    else if (v.height >= 1080 || v.width >= 1920) resLabel = '1080p';
-    else if (v.height >= 720 || v.width >= 1280) resLabel = '720p';
-    else if (v.height > 0) resLabel = `${v.height}p`;
+    if (v.width && v.height) {
+      if (v.width >= 3840 || v.height >= 2160) resLabel = '4K';
+      else if (v.width >= 1920 || v.height >= 1080) resLabel = '1080p';
+      else if (v.width >= 1280 || v.height >= 720) resLabel = '720p';
+      else if (v.height > 0) resLabel = `${v.height}p`;
+    }
 
-    const durationStr = v.duration > 0 ? _formatDuration(v.duration) : '';
-
-    const thumbHtml = v.has_thumb
-      ? `<img class="video-thumb-img" src="${v.thumb_url}" alt="" loading="lazy" onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';">
-         <div class="video-thumb-fallback" style="display: none;">🎬</div>`
-      : `<div class="video-thumb-fallback">🎬</div>`;
+    const durationStr = v.duration ? _formatDuration(v.duration) : '';
+    const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
 
     card.innerHTML = `
-      <div class="video-thumb-container">
-        ${thumbHtml}
+      <div class="cinema-hub-thumb" title="Click to stream in VLC Player">
+        ${v.has_thumb
+          ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(v.filename)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
+          : `<div class="cinema-hub-thumb-fallback">🎬</div>`
+        }
         ${resLabel ? `<span class="video-res-pill">${resLabel}</span>` : ''}
         ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ''}
-        <div class="video-play-overlay">▶</div>
+        <div class="cinema-hub-play-overlay">
+          <div class="cinema-hub-play-btn">
+            <span>▶</span><span>Stream in VLC</span>
+          </div>
+        </div>
       </div>
-      <div class="video-meta">
-        <span class="video-card-title" title="${escapeHtml(v.filename)}">${escapeHtml(v.filename)}</span>
-        <div class="video-card-sub">
+      <div class="cinema-hub-meta">
+        <span class="cinema-hub-title" title="${escapeHtml(v.filename)}">${escapeHtml(v.filename)}</span>
+        <div class="cinema-hub-sub">
           <span>${formatBytes(v.file_size)}</span>
+          <span>•</span>
+          <span style="color: ${isMkv ? '#ff793f' : 'var(--accent-secondary)'}; font-weight: 600;">${isMkv ? 'MKV' : 'MP4'}</span>
           <span>•</span>
           <span>${v.date ? new Date(v.date * 1000).toLocaleDateString() : 'Cloud'}</span>
         </div>
       </div>
+      <div class="cinema-hub-card-actions">
+        <button class="btn-primary btn-card-vlc" type="button" title="Stream in VLC Media Player" style="flex: 1.2; padding: 6px 10px; font-size: 0.78rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
+          <span>🎬</span><span>VLC</span>
+        </button>
+        <button class="btn-secondary btn-card-fdm" type="button" title="Push to Free Download Manager" style="flex: 1; padding: 6px 8px; font-size: 0.78rem;">
+          <span>🚀</span><span>FDM</span>
+        </button>
+        <button class="btn-secondary btn-card-copy" type="button" title="Copy HTTP Stream Link" style="flex: 0.8; padding: 6px 8px; font-size: 0.78rem;">
+          <span>📋</span>
+        </button>
+        <button class="btn-secondary btn-card-m3u" type="button" title="Download VLC .m3u Playlist" style="flex: 0.8; padding: 6px 8px; font-size: 0.78rem;">
+          <span>📥</span>
+        </button>
+      </div>
     `;
 
-    card.addEventListener('click', () => {
-      selectCinemaVideo(idx, true);
-    });
+    // 1. Click thumbnail or VLC button -> Launches VLC
+    const thumbEl = card.querySelector('.cinema-hub-thumb');
+    const vlcBtn = card.querySelector('.btn-card-vlc');
+    if (thumbEl) thumbEl.addEventListener('click', () => playInVlc(v));
+    if (vlcBtn) vlcBtn.addEventListener('click', () => playInVlc(v));
+
+    // 2. Click FDM button -> Push to Download Manager
+    const fdmBtn = card.querySelector('.btn-card-fdm');
+    if (fdmBtn) {
+      fdmBtn.addEventListener('click', () => triggerFdm(v));
+    }
+
+    // 3. Click Copy button -> Copy Stream URL
+    const copyBtn = card.querySelector('.btn-card-copy');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const fullUrl = `${window.location.origin}${v.stream_url}`;
+        navigator.clipboard.writeText(fullUrl).then(() => {
+          showToast('📋 Stream URL copied to clipboard!', 'success');
+        });
+      });
+    }
+
+    // 4. Click M3U button -> Download Playlist
+    const m3uBtn = card.querySelector('.btn-card-m3u');
+    if (m3uBtn) {
+      m3uBtn.addEventListener('click', () => {
+        const url = `/api/media/vlc/playlist/${encodeURIComponent(v.chat_id)}/${v.message_id}/${encodeURIComponent(v.filename)}.m3u`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${v.filename}.m3u`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('📥 Downloaded VLC .m3u playlist', 'success');
+      });
+    }
 
     grid.appendChild(card);
   });
@@ -517,209 +285,58 @@ function _filterCinemaGrid(query) {
   renderCinemaGrid(filtered);
 }
 
-export async function selectCinemaVideo(idx, autoPlay = true) {
-  if (idx < 0 || idx >= _cinemaVideos.length) return;
-  _currentPlayingIndex = idx;
-  _currentAudioTrack = 0;
-  _currentSubtitleTrack = 'off';
-  _seekBaseOffset = 0;
-  const v = _cinemaVideos[idx];
-
-  const videoPlayer = document.getElementById('cinemaVideoPlayer');
-  const standbyNotice = document.getElementById('cinemaPlayerStandbyNotice');
-  const errorNotice = document.getElementById('cinemaPlayerErrorNotice');
-  const titleElem = document.getElementById('cinemaNowPlayingTitle');
-  const resElem = document.getElementById('cinemaNowPlayingRes');
-  const sizeElem = document.getElementById('cinemaNowPlayingSize');
-  const durElem = document.getElementById('cinemaNowPlayingDur');
-  const timelineContainer = document.getElementById('cinemaTimelineContainer');
-  const scrubber = document.getElementById('cinemaScrubber');
-
-  if (standbyNotice) standbyNotice.style.display = 'none';
-  if (errorNotice) errorNotice.style.display = 'none';
-  if (videoPlayer) videoPlayer.style.display = 'block';
-
-  if (titleElem) titleElem.textContent = v.filename;
-  if (resElem) {
-    let resText = 'HD Video';
-    if (v.width && v.height) resText = `${v.width}x${v.height}`;
-    resElem.textContent = resText;
-  }
-  if (sizeElem) sizeElem.textContent = formatBytes(v.file_size);
-  
-  _knownDuration = v.duration || 0;
-  if (durElem) durElem.textContent = _knownDuration > 0 ? _formatDuration(_knownDuration) : '--:--';
-
-  // 1. Load video source immediately for instantaneous <50ms playback start
-  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
-  const streamUrl = (isMkv && v.stream_transmux_url) ? v.stream_transmux_url : v.stream_url;
-
-  // Show custom timeline scrubber only for transmuxed streams that need server-side seeking
-  if (timelineContainer) {
-    if (isMkv && _knownDuration > 0) {
-      timelineContainer.style.display = 'flex';
-      if (scrubber) {
-        scrubber.max = _knownDuration;
-        scrubber.value = 0;
-      }
-    } else {
-      timelineContainer.style.display = 'none';
-    }
-  }
-
-  // Highlight active card
-  document.querySelectorAll('.video-card').forEach((c) => c.classList.remove('active'));
-  const activeCard = document.getElementById(`videoCard_${idx}`);
-  if (activeCard) activeCard.classList.add('active');
-  
-  videoPlayer.src = streamUrl;
-  videoPlayer.load();
-  if (autoPlay) {
-    videoPlayer.play().catch((err) => {
-      console.debug('Autoplay notice:', err);
-    });
-  }
-
-  // 2. Non-blocking lazy stream probe (runs in background without contending for MTProto download)
-  setTimeout(() => {
-    _probeAndPopulateTracks(v.chat_id, v.message_id);
-  }, 800);
-}
-
-async function _probeAndPopulateTracks(chatId, messageId) {
-  const audioGroup = document.getElementById('cinemaAudioGroup');
-  const subGroup = document.getElementById('cinemaSubtitleGroup');
-  const audioSelect = document.getElementById('cinemaAudioSelect');
-  const subSelect = document.getElementById('cinemaSubtitleSelect');
-
-  if (audioGroup) audioGroup.style.display = 'none';
-  if (subGroup) subGroup.style.display = 'none';
-
+export async function playInVlc(v) {
+  showToast(`🎬 Launching VLC for "${v.filename}"...`, 'info');
   try {
-    const resp = await fetch(`/api/media/streams/${encodeURIComponent(chatId)}/${messageId}`);
-    if (!resp.ok) return;
-    const info = await resp.json();
-
-    // Populate Audio Tracks
-    if (audioSelect && info.audio_tracks && info.audio_tracks.length > 0) {
-      audioSelect.innerHTML = '';
-      info.audio_tracks.forEach((t) => {
-        const opt = document.createElement('option');
-        opt.value = t.index;
-        opt.textContent = t.title;
-        audioSelect.appendChild(opt);
-      });
-      if (audioGroup) audioGroup.style.display = 'flex';
-    }
-
-    // Populate Subtitle Tracks
-    if (subSelect && info.subtitle_tracks && info.subtitle_tracks.length > 0) {
-      subSelect.innerHTML = '<option value="off">Off</option>';
-      info.subtitle_tracks.forEach((s) => {
-        const opt = document.createElement('option');
-        opt.value = s.vtt_url;
-        opt.textContent = s.title;
-        subSelect.appendChild(opt);
-      });
-      if (subGroup) subGroup.style.display = 'flex';
+    const resp = await fetch('/api/media/vlc/play', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: v.chat_id,
+        message_id: v.message_id,
+        filename: v.filename,
+        stream_url: v.stream_url
+      })
+    });
+    const data = await resp.json();
+    if (data.launched) {
+      showToast(`🎬 VLC Media Player streaming "${v.filename}"!`, 'success');
+    } else if (data.playlist_url) {
+      const a = document.createElement('a');
+      a.href = data.playlist_url;
+      a.download = `${v.filename}.m3u`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast('🎬 Opening VLC via .m3u stream playlist...', 'success');
     }
   } catch (e) {
-    console.debug('Probe streams notice:', e);
+    showToast(`VLC launch notice: ${e.message}`, 'warning');
   }
 }
 
-function _reloadStreamWithParams(startSeconds = 0) {
-  if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
-  const v = _cinemaVideos[_currentPlayingIndex];
-  const videoPlayer = document.getElementById('cinemaVideoPlayer');
-  if (!videoPlayer) return;
-
-  _seekBaseOffset = startSeconds;
-  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
-  
-  if (isMkv && v.stream_transmux_url) {
-    const baseUrl = v.stream_transmux_url.split('?')[0];
-    videoPlayer.src = `${baseUrl}?audio=${_currentAudioTrack}&ss=${startSeconds}`;
-    videoPlayer.load();
-    videoPlayer.play().catch(() => {});
-  } else {
-    try {
-      videoPlayer.currentTime = startSeconds;
-    } catch (e) {
-      console.debug('Native seek error:', e);
+export async function triggerFdm(v) {
+  try {
+    const resp = await fetch(`/api/proxy/trigger?chat_id=${encodeURIComponent(v.chat_id)}&message_id=${v.message_id}`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      showToast(`🚀 Dispatched "${v.filename}" to ${data.manager.toUpperCase()}`, 'success');
+    } else {
+      showToast(`⚠️ Could not auto-launch manager. Copied stream link.`, 'warning');
     }
+  } catch (err) {
+    showToast(`Download trigger error: ${err.message}`, 'error');
   }
-}
-
-function _seekToPosition(targetSeconds) {
-  if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
-  const v = _cinemaVideos[_currentPlayingIndex];
-  const videoPlayer = document.getElementById('cinemaVideoPlayer');
-  if (!videoPlayer) return;
-
-  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
-  if (isMkv && v.stream_transmux_url) {
-    _reloadStreamWithParams(targetSeconds);
-  } else {
-    _seekBaseOffset = 0;
-    try {
-      videoPlayer.currentTime = targetSeconds;
-    } catch (e) {
-      console.debug('Native seek error:', e);
-    }
-  }
-}
-
-function _applySubtitleTrack(vttUrl) {
-  const videoPlayer = document.getElementById('cinemaVideoPlayer');
-  if (!videoPlayer) return;
-
-  // Remove existing subtitle tracks
-  const oldTracks = videoPlayer.querySelectorAll('track');
-  oldTracks.forEach((t) => t.remove());
-
-  if (vttUrl !== 'off') {
-    const track = document.createElement('track');
-    track.kind = 'subtitles';
-    track.label = 'Subtitles';
-    track.srclang = 'en';
-    track.src = vttUrl;
-    track.default = true;
-    videoPlayer.appendChild(track);
-
-    setTimeout(() => {
-      if (videoPlayer.textTracks && videoPlayer.textTracks.length > 0) {
-        for (let i = 0; i < videoPlayer.textTracks.length; i++) {
-          videoPlayer.textTracks[i].mode = 'showing';
-        }
-      }
-    }, 200);
-
-    showToast('💬 Subtitles enabled', 'success');
-  } else {
-    if (videoPlayer.textTracks) {
-      for (let i = 0; i < videoPlayer.textTracks.length; i++) {
-        videoPlayer.textTracks[i].mode = 'disabled';
-      }
-    }
-    showToast('💬 Subtitles disabled', 'info');
-  }
-}
-
-function _playNextVideo() {
-  if (_cinemaVideos.length === 0) return;
-  const nextIdx = (_currentPlayingIndex + 1) % _cinemaVideos.length;
-  selectCinemaVideo(nextIdx, true);
-  showToast(`⏭️ Now Playing: ${_cinemaVideos[nextIdx].filename}`, 'info');
 }
 
 function _formatDuration(seconds) {
-  if (!seconds || isNaN(seconds)) return '00:00';
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  if (!seconds || isNaN(seconds) || seconds <= 0) return '00:00';
+  const sec = Math.floor(seconds);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }

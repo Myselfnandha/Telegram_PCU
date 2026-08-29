@@ -600,130 +600,20 @@
       </div>
     </div>
 
-    <!-- Tab 5: Real-Time Video Cinema & Stream Archive -->
+    <!-- Tab 5: Real-Time Video Cinema & VLC Media Hub -->
     <div class="tab-pane" id="tabPaneCinema">
-      <div class="cinema-workspace">
-        
-        <!-- Left: Cinema Theater Player Stage -->
-        <div class="cinema-theater-pane glass-panel">
-          <div class="theater-header">
-            <div class="theater-title-block">
-              <span class="theater-badge">🎬 CINEMA THEATER</span>
-              <h2 class="theater-now-playing" id="cinemaNowPlayingTitle">Select a video to begin streaming</h2>
-              <div class="theater-meta-tags">
-                <span class="meta-pill" id="cinemaNowPlayingRes">HD Video</span>
-                <span class="meta-pill" id="cinemaNowPlayingSize">-- MB</span>
-                <span class="meta-pill" id="cinemaNowPlayingDur">--:--</span>
-                <span class="meta-pill" style="color: var(--accent-secondary); border-color: rgba(0, 206, 201, 0.3);">⚡ MTProto Stream</span>
-              </div>
-            </div>
-            <div class="theater-actions">
-              <!-- Multi-Audio Track Selector -->
-              <div class="theater-select-group" id="cinemaAudioGroup" style="display: none;">
-                <label for="cinemaAudioSelect">🔊 Audio</label>
-                <select id="cinemaAudioSelect" class="glass-select-compact">
-                  <option value="0">Default</option>
-                </select>
-              </div>
-
-              <!-- Subtitle Track Selector -->
-              <div class="theater-select-group" id="cinemaSubtitleGroup" style="display: none;">
-                <label for="cinemaSubtitleSelect">💬 Subs</label>
-                <select id="cinemaSubtitleSelect" class="glass-select-compact">
-                  <option value="off">Off</option>
-                </select>
-              </div>
-
-              <button class="btn-primary" id="btnCinemaVlc" type="button" title="Stream in VLC Media Player (100% codec compatibility)" style="background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4); padding: 5px 12px; font-size: 0.82rem;">
-                <span>🎬</span><span>VLC</span>
-              </button>
-              <button class="btn-secondary" id="btnCinemaFdm" type="button" title="Push to Free Download Manager">
-                <span>🚀</span><span>FDM</span>
-              </button>
-              <button class="btn-secondary" id="btnCinemaCopyUrl" type="button" title="Copy direct HTTP stream link">
-                <span>📋</span><span>Copy</span>
-              </button>
-              <button class="btn-secondary" id="btnCinemaNext" type="button" title="Play next video in archive">
-                <span>⏭️</span><span>Next</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="video-player-container">
-            <div class="video-standby-overlay" id="cinemaPlayerStandbyNotice">
-              <div class="video-standby-card">
-                <div class="standby-icon-glow">🎬</div>
-                <span class="standby-title">Cinema Theater Standby</span>
-                <p class="standby-subtitle">Select any video from the archive on the right to start real-time MTProto streaming</p>
-              </div>
-            </div>
-            <video id="cinemaVideoPlayer" controls preload="metadata" playsinline class="cinema-video-element" style="display: none;">
-              Your browser does not support HTML5 video playback.
-            </video>
-            <div class="video-error-overlay" id="cinemaPlayerErrorNotice" style="display: none;">
-              <div class="video-error-card glass-panel">
-                <span style="font-size: 2.2rem; margin-bottom: 4px;">🎬</span>
-                <span style="font-weight: 700; font-size: 1rem; color: #fff;">External Codec Video (.mkv / AC3 / HEVC)</span>
-                <p style="font-size: 0.82rem; color: var(--text-muted); margin: 6px 0 14px 0; max-width: 400px; line-height: 1.4;">
-                  This video format uses external audio/video codecs that cannot be decoded inside your browser sandbox. Click below to stream instantly in VLC Media Player:
-                </p>
-                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
-                  <button class="btn-primary" id="btnCinemaVlcFallback" type="button" style="padding: 8px 16px; font-size: 0.84rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%);">
-                    🎬 Stream in VLC Player
-                  </button>
-                  <button class="btn-secondary" id="btnCinemaFdmFallback" type="button" style="padding: 8px 14px; font-size: 0.82rem;">
-                    🚀 Open with FDM
-                  </button>
-                  <button class="btn-secondary" id="btnCinemaCopyFallback" type="button" style="padding: 8px 14px; font-size: 0.82rem;">
-                    📋 Copy Stream URL
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Full-Duration Timeline Scrubber -->
-          <div class="cinema-custom-timeline" id="cinemaTimelineContainer" style="display: none;">
-            <span class="timeline-time" id="cinemaCurrentTime">00:00</span>
-            <input type="range" class="cinema-scrubber" id="cinemaScrubber" min="0" max="100" value="0" step="0.1">
-            <span class="timeline-time" id="cinemaTotalDuration">00:00</span>
-          </div>
-
-          <div class="theater-footer-info">
-            <div class="shortcut-hints">
-              <span>⌨️ <strong>Space / K:</strong> Play/Pause</span>
-              <span>•</span>
-              <span><strong>← / → or J / L:</strong> Seek 10s</span>
-              <span>•</span>
-              <span><strong>M:</strong> Mute</span>
-              <span>•</span>
-              <span><strong>F:</strong> Fullscreen</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Channel Video Archive Browser & Queue Grid -->
-        <div class="cinema-archive-pane glass-panel">
-          <div class="archive-header">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 1.1rem;">📁</span>
-                <span style="font-weight: 700; font-size: 1rem; color: var(--text-main);">Video Archive</span>
-                <span class="count-badge" id="cinemaVideoCount">0 Videos</span>
-              </div>
-              <button class="btn-secondary" id="btnCinemaRefresh" type="button" style="padding: 4px 10px; font-size: 0.8rem;">
-                🔄 Refresh
-              </button>
-            </div>
-
-            <!-- Destination Selector Bar (Source Telegram Channel/Chat) -->
-            <div class="destination-bar glass-panel" style="padding: 10px 14px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; width: 100%; box-sizing: border-box;">
+      <div class="cinema-hub-pane glass-panel">
+        <div class="cinema-hub-header">
+          <!-- Top Row: Source Destination Bar, Search, and Refresh -->
+          <div class="cinema-hub-top-bar">
+            <!-- Source Channel Destination Selector -->
+            <div class="destination-bar glass-panel" style="padding: 6px 14px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-width: 320px; flex: 1.1; box-sizing: border-box;">
               <div class="dest-info" style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
                 <div class="dest-icon" style="background: rgba(108, 92, 231, 0.15); color: var(--accent-primary); width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                   <span id="cinemaCurrentChatIcon" style="font-size: 1.1rem;">☁️</span>
                 </div>
                 <div class="dest-text" style="min-width: 0; flex: 1;">
-                  <div class="label" style="font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Source Channel / Chat</div>
+                  <div class="label" style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Source Channel / Chat</div>
                   <div class="target-name" style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px;">
                     <span id="cinemaCurrentChatName">Saved Messages (Personal Cloud)</span>
                     <span class="chat-type-tag" id="cinemaCurrentChatType" style="font-size: 0.65rem; padding: 1px 6px;">CLOUD</span>
@@ -732,7 +622,7 @@
               </div>
 
               <button class="btn-choose-chat" id="btnCinemaChooseChat" type="button" style="padding: 6px 12px; font-size: 0.8rem; white-space: nowrap; flex-shrink: 0;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
@@ -740,23 +630,35 @@
               </button>
             </div>
 
-            <!-- Watched / Recent Channels Quick-Switch Chips -->
-            <div class="cinema-channel-chips" id="cinemaWatchedChips" style="display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px 0; scrollbar-width: none;">
-              <!-- Dynamically populated with Saved Messages and Watched Channels -->
+            <!-- Search Input -->
+            <div class="search-input-wrap" style="flex: 1.2; min-width: 240px;">
+              <input type="text" id="cinemaSearchInput" class="glass-input" placeholder="🔍 Search video titles in this channel..." style="width: 100%; font-size: 0.85rem; padding: 8px 14px;">
             </div>
 
-            <!-- Live Search Bar -->
-            <div class="search-input-wrap" style="width: 100%;">
-              <input type="text" id="cinemaSearchInput" class="glass-input" placeholder="🔍 Search video titles in this channel..." style="width: 100%; font-size: 0.85rem; padding: 8px 12px;">
+            <!-- Total count & Refresh -->
+            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+              <span class="count-badge" id="cinemaVideoCount" style="padding: 6px 12px; font-size: 0.82rem;">0 Videos</span>
+              <button class="btn-secondary" id="btnCinemaRefresh" type="button" style="padding: 6px 12px; font-size: 0.82rem;">
+                🔄 Refresh
+              </button>
             </div>
           </div>
 
-          <!-- Video Cards Grid -->
-          <div class="cinema-video-grid-container" id="cinemaVideoGrid">
-            <!-- Dynamically populated via cinema-ui.js -->
+          <!-- Watched / Quick-Switch Channels Chips -->
+          <div class="cinema-channel-chips" id="cinemaWatchedChips" style="display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; scrollbar-width: none;">
+            <!-- Dynamically populated with Saved Messages and Watched Channels -->
           </div>
         </div>
 
+        <!-- Full-Width Responsive Video Grid -->
+        <div class="cinema-full-grid-wrap" id="cinemaVideoGrid">
+          <!-- Dynamically populated via cinema-ui.js -->
+        </div>
+
+        <!-- Footer Info Bar -->
+        <div class="cinema-hub-footer">
+          <span>🎬 <strong>VLC Media Hub:</strong> Click any video or press <strong>[ 🎬 VLC ]</strong> for instant hardware-accelerated MTProto streaming with full audio tracks & subtitles</span>
+        </div>
       </div>
     </div>
 
@@ -869,6 +771,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=2.8.11"></script>
+  <script src="/js/app.bundle.js?v=3.0.0"></script>
 </body>
 </html>
