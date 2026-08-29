@@ -473,12 +473,20 @@ export async function selectCinemaVideo(idx, autoPlay = true) {
   _knownDuration = v.duration || 0;
   if (durElem) durElem.textContent = _knownDuration > 0 ? _formatDuration(_knownDuration) : '--:--';
 
-  // Enable timeline scrubber
-  if (timelineContainer && _knownDuration > 0) {
-    timelineContainer.style.display = 'flex';
-    if (scrubber) {
-      scrubber.max = _knownDuration;
-      scrubber.value = 0;
+  // 1. Load video source immediately for instantaneous <50ms playback start
+  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+  const streamUrl = (isMkv && v.stream_transmux_url) ? v.stream_transmux_url : v.stream_url;
+
+  // Show custom timeline scrubber only for transmuxed streams that need server-side seeking
+  if (timelineContainer) {
+    if (isMkv && _knownDuration > 0) {
+      timelineContainer.style.display = 'flex';
+      if (scrubber) {
+        scrubber.max = _knownDuration;
+        scrubber.value = 0;
+      }
+    } else {
+      timelineContainer.style.display = 'none';
     }
   }
 
@@ -486,10 +494,6 @@ export async function selectCinemaVideo(idx, autoPlay = true) {
   document.querySelectorAll('.video-card').forEach((c) => c.classList.remove('active'));
   const activeCard = document.getElementById(`videoCard_${idx}`);
   if (activeCard) activeCard.classList.add('active');
-
-  // 1. Load video source immediately for instantaneous <50ms playback start
-  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
-  const streamUrl = (isMkv && v.stream_transmux_url) ? v.stream_transmux_url : v.stream_url;
   
   videoPlayer.src = streamUrl;
   videoPlayer.load();
