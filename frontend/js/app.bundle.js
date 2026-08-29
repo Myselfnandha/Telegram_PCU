@@ -2526,7 +2526,11 @@
   async function loadCinemaVideos(chatId = "me", forceRefresh = false) {
     _currentChatId = chatId;
     const grid = document.getElementById("cinemaVideoGrid");
+    const seriesPane = document.getElementById("cinemaSeriesPane");
+    const seriesList = document.getElementById("cinemaSeriesList");
     const countBadge = document.getElementById("cinemaVideoCount");
+    const moviesCountBadge = document.getElementById("cinemaMoviesCount");
+    const seriesCountBadge = document.getElementById("cinemaSeriesCount");
     const cacheKey = "tg_cinema_cache_" + chatId;
     let hasRenderedCached = false;
     if (!forceRefresh) {
@@ -2544,13 +2548,44 @@
       } catch (e) {
       }
     }
-    if (!hasRenderedCached && grid) {
-      grid.innerHTML = `
-      <div class="cinema-loading">
-        <div class="spinner" style="margin-bottom: 12px;"></div>
-        <p style="font-size: 0.9rem; color: var(--text-muted);">Fetching video files from Telegram MTProto...</p>
-      </div>
-    `;
+    if (!hasRenderedCached) {
+      _cinemaVideos = [];
+      if (countBadge) countBadge.textContent = "Scanning...";
+      if (moviesCountBadge) moviesCountBadge.textContent = "Loading...";
+      if (seriesCountBadge) seriesCountBadge.textContent = "Loading...";
+      if (seriesPane) seriesPane.classList.remove("hidden");
+      if (grid) {
+        grid.innerHTML = `
+        <div class="cinema-loading-container" style="grid-column: 1 / -1; padding: 32px 16px; text-align: center;">
+          <div class="mtproto-pulse-loader">
+            <div class="pulse-ring"></div>
+            <div class="pulse-core">\u{1F4E1}</div>
+          </div>
+          <h3 style="margin-top: 14px; font-size: 1.05rem; font-weight: 700; background: linear-gradient(135deg, #00cec9, #6c5ce7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Fetching video files from Telegram MTProto...</h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 6px;">Retrieving high-speed video stream catalog from Telegram cloud...</p>
+        </div>
+        <div class="cinema-skeleton-card"></div>
+        <div class="cinema-skeleton-card"></div>
+        <div class="cinema-skeleton-card"></div>
+        <div class="cinema-skeleton-card"></div>
+      `;
+      }
+      if (seriesList) {
+        seriesList.innerHTML = `
+        <div class="series-skeleton-card" style="padding: 16px;">
+          <div style="height: 16px; width: 60%; background: rgba(255,255,255,0.08); border-radius: 4px; margin-bottom: 12px;"></div>
+          <div style="height: 12px; width: 40%; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 16px;"></div>
+          <div style="display: flex; gap: 8px;">
+            <div style="height: 48px; width: 120px; background: rgba(255,255,255,0.04); border-radius: 6px;"></div>
+            <div style="height: 48px; width: 120px; background: rgba(255,255,255,0.04); border-radius: 6px;"></div>
+          </div>
+        </div>
+        <div class="series-skeleton-card" style="padding: 16px;">
+          <div style="height: 16px; width: 50%; background: rgba(255,255,255,0.08); border-radius: 4px; margin-bottom: 12px;"></div>
+          <div style="height: 12px; width: 35%; background: rgba(255,255,255,0.05); border-radius: 4px;"></div>
+        </div>
+      `;
+      }
     }
     try {
       const url = forceRefresh ? `/api/media/videos/${encodeURIComponent(chatId)}?force_refresh=true` : `/api/media/videos/${encodeURIComponent(chatId)}`;
@@ -2578,6 +2613,8 @@
           </button>
         </div>
       `;
+        if (seriesList) seriesList.innerHTML = "";
+        if (seriesPane) seriesPane.classList.add("hidden");
       }
     }
   }

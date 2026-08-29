@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TG Power Suite — Turbo MTProto Uploader & FDM Proxy</title>
-  <meta name="description" content="Upload any size file (up to 2GB+ with auto-splitting) directly to Telegram and high-speed FDM HTTP streaming proxy with channel sniffer.">
-  
+  <meta name="description"
+    content="Upload any size file (up to 2GB+ with auto-splitting) directly to Telegram and high-speed FDM HTTP streaming proxy with channel sniffer.">
+
   <!-- PWA Manifest & App Icons -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#6c5ce7">
@@ -16,14 +18,14 @@
   <link rel="icon" type="image/png" href="/assets/icon-192.png">
 
   <!-- Local Instant Socket.IO Client (Zero CDN Latency) -->
-  <script src="/js/socket.io.min.js?v=3.2.7"></script>
-  <link rel="stylesheet" href="/css/style.css?v=3.2.7">
+  <script src="/js/socket.io.min.js?v=3.2.8"></script>
+  <link rel="stylesheet" href="/css/style.css?v=3.2.8">
   <script>
     // Early instantaneous auth status check & tab switching logic
-    window._earlyCheckAuth = function() {
+    window._earlyCheckAuth = function () {
       fetch('/api/auth/status')
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
           var badge = document.getElementById('authStatusBadge');
           var userText = document.getElementById('authUserName');
           if (badge && userText) {
@@ -38,9 +40,9 @@
             }
           }
         })
-        .catch(function() {});
+        .catch(function () { });
     };
-    window._switchTab = function(tabName) {
+    window._switchTab = function (tabName) {
       window.location.hash = tabName;
       var buttons = document.querySelectorAll(".header-nav-tabs .tab-btn");
       for (var i = 0; i < buttons.length; i++) {
@@ -62,15 +64,17 @@
     window._earlyCheckAuth();
   </script>
 </head>
+
 <body>
   <div class="app-container">
-    
+
     <!-- Top Header -->
     <header class="app-header glass-panel">
       <div class="brand-section">
         <div class="logo-badge">
           <svg viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/>
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
           </svg>
         </div>
         <div class="brand-title">
@@ -80,17 +84,20 @@
 
       <!-- Top Navigation Tabs -->
       <nav class="header-nav-tabs">
-        <button class="tab-btn active" data-tab="uploader" type="button" id="tabBtnUploader" onclick="window._switchTab('uploader')">
+        <button class="tab-btn active" data-tab="uploader" type="button" id="tabBtnUploader"
+          onclick="window._switchTab('uploader')">
           <span class="tab-icon">📤</span>
           <span class="tab-text">Uploader</span>
           <span class="count-badge" id="tabUploaderBadge">0</span>
         </button>
-        <button class="tab-btn" data-tab="sniffer" type="button" id="tabBtnSniffer" onclick="window._switchTab('sniffer')">
+        <button class="tab-btn" data-tab="sniffer" type="button" id="tabBtnSniffer"
+          onclick="window._switchTab('sniffer')">
           <span class="tab-icon">📥</span>
           <span class="tab-text">Sniffer & FDM Proxy</span>
           <span class="tab-status-dot" id="snifferStatusDot" title="Sniffer Status"></span>
         </button>
-        <button class="tab-btn" data-tab="history" type="button" id="tabBtnHistory" onclick="window._switchTab('history')">
+        <button class="tab-btn" data-tab="history" type="button" id="tabBtnHistory"
+          onclick="window._switchTab('history')">
           <span class="tab-icon">📜</span>
           <span class="tab-text">History</span>
         </button>
@@ -98,7 +105,8 @@
           <span class="tab-icon">🎬</span>
           <span class="tab-text">Cinema</span>
         </button>
-        <button class="tab-btn" data-tab="settings" type="button" id="tabBtnSettings" onclick="window._switchTab('settings')">
+        <button class="tab-btn" data-tab="settings" type="button" id="tabBtnSettings"
+          onclick="window._switchTab('settings')">
           <span class="tab-icon">⚙️</span>
           <span class="tab-text">Settings</span>
         </button>
@@ -106,10 +114,12 @@
 
       <!-- Right Header Actions (PWA Install, Theme, Auth) -->
       <div style="display: flex; align-items: center; gap: 10px;">
-        <button class="btn-secondary" id="btnPwaInstall" type="button" style="display: none; padding: 6px 14px; font-size: 0.82rem; border-color: rgba(0, 206, 201, 0.4); color: var(--accent-secondary); align-items: center; gap: 6px;">
+        <button class="btn-secondary" id="btnPwaInstall" type="button"
+          style="display: none; padding: 6px 14px; font-size: 0.82rem; border-color: rgba(0, 206, 201, 0.4); color: var(--accent-secondary); align-items: center; gap: 6px;">
           <span>📲</span><span>Install App</span>
         </button>
-        <button class="theme-toggle-btn btn-theme-customizer" id="btnThemeToggle" title="Customize Theme & Aesthetics" type="button">
+        <button class="theme-toggle-btn btn-theme-customizer" id="btnThemeToggle" title="Customize Theme & Aesthetics"
+          type="button">
           <span id="themeIcon">🎨</span>
           <span style="font-size: 0.8rem; font-weight: 500;">Theme</span>
         </button>
@@ -167,7 +177,7 @@
     <div class="tab-pane active" id="tabPaneUploader">
       <!-- Main 2-Column Responsive Workspace Layout -->
       <div class="workspace-layout" id="workspaceLayout">
-        
+
         <!-- Left Column: Active Upload Queue -->
         <div class="layout-left-column" id="layoutLeftColumn">
           <!-- Active Upload Queue Section -->
@@ -178,16 +188,20 @@
                 <span class="count-badge" id="queueCountBadge">0</span>
               </div>
               <div class="header-actions" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                <button class="btn-secondary" id="btnBatchPause" style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Pause all active uploads">
+                <button class="btn-secondary" id="btnBatchPause" style="padding: 5px 10px; font-size: 0.76rem;"
+                  type="button" title="Pause all active uploads">
                   ⏸️ Pause All
                 </button>
-                <button class="btn-secondary" id="btnBatchResume" style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Resume paused uploads">
+                <button class="btn-secondary" id="btnBatchResume" style="padding: 5px 10px; font-size: 0.76rem;"
+                  type="button" title="Resume paused uploads">
                   ▶️ Resume All
                 </button>
-                <button class="btn-secondary" id="btnBatchClear" style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Clear completed tasks">
+                <button class="btn-secondary" id="btnBatchClear" style="padding: 5px 10px; font-size: 0.76rem;"
+                  type="button" title="Clear completed tasks">
                   🧹 Clear Done
                 </button>
-                <button class="btn-secondary danger-hover" id="btnBatchCancel" style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Cancel all uploads">
+                <button class="btn-secondary danger-hover" id="btnBatchCancel"
+                  style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Cancel all uploads">
                   ❌ Cancel All
                 </button>
               </div>
@@ -195,7 +209,8 @@
 
             <div id="queueEmptyState" style="text-align: center; padding: 48px 16px; color: var(--text-muted);">
               <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">📥</div>
-              <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Queue is Empty</p>
+              <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Queue is
+                Empty</p>
               <p style="font-size: 0.85rem;">Select or drop files on the right to start uploading.</p>
             </div>
 
@@ -207,7 +222,7 @@
 
         <!-- Right Column: Destination Bar + Filter Tabs + Dropzone + Upload History -->
         <div class="layout-right-column" id="layoutRightColumn">
-          
+
           <!-- Destination Selector Bar -->
           <div class="destination-bar glass-panel">
             <div class="dest-info">
@@ -279,7 +294,8 @@
               <div class="section-title">
                 <span>Recent Uploads</span>
               </div>
-              <button class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;" onclick="window._app.clearHistory()" type="button">
+              <button class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;"
+                onclick="window._app.clearHistory()" type="button">
                 Clear History
               </button>
             </div>
@@ -298,7 +314,7 @@
     <!-- TAB 2: SNIFFER & FDM PROXY (Focused on Watched Channels & Auto-Dispatch) -->
     <div class="tab-pane" id="tabPaneSniffer">
       <div class="sniffer-dashboard-grid">
-        
+
         <!-- Left: Watched Channels & Controls -->
         <div class="sniffer-left-pane">
           <!-- Monitored Channels Card -->
@@ -314,22 +330,29 @@
             </p>
 
             <!-- Watched Channels Selection Bar (Like Change Destination in Uploader) -->
-            <div class="destination-bar glass-panel" style="margin-bottom: 14px; padding: 14px 18px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; width: 100%; box-sizing: border-box;">
+            <div class="destination-bar glass-panel"
+              style="margin-bottom: 14px; padding: 14px 18px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; width: 100%; box-sizing: border-box;">
               <div class="dest-info" style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
-                <div class="dest-icon" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <div class="dest-icon"
+                  style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                    <path
+                      d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
                   </svg>
                 </div>
                 <div class="dest-text" style="min-width: 0;">
-                  <div class="label" style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Channel Watchlist</div>
-                  <div class="target-name" style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  <div class="label"
+                    style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">
+                    Channel Watchlist</div>
+                  <div class="target-name"
+                    style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                     <span id="activeWatchedCountLabel">0 Monitored</span>
                   </div>
                 </div>
               </div>
 
-              <button class="btn-choose-chat" id="btnOpenWatchModal" type="button" style="flex-shrink: 0; white-space: nowrap; padding: 8px 14px; font-size: 0.82rem;">
+              <button class="btn-choose-chat" id="btnOpenWatchModal" type="button"
+                style="flex-shrink: 0; white-space: nowrap; padding: 8px 14px; font-size: 0.82rem;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="12" y1="8" x2="12" y2="16"></line>
@@ -340,16 +363,21 @@
             </div>
 
             <!-- Always-Visible Custom Channel ID / Username Form -->
-            <form id="formAddChannel" style="display: flex; gap: 8px; margin-bottom: 14px; width: 100%; box-sizing: border-box;">
-              <input type="text" id="inputChannelId" class="glass-input" placeholder="Enter custom Channel ID, link, or @username..." style="flex: 1; min-width: 0; font-size: 0.84rem;">
-              <button type="submit" class="btn-secondary" style="padding: 8px 14px; font-size: 0.84rem; white-space: nowrap; flex-shrink: 0;">
+            <form id="formAddChannel"
+              style="display: flex; gap: 8px; margin-bottom: 14px; width: 100%; box-sizing: border-box;">
+              <input type="text" id="inputChannelId" class="glass-input"
+                placeholder="Enter custom Channel ID, link, or @username..."
+                style="flex: 1; min-width: 0; font-size: 0.84rem;">
+              <button type="submit" class="btn-secondary"
+                style="padding: 8px 14px; font-size: 0.84rem; white-space: nowrap; flex-shrink: 0;">
                 + Add
               </button>
             </form>
 
             <!-- Channel Chips Container -->
             <div class="channel-chips-list" id="channelChipsList">
-              <div class="empty-hint" style="color: var(--text-muted); font-size: 0.85rem;">No channels watched yet. Pick channels or enter ID above.</div>
+              <div class="empty-hint" style="color: var(--text-muted); font-size: 0.85rem;">No channels watched yet.
+                Pick channels or enter ID above.</div>
             </div>
           </section>
 
@@ -361,14 +389,17 @@
               </div>
               <span class="badge-status-online" id="snifferStatusBadge">Active</span>
             </div>
-            
+
             <div class="manager-status-grid" id="detectedManagersGrid">
               <!-- Dynamically rendered -->
             </div>
 
-            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 0.85rem; color: var(--text-muted);">Configure filters & threshold in Settings</span>
-              <button class="btn-secondary" id="btnGoToSettings" style="font-size: 0.8rem; padding: 6px 12px;" onclick="window._switchTab('settings')" type="button">
+            <div
+              style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.85rem; color: var(--text-muted);">Configure filters & threshold in
+                Settings</span>
+              <button class="btn-secondary" id="btnGoToSettings" style="font-size: 0.8rem; padding: 6px 12px;"
+                onclick="window._switchTab('settings')" type="button">
                 ⚙️ Open Settings
               </button>
             </div>
@@ -383,7 +414,8 @@
                 <span>🚀 Live Dispatched Media Stream</span>
                 <span class="count-badge" id="snifferFeedCount">0</span>
               </div>
-              <button class="btn-secondary" id="btnRefreshSnifferFeed" style="padding: 6px 12px; font-size: 0.8rem;" type="button">
+              <button class="btn-secondary" id="btnRefreshSnifferFeed" style="padding: 6px 12px; font-size: 0.8rem;"
+                type="button">
                 🔄 Refresh
               </button>
             </div>
@@ -391,8 +423,10 @@
             <div class="sniffer-feed-list" id="snifferFeedContainer">
               <div class="feed-empty-state">
                 <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">📡</div>
-                <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Sniffer Waiting for Media</p>
-                <p style="font-size: 0.85rem;">New media posted to watched channels will automatically appear here and trigger your download manager.</p>
+                <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Sniffer
+                  Waiting for Media</p>
+                <p style="font-size: 0.85rem;">New media posted to watched channels will automatically appear here and
+                  trigger your download manager.</p>
               </div>
             </div>
           </section>
@@ -413,27 +447,34 @@
             <button class="btn-secondary" id="btnExportCSV" type="button" style="padding: 6px 12px; font-size: 0.8rem;">
               📊 Export CSV
             </button>
-            <button class="btn-secondary" id="btnExportJSON" type="button" style="padding: 6px 12px; font-size: 0.8rem;">
+            <button class="btn-secondary" id="btnExportJSON" type="button"
+              style="padding: 6px 12px; font-size: 0.8rem;">
               📄 Export JSON
             </button>
-            <button class="btn-secondary danger-hover" style="padding: 6px 14px; font-size: 0.8rem;" id="btnClearHistoryBtn" type="button">
+            <button class="btn-secondary danger-hover" style="padding: 6px 14px; font-size: 0.8rem;"
+              id="btnClearHistoryBtn" type="button">
               🗑️ Clear History
             </button>
           </div>
         </div>
 
         <!-- History Controls: Search and Status Filter -->
-        <div class="history-controls-bar glass-panel" style="margin-bottom: 16px; padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+        <div class="history-controls-bar glass-panel"
+          style="margin-bottom: 16px; padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
           <div style="display: flex; gap: 10px; flex: 1; min-width: 260px; align-items: center;">
-            <input type="text" id="historySearchInput" class="glass-input" placeholder="🔍 Search history by filename, chat name, ID..." style="flex: 1; min-width: 180px; font-size: 0.85rem;">
-            <select id="historyStatusFilter" class="glass-input" style="width: auto; min-width: 140px; font-size: 0.85rem; cursor: pointer;">
+            <input type="text" id="historySearchInput" class="glass-input"
+              placeholder="🔍 Search history by filename, chat name, ID..."
+              style="flex: 1; min-width: 180px; font-size: 0.85rem;">
+            <select id="historyStatusFilter" class="glass-input"
+              style="width: auto; min-width: 140px; font-size: 0.85rem; cursor: pointer;">
               <option value="all">All Statuses</option>
               <option value="completed">Completed ✓</option>
               <option value="failed">Failed ⚠️</option>
               <option value="uploading">Uploading ⚡</option>
             </select>
           </div>
-          <button class="btn-secondary" id="btnRefreshHistory" type="button" style="padding: 6px 12px; font-size: 0.8rem;">
+          <button class="btn-secondary" id="btnRefreshHistory" type="button"
+            style="padding: 6px 12px; font-size: 0.8rem;">
             🔄 Refresh
           </button>
         </div>
@@ -449,29 +490,34 @@
     <!-- TAB 4: SETTINGS -->
     <div class="tab-pane" id="tabPaneSettings">
       <div class="settings-full-width-container">
-        
+
         <!-- Top Action Header Banner -->
-        <div class="settings-header-banner glass-panel" style="padding: 20px 28px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <div class="settings-header-banner glass-panel"
+          style="padding: 20px 28px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
           <div class="settings-header-info">
-            <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+            <h2
+              style="font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
               <span>⚙️ Configuration & Settings</span>
             </h2>
             <p style="font-size: 0.85rem; color: var(--text-muted);">
-              Configure download manager auto-dispatch, sniffer keyword filters, proxy speed limits, and system automation.
+              Configure download manager auto-dispatch, sniffer keyword filters, proxy speed limits, and system
+              automation.
             </p>
           </div>
           <div class="settings-header-actions" style="display: flex; gap: 10px; align-items: center;">
-            <button class="btn-secondary" id="btnTestNotification" type="button" style="padding: 8px 16px; font-size: 0.85rem;">
+            <button class="btn-secondary" id="btnTestNotification" type="button"
+              style="padding: 8px 16px; font-size: 0.85rem;">
               🔔 Test Alert
             </button>
-            <button class="btn-primary" id="btnSaveSettings" type="button" style="padding: 8px 22px; font-size: 0.88rem;">
+            <button class="btn-primary" id="btnSaveSettings" type="button"
+              style="padding: 8px 22px; font-size: 0.88rem;">
               💾 Save Settings
             </button>
           </div>
         </div>
 
         <form id="settingsForm" class="settings-cards-grid">
-          
+
           <!-- Card 1: Download Managers & Proxy Streaming -->
           <section class="glass-panel settings-card">
             <div class="settings-card-header">
@@ -531,14 +577,16 @@
             <div class="settings-card-body">
               <div class="form-group">
                 <label for="setAllowedExt">Allowed File Extensions</label>
-                <input type="text" id="setAllowedExt" class="glass-input" placeholder=".mkv,.mp4,.avi,.mov,.zip,.rar,.7z,.iso">
+                <input type="text" id="setAllowedExt" class="glass-input"
+                  placeholder=".mkv,.mp4,.avi,.mov,.zip,.rar,.7z,.iso">
                 <span class="field-hint">Comma-separated list of file extensions to capture</span>
               </div>
 
               <div class="form-row-2">
                 <div class="form-group">
                   <label for="setKeywordBlock">Blocked Keywords</label>
-                  <input type="text" id="setKeywordBlock" class="glass-input" placeholder="sample,trailer,cam,ts,telesync,PRE-DVD">
+                  <input type="text" id="setKeywordBlock" class="glass-input"
+                    placeholder="sample,trailer,cam,ts,telesync,PRE-DVD">
                   <span class="field-hint">Skip files matching these words</span>
                 </div>
                 <div class="form-group">
@@ -603,21 +651,28 @@
           <!-- Top Row: Source Destination Bar, Search, and Refresh -->
           <div class="cinema-hub-top-bar">
             <!-- Source Channel Selector (Flat Integrated Header) -->
-            <div class="cinema-dest-bar" style="padding: 6px 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-width: 300px; flex: 1.1; box-sizing: border-box; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); border-radius: var(--radius-md);">
+            <div class="cinema-dest-bar"
+              style="padding: 6px 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-width: 300px; flex: 1.1; box-sizing: border-box; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); border-radius: var(--radius-md);">
               <div class="dest-info" style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
-                <div class="dest-icon" style="background: rgba(108, 92, 231, 0.15); color: var(--accent-primary); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <div class="dest-icon"
+                  style="background: rgba(108, 92, 231, 0.15); color: var(--accent-primary); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                   <span id="cinemaCurrentChatIcon" style="font-size: 1.1rem;">☁️</span>
                 </div>
                 <div class="dest-text" style="min-width: 0; flex: 1;">
-                  <div class="label" style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Source Channel / Chat</div>
-                  <div class="target-name" style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px;">
+                  <div class="label"
+                    style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">
+                    Source Channel / Chat</div>
+                  <div class="target-name"
+                    style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px;">
                     <span id="cinemaCurrentChatName">Saved Messages (Personal Cloud)</span>
-                    <span class="chat-type-tag" id="cinemaCurrentChatType" style="font-size: 0.65rem; padding: 1px 6px;">CLOUD</span>
+                    <span class="chat-type-tag" id="cinemaCurrentChatType"
+                      style="font-size: 0.65rem; padding: 1px 6px;">CLOUD</span>
                   </div>
                 </div>
               </div>
 
-              <button class="btn-choose-chat" id="btnCinemaChooseChat" type="button" style="padding: 5px 10px; font-size: 0.78rem; white-space: nowrap; flex-shrink: 0;">
+              <button class="btn-choose-chat" id="btnCinemaChooseChat" type="button"
+                style="padding: 5px 10px; font-size: 0.78rem; white-space: nowrap; flex-shrink: 0;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -628,20 +683,25 @@
 
             <!-- Search Input -->
             <div class="search-input-wrap" style="flex: 1.2; min-width: 240px;">
-              <input type="text" id="cinemaSearchInput" class="glass-input" placeholder="🔍 Search video titles in this channel..." style="width: 100%; font-size: 0.85rem; padding: 8px 14px;">
+              <input type="text" id="cinemaSearchInput" class="glass-input"
+                placeholder="🔍 Search video titles in this channel..."
+                style="width: 100%; font-size: 0.85rem; padding: 8px 14px;">
             </div>
 
             <!-- Total count & Refresh -->
             <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-              <span class="count-badge" id="cinemaVideoCount" style="padding: 6px 12px; font-size: 0.82rem;">0 Videos</span>
-              <button class="btn-secondary" id="btnCinemaRefresh" type="button" style="padding: 6px 12px; font-size: 0.82rem;">
+              <span class="count-badge" id="cinemaVideoCount" style="padding: 6px 12px; font-size: 0.82rem;">0
+                Videos</span>
+              <button class="btn-secondary" id="btnCinemaRefresh" type="button"
+                style="padding: 6px 12px; font-size: 0.82rem;">
                 🔄 Refresh
               </button>
             </div>
           </div>
 
           <!-- Watched / Quick-Switch Channels Chips -->
-          <div class="cinema-channel-chips" id="cinemaWatchedChips" style="display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; scrollbar-width: none;">
+          <div class="cinema-channel-chips" id="cinemaWatchedChips"
+            style="display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; scrollbar-width: none;">
             <!-- Dynamically populated with Saved Messages and Watched Channels -->
           </div>
         </div>
@@ -663,7 +723,8 @@
           <div class="cinema-series-pane" id="cinemaSeriesPane">
             <div class="cinema-section-header">
               <span class="cinema-section-title">📺 TV Series & Seasons</span>
-              <span class="count-badge" id="cinemaSeriesCount" style="background: rgba(108, 92, 231, 0.2); color: var(--accent-primary);">0 Series</span>
+              <span class="count-badge" id="cinemaSeriesCount"
+                style="background: rgba(108, 92, 231, 0.2); color: var(--accent-primary);">0 Series</span>
             </div>
             <div class="cinema-series-list" id="cinemaSeriesList">
               <!-- Series Showcase Cards -->
@@ -673,7 +734,8 @@
 
         <!-- Footer Info Bar -->
         <div class="cinema-hub-footer">
-          <span>🎬 <strong>VLC Media Hub:</strong> Click any video or press <strong>[ 🎬 VLC ]</strong> for instant hardware-accelerated MTProto streaming with full audio tracks & subtitles</span>
+          <span>🎬 <strong>VLC Media Hub:</strong> Click any video or press <strong>[ 🎬 VLC ]</strong> for instant
+            hardware-accelerated MTProto streaming with full audio tracks & subtitles</span>
         </div>
       </div>
     </div>
@@ -693,9 +755,11 @@
         </button>
       </div>
       <div class="modal-search">
-        <input type="text" class="modal-search-input" id="chatSearchInput" placeholder="Search chats, channels, groups by name or @username...">
-        <div class="modal-filter-tabs" id="chatModalFilterTabs" style="display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px;">
-          <button class="filter-chip active" data-filter="all" type="button">All Dialogs</button>
+        <input type="text" class="modal-search-input" id="chatSearchInput"
+          placeholder="Search chats, channels, groups by name or @username...">
+        <div class="modal-filter-tabs" id="chatModalFilterTabs"
+          style="display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px;">
+          <button class="filter-chip active" data-filter="all" type="button">All</button>
           <button class="filter-chip" data-filter="channel" type="button">📢 Channels</button>
           <button class="filter-chip" data-filter="group" type="button">👥 Groups</button>
           <button class="filter-chip" data-filter="bot" type="button">🤖 Bots</button>
@@ -705,9 +769,11 @@
       <div class="modal-body" id="chatListContainer">
         <!-- Injected via chat-picker.js -->
       </div>
-      <div style="padding: 12px 24px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
+      <div
+        style="padding: 12px 24px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
         <span style="font-size: 0.75rem; color: var(--text-muted);">Saved Messages is always available</span>
-        <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._app.refreshChats()" type="button">
+        <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._app.refreshChats()"
+          type="button">
           🔄 Refresh Dialogs
         </button>
       </div>
@@ -727,9 +793,11 @@
         </button>
       </div>
       <div class="modal-search">
-        <input type="text" class="modal-search-input" id="watchChannelSearchInput" placeholder="🔍 Search channels, groups, bots, or contacts...">
-        <div class="modal-filter-tabs" id="watchModalFilterTabs" style="display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px;">
-          <button class="filter-chip active" data-filter="all" type="button">All Dialogs</button>
+        <input type="text" class="modal-search-input" id="watchChannelSearchInput"
+          placeholder="🔍 Search channels, groups, bots, or contacts...">
+        <div class="modal-filter-tabs" id="watchModalFilterTabs"
+          style="display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px;">
+          <button class="filter-chip active" data-filter="all" type="button">All</button>
           <button class="filter-chip" data-filter="channel" type="button">📢 Channels</button>
           <button class="filter-chip" data-filter="group" type="button">👥 Groups</button>
           <button class="filter-chip" data-filter="bot" type="button">🤖 Bots</button>
@@ -739,9 +807,12 @@
       <div class="modal-body" id="watchChannelListContainer">
         <!-- Injected via sniffer-ui.js -->
       </div>
-      <div style="padding: 12px 24px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 0.75rem; color: var(--text-muted);">Click "+ Watch" on any channel to monitor it in real time</span>
-        <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" id="btnRefreshWatchDialogs" type="button">
+      <div
+        style="padding: 12px 24px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Click "+ Watch" on any channel to monitor it in real
+          time</span>
+        <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" id="btnRefreshWatchDialogs"
+          type="button">
           🔄 Refresh Dialogs
         </button>
       </div>
@@ -758,7 +829,9 @@
       <div class="theme-modal-body">
         <div class="theme-presets-grid">
           <button class="preset-card" data-theme="light" type="button">
-            <div class="swatch" style="background: linear-gradient(135deg, #ffffff 0%, #6c5ce7 100%); border: 1px solid rgba(0,0,0,0.15);"></div>
+            <div class="swatch"
+              style="background: linear-gradient(135deg, #ffffff 0%, #6c5ce7 100%); border: 1px solid rgba(0,0,0,0.15);">
+            </div>
             <span>☀️ Light</span>
           </button>
           <button class="preset-card active" data-theme="deep-space" type="button">
@@ -786,7 +859,8 @@
         <div class="glass-slider-section">
           <div class="slider-label-row">
             <span>Glass Intensity / Blur</span>
-            <span id="glassIntensityValue" style="color: var(--accent-secondary); font-family: var(--font-mono); font-weight: 600;">16px</span>
+            <span id="glassIntensityValue"
+              style="color: var(--accent-secondary); font-family: var(--font-mono); font-weight: 600;">16px</span>
           </div>
           <input type="range" class="glass-range-slider" id="glassIntensitySlider" min="0" max="32" value="16" step="2">
         </div>
@@ -798,6 +872,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=3.2.7"></script>
+  <script src="/js/app.bundle.js?v=3.2.8"></script>
 </body>
+
 </html>
