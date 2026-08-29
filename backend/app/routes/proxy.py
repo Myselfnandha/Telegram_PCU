@@ -211,15 +211,7 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 2. Launch Continuous Background Prefetcher for non-watched blocks
-    curr_block = start // BLOCK_SIZE
-    task_key = (str(chat_id), message_id)
-    if task_key not in _ACTIVE_PREFETCH_TASKS or _ACTIVE_PREFETCH_TASKS[task_key].done():
-        _ACTIVE_PREFETCH_TASKS[task_key] = asyncio.create_task(
-            _prefetch_non_watched_blocks(client, message, str(chat_id), message_id, file_size, clean_name, curr_block)
-        )
-
-    # 3. Check if the requested range can be served directly from discrete block parts on disk (<0.1ms)
+    # 2. Check if the requested range can be served directly from discrete block parts on disk (<0.1ms)
     start_block = start // BLOCK_SIZE
     end_block = end // BLOCK_SIZE
     all_blocks_present = True
@@ -1154,9 +1146,9 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                         "--input-fast-seek",
                         "--avcodec-threads=0",
                         "--avcodec-fast",
-                        "--network-caching=250",
-                        "--file-caching=150",
-                        "--live-caching=150",
+                        "--network-caching=1500",
+                        "--file-caching=1000",
+                        "--live-caching=1000",
                         "--clock-jitter=0",
                         "--no-qt-error-dialogs",
                         "--quiet"
