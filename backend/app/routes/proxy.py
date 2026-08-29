@@ -51,7 +51,8 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
     file_size = int(message.file.size)
     raw_name = message.file.name if message.file.name else f"tg_media_{message_id}.bin"
     raw_name = "".join([c for c in raw_name if (c.isalnum() or c in " .-_()")]).strip()
-    clean_name = filename or auto_rename(raw_name)
+    import urllib.parse
+    clean_name = urllib.parse.unquote(filename) if filename else auto_rename(raw_name)
 
     range_header = request.headers.get("Range", "")
     start = 0
@@ -163,7 +164,8 @@ async def handle_transmux_stream(chat_id: str, message_id: int, request: Request
         raise HTTPException(status_code=404, detail="Message not found or contains no media.")
 
     raw_name = message.file.name if message.file.name else f"stream_{message_id}.mp4"
-    clean_name = filename or auto_rename(raw_name)
+    import urllib.parse
+    clean_name = urllib.parse.unquote(filename) if filename else auto_rename(raw_name)
     base_name = os.path.splitext(clean_name)[0] + ".mp4"
 
     chunk_unit = 128 * 1024  # 128KB ultra-fast low-latency chunks
@@ -358,6 +360,11 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
             ext = os.path.splitext(clean_name)[1].lower()
             is_mkv = ext in (".mkv", ".avi", ".ts", ".flv", ".wmv")
 
+            import urllib.parse
+            encoded_name = urllib.parse.quote(clean_name)
+            base_clean = os.path.splitext(clean_name)[0]
+            encoded_mp4 = urllib.parse.quote(f"{base_clean}.mp4")
+
             videos.append({
                 "message_id": msg.id,
                 "chat_id": str(chat_id),
@@ -370,8 +377,8 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
                 "mime_type": msg.file.mime_type or "video/mp4",
                 "has_thumb": has_thumb,
                 "is_mkv": is_mkv,
-                "stream_url": f"/dl/{chat_id}/{msg.id}/{clean_name}",
-                "stream_transmux_url": f"/stream/{chat_id}/{msg.id}/{clean_name}.mp4",
+                "stream_url": f"/dl/{chat_id}/{msg.id}/{encoded_name}",
+                "stream_transmux_url": f"/stream/{chat_id}/{msg.id}/{encoded_mp4}",
                 "thumb_url": f"/dl/{chat_id}/{msg.id}/thumb" if has_thumb else None
             })
 
