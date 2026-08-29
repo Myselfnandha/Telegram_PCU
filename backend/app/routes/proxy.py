@@ -94,6 +94,8 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
         "Content-Range": f"bytes {start}-{end}/{file_size}",
         "Content-Length": str(length),
         "ETag": f'"{chat_id}_{message_id}_{file_size}"',
+        "X-Accel-Buffering": "no",
+        "Cache-Control": "public, max-age=3600",
     }
 
     if hasattr(message, "date") and message.date:
@@ -137,8 +139,8 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
             except Exception:
                 pass
 
-        # High-throughput asynchronous MTProto chunk lookahead queue (8MB buffer)
-        chunk_queue = asyncio.Queue(maxsize=8)
+        # High-throughput asynchronous MTProto chunk lookahead queue (16MB buffer)
+        chunk_queue = asyncio.Queue(maxsize=16)
         producer_done = asyncio.Event()
 
         async def _mtproto_producer():
