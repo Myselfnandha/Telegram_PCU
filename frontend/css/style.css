@@ -52,6 +52,31 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+
+/* Hide all visible scrollbars completely across Chrome, Safari, Chromium, Edge */
+::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  display: none !important;
+  background: transparent !important;
 }
 
 html, body {
@@ -69,22 +94,8 @@ html, body {
     radial-gradient(circle at 50% 50%, rgba(19, 21, 36, 0.5) 0%, transparent 80%);
   background-attachment: fixed;
   box-sizing: border-box;
-}
-
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: rgba(15, 17, 32, 0.3);
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(108, 92, 231, 0.6);
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
 /* Container — 100% Full-Viewport Fit (No Outer Scroll) */
