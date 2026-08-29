@@ -726,36 +726,40 @@
     <div class="theme-modal glass-panel">
       <div class="theme-modal-header">
         <div class="modal-title">🎨 Theme & Aesthetics</div>
-        <button class="close-btn" id="btnCloseThemeModal" type="button">&times;</button>
+        <button class="close-btn" id="btnCloseThemeModal" type="button" title="Close modal">&times;</button>
       </div>
       <div class="theme-modal-body">
         <div class="theme-presets-grid">
+          <button class="preset-card" data-theme="light" type="button">
+            <div class="swatch" style="background: linear-gradient(135deg, #ffffff 0%, #6c5ce7 100%); border: 1px solid rgba(0,0,0,0.15);"></div>
+            <span>☀️ Light</span>
+          </button>
           <button class="preset-card active" data-theme="deep-space" type="button">
             <div class="swatch" style="background: linear-gradient(135deg, #0f111a 0%, #6c5ce7 100%);"></div>
-            <span>Deep Space</span>
-          </button>
-          <button class="preset-card" data-theme="cyberpunk" type="button">
-            <div class="swatch" style="background: linear-gradient(135deg, #ff007f 0%, #00f0ff 100%);"></div>
-            <span>Cyberpunk</span>
-          </button>
-          <button class="preset-card" data-theme="nord" type="button">
-            <div class="swatch" style="background: linear-gradient(135deg, #242933 0%, #88c0d0 100%);"></div>
-            <span>Nord Frost</span>
+            <span>🌌 Dark</span>
           </button>
           <button class="preset-card" data-theme="oled" type="button">
             <div class="swatch" style="background: linear-gradient(135deg, #000000 0%, #10b981 100%);"></div>
-            <span>Midnight OLED</span>
+            <span>🖤 Pure Black</span>
+          </button>
+          <button class="preset-card" data-theme="cyberpunk" type="button">
+            <div class="swatch" style="background: linear-gradient(135deg, #ff007f 0%, #00f0ff 100%);"></div>
+            <span>⚡ Cyberpunk</span>
+          </button>
+          <button class="preset-card" data-theme="nord" type="button">
+            <div class="swatch" style="background: linear-gradient(135deg, #242933 0%, #88c0d0 100%);"></div>
+            <span>❄️ Nord Frost</span>
           </button>
           <button class="preset-card" data-theme="sunset" type="button">
             <div class="swatch" style="background: linear-gradient(135deg, #140e1b 0%, #fd79a8 100%);"></div>
-            <span>Sunset Glow</span>
+            <span>🌅 Sunset</span>
           </button>
         </div>
 
         <div class="glass-slider-section">
           <div class="slider-label-row">
             <span>Glass Intensity / Blur</span>
-            <span id="glassIntensityValue" style="color: var(--accent-secondary); font-family: var(--font-mono);">16px</span>
+            <span id="glassIntensityValue" style="color: var(--accent-secondary); font-family: var(--font-mono); font-weight: 600;">16px</span>
           </div>
           <input type="range" class="glass-range-slider" id="glassIntensitySlider" min="0" max="32" value="16" step="2">
         </div>
@@ -767,6 +771,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=3.0.6"></script>
+  <script src="/js/app.bundle.js?v=3.0.7"></script>
 </body>
 </html>
