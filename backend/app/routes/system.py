@@ -15,14 +15,21 @@ SERVER_START_TIME = time.time()
 
 def get_system_telemetry() -> Dict[str, Any]:
     """Gathers real-time performance and application metrics."""
-    # Memory
+    # Process Memory & CPU (TG Power Suite actual footprint)
+    try:
+        proc = psutil.Process()
+        app_ram_mb = round(proc.memory_info().rss / (1024 * 1024), 1)
+        app_cpu_percent = round(proc.cpu_percent(interval=None), 1)
+    except Exception:
+        app_ram_mb = 0.0
+        app_cpu_percent = 0.0
+
+    # System Memory & CPU
     mem = psutil.virtual_memory()
     ram_used_mb = round((mem.total - mem.available) / (1024 * 1024), 1)
     ram_total_mb = round(mem.total / (1024 * 1024), 1)
     ram_percent = mem.percent
-
-    # CPU
-    cpu_percent = psutil.cpu_percent(interval=None)
+    sys_cpu_percent = psutil.cpu_percent(interval=None)
 
     # Active uploads
     all_tasks = queue_manager.get_all_tasks()
@@ -40,10 +47,15 @@ def get_system_telemetry() -> Dict[str, Any]:
     uptime_sec = round(time.time() - SERVER_START_TIME, 1)
 
     return {
-        "cpu_percent": cpu_percent,
-        "ram_used_mb": ram_used_mb,
+        "app_ram_mb": app_ram_mb,
+        "app_cpu_percent": app_cpu_percent,
+        "cpu_percent": app_cpu_percent,  # Backward compatibility
+        "sys_cpu_percent": sys_cpu_percent,
+        "ram_used_mb": app_ram_mb,       # App RSS memory
+        "sys_ram_used_mb": ram_used_mb,
         "ram_total_mb": ram_total_mb,
-        "ram_percent": ram_percent,
+        "ram_percent": round((app_ram_mb / ram_total_mb) * 100, 2) if ram_total_mb else 0,
+        "sys_ram_percent": ram_percent,
         "active_uploads_count": len(active_uploads),
         "total_tasks_count": len(all_tasks),
         "upload_speed_bps": round(total_up_speed, 1),

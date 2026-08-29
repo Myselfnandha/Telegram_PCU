@@ -2132,12 +2132,16 @@
         this.telemProxyStreams.textContent = `${count} Active`;
       }
       if (this.telemRam) {
-        const used = stats.ram_used_mb || 0;
-        const pct = stats.ram_percent || 0;
-        this.telemRam.textContent = `${used} MB (${pct}%)`;
+        const appRam = stats.app_ram_mb !== void 0 ? stats.app_ram_mb : stats.ram_used_mb || 0;
+        const sysPct = stats.sys_ram_percent || stats.ram_percent || 0;
+        this.telemRam.textContent = `${appRam} MB`;
+        this.telemRam.title = `App RSS: ${appRam} MB \u2022 Total System RAM: ${sysPct}%`;
       }
       if (this.telemCpu) {
-        this.telemCpu.textContent = `${stats.cpu_percent || 0}%`;
+        const appCpu = stats.app_cpu_percent !== void 0 ? stats.app_cpu_percent : stats.cpu_percent || 0;
+        const sysCpu = stats.sys_cpu_percent !== void 0 ? stats.sys_cpu_percent : appCpu;
+        this.telemCpu.textContent = `${appCpu}%`;
+        this.telemCpu.title = `App CPU: ${appCpu}% \u2022 Total System CPU: ${sysCpu}%`;
       }
       if (this.telemUptime) {
         const sec = Math.floor(stats.uptime_seconds || 0);
@@ -2252,6 +2256,18 @@
     const btnFdmFallback = document.getElementById("btnCinemaFdmFallback");
     const btnCopyFallback = document.getElementById("btnCinemaCopyFallback");
     videoPlayer.addEventListener("error", () => {
+      if (_currentPlayingIndex >= 0 && _cinemaVideos[_currentPlayingIndex]) {
+        const v = _cinemaVideos[_currentPlayingIndex];
+        const currentSrc = videoPlayer.getAttribute("src") || "";
+        if (!currentSrc.includes("/stream/") && v.stream_transmux_url) {
+          console.log("Native stream unsupported. Auto-switching to real-time transmux stream...");
+          videoPlayer.src = v.stream_transmux_url;
+          videoPlayer.load();
+          videoPlayer.play().catch(() => {
+          });
+          return;
+        }
+      }
       if (errorNotice) errorNotice.style.display = "flex";
     });
     videoPlayer.addEventListener("loadeddata", () => {
@@ -2469,7 +2485,9 @@
     const activeCard = document.getElementById(`videoCard_${idx}`);
     if (activeCard) activeCard.classList.add("active");
     if (videoPlayer) {
-      videoPlayer.src = v.stream_url;
+      const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+      const streamUrl = isMkv && v.stream_transmux_url ? v.stream_transmux_url : v.stream_url;
+      videoPlayer.src = streamUrl;
       videoPlayer.load();
       if (autoPlay) {
         videoPlayer.play().catch((err) => {

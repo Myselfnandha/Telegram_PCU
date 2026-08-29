@@ -50,6 +50,18 @@ export async function initCinema() {
   const btnCopyFallback = document.getElementById('btnCinemaCopyFallback');
 
   videoPlayer.addEventListener('error', () => {
+    if (_currentPlayingIndex >= 0 && _cinemaVideos[_currentPlayingIndex]) {
+      const v = _cinemaVideos[_currentPlayingIndex];
+      const currentSrc = videoPlayer.getAttribute('src') || '';
+      // If native stream failed, try transmuxed MP4 stream automatically
+      if (!currentSrc.includes('/stream/') && v.stream_transmux_url) {
+        console.log('Native stream unsupported. Auto-switching to real-time transmux stream...');
+        videoPlayer.src = v.stream_transmux_url;
+        videoPlayer.load();
+        videoPlayer.play().catch(() => {});
+        return;
+      }
+    }
     if (errorNotice) errorNotice.style.display = 'flex';
   });
 
@@ -313,9 +325,11 @@ export function selectCinemaVideo(idx, autoPlay = true) {
   const activeCard = document.getElementById(`videoCard_${idx}`);
   if (activeCard) activeCard.classList.add('active');
 
-  // Load stream
+  // Load stream (use transmux endpoint directly for MKV/AVI/TS/non-MP4 files for immediate chunked playback)
   if (videoPlayer) {
-    videoPlayer.src = v.stream_url;
+    const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+    const streamUrl = (isMkv && v.stream_transmux_url) ? v.stream_transmux_url : v.stream_url;
+    videoPlayer.src = streamUrl;
     videoPlayer.load();
     if (autoPlay) {
       videoPlayer.play().catch((err) => {

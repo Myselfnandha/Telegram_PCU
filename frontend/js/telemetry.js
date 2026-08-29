@@ -73,16 +73,20 @@ export class TelemetryController {
       this.telemProxyStreams.textContent = `${count} Active`;
     }
 
-    // 3. RAM
+    // 3. App RAM RSS Footprint
     if (this.telemRam) {
-      const used = stats.ram_used_mb || 0;
-      const pct = stats.ram_percent || 0;
-      this.telemRam.textContent = `${used} MB (${pct}%)`;
+      const appRam = stats.app_ram_mb !== undefined ? stats.app_ram_mb : (stats.ram_used_mb || 0);
+      const sysPct = stats.sys_ram_percent || stats.ram_percent || 0;
+      this.telemRam.textContent = `${appRam} MB`;
+      this.telemRam.title = `App RSS: ${appRam} MB • Total System RAM: ${sysPct}%`;
     }
 
-    // 4. CPU
+    // 4. App CPU Load
     if (this.telemCpu) {
-      this.telemCpu.textContent = `${stats.cpu_percent || 0}%`;
+      const appCpu = stats.app_cpu_percent !== undefined ? stats.app_cpu_percent : (stats.cpu_percent || 0);
+      const sysCpu = stats.sys_cpu_percent !== undefined ? stats.sys_cpu_percent : appCpu;
+      this.telemCpu.textContent = `${appCpu}%`;
+      this.telemCpu.title = `App CPU: ${appCpu}% • Total System CPU: ${sysCpu}%`;
     }
 
     // 5. Uptime
