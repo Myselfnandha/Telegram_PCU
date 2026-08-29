@@ -181,12 +181,12 @@ async def handle_transmux_stream(
         "ffmpeg",
         "-hide_banner",
         "-loglevel", "error",
+        "-i", "pipe:0",
     ]
     if ss > 0:
         cmd.extend(["-ss", str(ss)])
 
     cmd.extend([
-        "-i", "pipe:0",
         "-map", "0:v:0?",
         "-map", f"0:a:{audio}?",
         "-c:v", "copy",
@@ -414,19 +414,25 @@ async def probe_media_streams(chat_id: str, message_id: int):
         }
 
 
+_SUBTITLE_CACHE = {}
+
 @router.get("/api/media/subtitles/{chat_id}/{message_id}/{sub_index}.vtt")
 async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int):
     """Extracts embedded subtitle track and converts to WebVTT."""
-    client = await TelegramClientManager.get_client()
-    if not client or not client.is_connected():
-        raise HTTPException(status_code=503, detail="Telegram client is not connected.")
-
     clean_chat_id: Union[int, str] = chat_id
     if chat_id != "me":
         try:
             clean_chat_id = int(chat_id)
         except ValueError:
             clean_chat_id = chat_id
+
+    cache_key = (clean_chat_id, message_id, sub_index)
+    if cache_key in _SUBTITLE_CACHE:
+        return Response(content=_SUBTITLE_CACHE[cache_key], media_type="text/vtt")
+
+    client = await TelegramClientManager.get_client()
+    if not client or not client.is_connected():
+        raise HTTPException(status_code=503, detail="Telegram client is not connected.")
 
     message = sniffer_service._message_cache.get((clean_chat_id, message_id))
     if not message:
@@ -437,9 +443,9 @@ async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int):
 
     sub_buffer = bytearray()
     try:
-        async for chunk in client.iter_download(message.media, request_size=512*1024, chunk_size=512*1024):
+        async for chunk in client.iter_download(message.media, request_size=256*1024, chunk_size=256*1024):
             sub_buffer.extend(chunk)
-            if len(sub_buffer) >= 6 * 1024 * 1024:
+            if len(sub_buffer) >= 1500 * 1024:
                 break
     except Exception:
         pass
@@ -463,6 +469,7 @@ async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int):
         stdout_data, _ = await proc.communicate(input=bytes(sub_buffer))
         if not stdout_data or not stdout_data.startswith(b"WEBVTT"):
             stdout_data = b"WEBVTT\n\n1\n00:00:01.000 --> 00:00:05.000\n[Subtitles Active]\n"
+        _SUBTITLE_CACHE[cache_key] = stdout_data
         return Response(content=stdout_data, media_type="text/vtt")
     except Exception as e:
         logger.warning(f"Subtitle extraction notice: {e}")
