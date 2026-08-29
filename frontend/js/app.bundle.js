@@ -2384,20 +2384,26 @@
       const cinemaTab = document.getElementById("tabPaneCinema");
       if (!cinemaTab || !cinemaTab.classList.contains("active")) return;
       if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
-      if (e.code === "Space") {
+      if (e.code === "Space" || e.code === "KeyK") {
         e.preventDefault();
         videoPlayer.paused ? videoPlayer.play() : videoPlayer.pause();
-      } else if (e.code === "ArrowRight") {
+      } else if (e.code === "ArrowRight" || e.code === "KeyL") {
         e.preventDefault();
-        const newPos = Math.min(_knownDuration || videoPlayer.duration || 0, _seekBaseOffset + videoPlayer.currentTime + 10);
+        const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
+        const totalDur = _knownDuration || videoPlayer.duration || currentPos + 60;
+        const newPos = Math.min(totalDur, currentPos + 10);
         _seekToPosition(newPos);
-      } else if (e.code === "ArrowLeft") {
+        showToast2(`\u23E9 Fast Forward (+10s) \u2192 ${_formatDuration(newPos)}`, "info");
+      } else if (e.code === "ArrowLeft" || e.code === "KeyJ") {
         e.preventDefault();
-        const newPos = Math.max(0, _seekBaseOffset + videoPlayer.currentTime - 10);
+        const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
+        const newPos = Math.max(0, currentPos - 10);
         _seekToPosition(newPos);
+        showToast2(`\u23EA Rewind (-10s) \u2192 ${_formatDuration(newPos)}`, "info");
       } else if (e.code === "KeyM") {
         e.preventDefault();
         videoPlayer.muted = !videoPlayer.muted;
+        showToast2(videoPlayer.muted ? "\u{1F507} Muted" : "\u{1F50A} Unmuted", "info");
       } else if (e.code === "KeyF") {
         e.preventDefault();
         if (document.fullscreenElement) {
@@ -2612,15 +2618,19 @@
     if (!videoPlayer) return;
     _seekBaseOffset = startSeconds;
     const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
-    if (isMkv) {
+    if (isMkv && v.stream_transmux_url) {
       const baseUrl = v.stream_transmux_url.split("?")[0];
       videoPlayer.src = `${baseUrl}?audio=${_currentAudioTrack}&ss=${startSeconds}`;
+      videoPlayer.load();
+      videoPlayer.play().catch(() => {
+      });
     } else {
-      videoPlayer.currentTime = startSeconds;
+      try {
+        videoPlayer.currentTime = startSeconds;
+      } catch (e) {
+        console.debug("Native seek error:", e);
+      }
     }
-    videoPlayer.load();
-    videoPlayer.play().catch(() => {
-    });
   }
   function _seekToPosition(targetSeconds) {
     if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
@@ -2628,10 +2638,15 @@
     const videoPlayer = document.getElementById("cinemaVideoPlayer");
     if (!videoPlayer) return;
     const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
-    if (isMkv) {
+    if (isMkv && v.stream_transmux_url) {
       _reloadStreamWithParams(targetSeconds);
     } else {
-      videoPlayer.currentTime = targetSeconds;
+      _seekBaseOffset = 0;
+      try {
+        videoPlayer.currentTime = targetSeconds;
+      } catch (e) {
+        console.debug("Native seek error:", e);
+      }
     }
   }
   function _applySubtitleTrack(vttUrl) {

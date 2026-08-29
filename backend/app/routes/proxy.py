@@ -249,6 +249,8 @@ async def handle_transmux_stream(
         cmd.extend(["-i", input_target])
     else:
         cmd.extend(["-i", "pipe:0"])
+        if ss > 0:
+            cmd.extend(["-ss", str(ss)])
 
     cmd.extend([
         "-map", "0:v:0?",
@@ -257,6 +259,7 @@ async def handle_transmux_stream(
         "-c:a", "aac",
         "-b:a", "192k",
         "-ac", "2",
+        "-avoid_negative_ts", "make_zero",
         "-movflags", "frag_keyframe+empty_moov+default_base_moof",
         "-frag_duration", "500000",
         "-f", "mp4",
