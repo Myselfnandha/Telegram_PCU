@@ -2503,6 +2503,8 @@
       const data = await resp.json();
       const channels = data.watched_channels || [];
       channels.forEach((ch) => {
+        fetch(`/api/media/videos/${encodeURIComponent(ch.id)}`).catch(() => {
+        });
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "cinema-chip";

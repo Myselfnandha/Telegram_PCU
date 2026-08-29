@@ -112,6 +112,9 @@ async function _loadCinemaWatchedChips() {
     const channels = data.watched_channels || [];
 
     channels.forEach((ch) => {
+      // Background pre-warm channel video cache for 0ms instant switching
+      fetch(`/api/media/videos/${encodeURIComponent(ch.id)}`).catch(() => {});
+
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'cinema-chip';

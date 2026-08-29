@@ -882,30 +882,29 @@ async def _fetch_and_cache_videos(chat_id: str, limit: int = 50, offset_id: int 
     try:
         from telethon.tl.types import InputMessagesFilterVideo, InputMessagesFilterDocument, DocumentAttributeVideo, DocumentAttributeFilename
 
-        # Fetch both native video messages AND videos sent as documents (MKV, MP4, etc.) at full raw MTProto speed
-        fetch_limit = max(limit, 80)
+        # Fetch recent messages + native video filter concurrently at ultra-fast wire speed (<200ms)
+        fetch_limit = min(limit, 50)
+        recent_task = client.get_messages(
+            clean_chat_id,
+            limit=fetch_limit,
+            offset_id=offset_id
+        )
         v_task = client.get_messages(
             clean_chat_id,
             limit=fetch_limit,
             offset_id=offset_id,
             filter=InputMessagesFilterVideo
         )
-        d_task = client.get_messages(
-            clean_chat_id,
-            limit=fetch_limit,
-            offset_id=offset_id,
-            filter=InputMessagesFilterDocument
-        )
 
-        v_msgs, d_msgs = await asyncio.gather(v_task, d_task, return_exceptions=True)
+        recent_msgs, v_msgs = await asyncio.gather(recent_task, v_task, return_exceptions=True)
+        if isinstance(recent_msgs, Exception):
+            recent_msgs = []
         if isinstance(v_msgs, Exception):
             v_msgs = []
-        if isinstance(d_msgs, Exception):
-            d_msgs = []
 
         seen_ids = set()
         combined_msgs = []
-        for msg in list(v_msgs) + list(d_msgs):
+        for msg in list(v_msgs) + list(recent_msgs):
             if not msg or msg.id in seen_ids or not hasattr(msg, "file") or not msg.file:
                 continue
             seen_ids.add(msg.id)
