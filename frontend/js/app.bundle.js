@@ -2261,7 +2261,6 @@
     const videoPlayer = document.getElementById("cinemaVideoPlayer");
     const btnFdm = document.getElementById("btnCinemaFdm");
     const btnCopyStream = document.getElementById("btnCinemaCopyUrl");
-    const btnTheaterMode = document.getElementById("btnCinemaTheater");
     const btnNextTrack = document.getElementById("btnCinemaNext");
     const audioSelect = document.getElementById("cinemaAudioSelect");
     const subSelect = document.getElementById("cinemaSubtitleSelect");
@@ -2379,16 +2378,6 @@
         navigator.clipboard.writeText(fullUrl).then(() => {
           showToast2("\u{1F4CB} Stream URL copied to clipboard!", "success");
         });
-      });
-    }
-    if (btnTheaterMode) {
-      btnTheaterMode.addEventListener("click", () => {
-        const cinemaContainer = document.querySelector(".cinema-workspace");
-        if (cinemaContainer) {
-          cinemaContainer.classList.toggle("theater-fullscreen");
-          const isFullscreen = cinemaContainer.classList.contains("theater-fullscreen");
-          btnTheaterMode.textContent = isFullscreen ? "\u{1F5D7} Standard View" : "\u{1F5A5}\uFE0F Theater Mode";
-        }
       });
     }
     document.addEventListener("keydown", (e) => {

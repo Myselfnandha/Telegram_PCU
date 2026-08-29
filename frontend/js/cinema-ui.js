@@ -24,7 +24,6 @@ export async function initCinema() {
   const videoPlayer = document.getElementById('cinemaVideoPlayer');
   const btnFdm = document.getElementById('btnCinemaFdm');
   const btnCopyStream = document.getElementById('btnCinemaCopyUrl');
-  const btnTheaterMode = document.getElementById('btnCinemaTheater');
   const btnNextTrack = document.getElementById('btnCinemaNext');
   const audioSelect = document.getElementById('cinemaAudioSelect');
   const subSelect = document.getElementById('cinemaSubtitleSelect');
@@ -174,18 +173,6 @@ export async function initCinema() {
       navigator.clipboard.writeText(fullUrl).then(() => {
         showToast('📋 Stream URL copied to clipboard!', 'success');
       });
-    });
-  }
-
-  // Theater Mode Toggle
-  if (btnTheaterMode) {
-    btnTheaterMode.addEventListener('click', () => {
-      const cinemaContainer = document.querySelector('.cinema-workspace');
-      if (cinemaContainer) {
-        cinemaContainer.classList.toggle('theater-fullscreen');
-        const isFullscreen = cinemaContainer.classList.contains('theater-fullscreen');
-        btnTheaterMode.textContent = isFullscreen ? '🗗 Standard View' : '🖥️ Theater Mode';
-      }
     });
   }
 

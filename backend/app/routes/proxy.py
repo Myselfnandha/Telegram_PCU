@@ -263,6 +263,7 @@ async def handle_transmux_stream(
         "pipe:1"
     ])
 
+    logger.info(f"Transmux starting: {' '.join(cmd)}")
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -274,11 +275,24 @@ async def handle_transmux_stream(
         logger.error(f"Failed to start FFmpeg process: {e}")
         raise HTTPException(status_code=500, detail="FFmpeg is not available on the server.")
 
+    async def log_stderr():
+        if not proc.stderr:
+            return
+        try:
+            err_data = await proc.stderr.read()
+            if err_data:
+                logger.warning(f"FFmpeg stderr: {err_data.decode(errors='ignore')}")
+        except Exception:
+            pass
+
+    asyncio.create_task(log_stderr())
+
     # Feeder task: downloads from Telegram in 128KB chunks and pipes to proc.stdin
     async def feed_stdin():
         if input_target != "pipe:0" or not proc.stdin:
             return
         try:
+            total_fed = 0
             async for chunk in client.iter_download(
                 message.media,
                 offset=0,
@@ -290,13 +304,15 @@ async def handle_transmux_stream(
                 if proc.stdin and not proc.stdin.is_closing():
                     proc.stdin.write(chunk)
                     await proc.stdin.drain()
+                    total_fed += len(chunk)
                     await asyncio.sleep(0)
                 else:
                     break
-        except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError, BrokenPipeError):
-            pass
+            logger.info(f"Feed stdin finished, total bytes fed to FFmpeg: {total_fed}")
+        except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError, BrokenPipeError) as be:
+            logger.debug(f"Feed stdin pipe notice: {be}")
         except Exception as e:
-            logger.debug(f"Feed stdin ended: {e}")
+            logger.warning(f"Feed stdin error: {e}")
         finally:
             try:
                 if proc.stdin and not proc.stdin.is_closing():
@@ -307,11 +323,14 @@ async def handle_transmux_stream(
     feeder_task = asyncio.create_task(feed_stdin())
 
     async def stream_output():
+        total_out = 0
         try:
             while True:
                 data = await proc.stdout.read(64 * 1024)
                 if not data:
+                    logger.info(f"Stream output EOF reached. Total out: {total_out}, returncode: {proc.returncode}")
                     break
+                total_out += len(data)
                 yield data
         except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError, GeneratorExit):
             logger.debug("Transmux stream client disconnected or cancelled")

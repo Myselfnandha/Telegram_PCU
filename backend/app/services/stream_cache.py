@@ -39,10 +39,10 @@ class StreamCacheManager:
         return CACHE_DIR / f"{chat_id}_{message_id}{ext}"
 
     def _scan_existing_cache(self):
-        """Scans cached files on startup."""
+        """Scans fully cached completed files on startup."""
         try:
             for p in CACHE_DIR.glob("*_*.*"):
-                if p.is_file():
+                if p.is_file() and p.suffix not in (".part", ".tmp"):
                     name_parts = p.stem.split("_", 1)
                     if len(name_parts) == 2:
                         key = p.stem
@@ -58,23 +58,23 @@ class StreamCacheManager:
         """Returns True if the complete media file is cached locally."""
         key = self._get_cache_key(chat_id, message_id)
         info = self._file_info.get(key)
-        if info and info.get("path") and info["path"].exists():
+        if info and info.get("path") and info["path"].exists() and info["path"].suffix not in (".part", ".tmp"):
             return True
         # Check disk directly
         for p in CACHE_DIR.glob(f"{chat_id}_{message_id}.*"):
-            if p.exists() and p.stat().st_size > 0:
+            if p.exists() and p.is_file() and p.suffix not in (".part", ".tmp") and p.stat().st_size > 0:
                 self._file_info[key] = {"path": p, "size": p.stat().st_size, "completed": True}
                 return True
         return False
 
     def get_cached_file(self, chat_id: str, message_id: int) -> Optional[Path]:
-        """Returns the local path if cached."""
+        """Returns the local path only if fully cached."""
         key = self._get_cache_key(chat_id, message_id)
         info = self._file_info.get(key)
-        if info and info.get("path") and info["path"].exists():
+        if info and info.get("path") and info["path"].exists() and info["path"].suffix not in (".part", ".tmp"):
             return info["path"]
         for p in CACHE_DIR.glob(f"{chat_id}_{message_id}.*"):
-            if p.exists() and p.stat().st_size > 0:
+            if p.exists() and p.is_file() and p.suffix not in (".part", ".tmp") and p.stat().st_size > 0:
                 self._file_info[key] = {"path": p, "size": p.stat().st_size, "completed": True}
                 return p
         return None
