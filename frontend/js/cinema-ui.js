@@ -106,7 +106,27 @@ export async function initCinema() {
   const btnFdmFallback = document.getElementById('btnCinemaFdmFallback');
   const btnCopyFallback = document.getElementById('btnCinemaCopyFallback');
 
+  let _stallTimer = null;
+
+  function _clearStallTimer() {
+    if (_stallTimer) {
+      clearTimeout(_stallTimer);
+      _stallTimer = null;
+    }
+  }
+
+  function _startStallTimer() {
+    _clearStallTimer();
+    _stallTimer = setTimeout(() => {
+      if (videoPlayer.readyState < 2 && videoPlayer.currentTime === 0) {
+        console.warn('Video buffer stalled. Displaying VLC / external codec fallback.');
+        if (errorNotice) errorNotice.style.display = 'flex';
+      }
+    }, 4500);
+  }
+
   videoPlayer.addEventListener('error', () => {
+    _clearStallTimer();
     if (_currentPlayingIndex >= 0 && _cinemaVideos[_currentPlayingIndex]) {
       const v = _cinemaVideos[_currentPlayingIndex];
       const currentSrc = videoPlayer.getAttribute('src') || '';
@@ -115,17 +135,28 @@ export async function initCinema() {
         videoPlayer.src = v.stream_transmux_url;
         videoPlayer.load();
         videoPlayer.play().catch(() => {});
+        _startStallTimer();
         return;
       }
     }
     if (errorNotice) errorNotice.style.display = 'flex';
   });
 
+  videoPlayer.addEventListener('loadstart', () => {
+    _startStallTimer();
+  });
+
+  videoPlayer.addEventListener('waiting', () => {
+    _startStallTimer();
+  });
+
   videoPlayer.addEventListener('loadeddata', () => {
+    _clearStallTimer();
     if (errorNotice) errorNotice.style.display = 'none';
   });
 
   videoPlayer.addEventListener('playing', () => {
+    _clearStallTimer();
     if (errorNotice) errorNotice.style.display = 'none';
   });
 

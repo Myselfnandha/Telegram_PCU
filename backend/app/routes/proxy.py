@@ -631,28 +631,50 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
 
     videos = []
     try:
-        from telethon.tl.types import InputMessagesFilterVideo, DocumentAttributeVideo, DocumentAttributeFilename
+        from telethon.tl.types import InputMessagesFilterVideo, InputMessagesFilterDocument, DocumentAttributeVideo, DocumentAttributeFilename
 
-        # Fetch messages with video filter
-        messages = await client.get_messages(
+        # Fetch both native video messages AND videos sent as documents (MKV, MP4, etc.)
+        fetch_limit = max(limit, 80)
+        v_task = client.get_messages(
             clean_chat_id,
-            limit=limit,
+            limit=fetch_limit,
             offset_id=offset_id,
             filter=InputMessagesFilterVideo
         )
+        d_task = client.get_messages(
+            clean_chat_id,
+            limit=fetch_limit,
+            offset_id=offset_id,
+            filter=InputMessagesFilterDocument
+        )
 
-        for msg in messages:
-            if not msg or not msg.media or not hasattr(msg, "file") or not msg.file:
+        v_msgs, d_msgs = await asyncio.gather(v_task, d_task, return_exceptions=True)
+        if isinstance(v_msgs, Exception):
+            v_msgs = []
+        if isinstance(d_msgs, Exception):
+            d_msgs = []
+
+        seen_ids = set()
+        combined_msgs = []
+        for msg in list(v_msgs) + list(d_msgs):
+            if not msg or msg.id in seen_ids or not hasattr(msg, "file") or not msg.file:
                 continue
+            seen_ids.add(msg.id)
+            combined_msgs.append(msg)
 
-            # Cache in sniffer message cache for instant stream resolution
-            sniffer_service._message_cache[(clean_chat_id, msg.id)] = msg
+        # Sort messages by ID descending (newest first)
+        combined_msgs.sort(key=lambda m: m.id, reverse=True)
 
-            # Extract video metadata
+        video_extensions = (
+            ".mp4", ".mkv", ".avi", ".mov", ".webm", ".ts",
+            ".flv", ".wmv", ".m4v", ".3gp", ".vob", ".mpg", ".mpeg"
+        )
+
+        for msg in combined_msgs:
+            filename = msg.file.name if msg.file.name else f"video_{msg.id}.mp4"
             duration = 0
             width = 0
             height = 0
-            filename = msg.file.name if msg.file.name else f"video_{msg.id}.mp4"
 
             if hasattr(msg.media, "document") and msg.media.document:
                 for attr in msg.media.document.attributes:
@@ -664,6 +686,20 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
                         if getattr(attr, "file_name", None):
                             filename = attr.file_name
 
+            # Check if this document/media is a video
+            mime = msg.file.mime_type or ""
+            is_video_media = (
+                getattr(msg, "video", None) is not None or
+                mime.startswith("video/") or
+                any(filename.lower().endswith(ext) for ext in video_extensions)
+            )
+
+            if not is_video_media:
+                continue
+
+            # Cache in sniffer message cache for instant stream resolution
+            sniffer_service._message_cache[(clean_chat_id, msg.id)] = msg
+
             raw_name = "".join([c for c in filename if (c.isalnum() or c in " .-_()")]).strip()
             clean_name = auto_rename(raw_name)
 
@@ -674,7 +710,7 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
                 has_thumb = True
 
             ext = os.path.splitext(clean_name)[1].lower()
-            is_mkv = ext in (".mkv", ".avi", ".ts", ".flv", ".wmv")
+            is_mkv = ext in (".mkv", ".avi", ".ts", ".flv", ".wmv", ".vob")
 
             import urllib.parse
             encoded_name = urllib.parse.quote(clean_name)
