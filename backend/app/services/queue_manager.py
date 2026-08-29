@@ -231,13 +231,18 @@ class QueueManager:
             file_size = item.file_path.stat().st_size
             item.file_size = file_size
 
-            # Check if file needs multi-part sequence slicing (> SPLIT_THRESHOLD)
-            if file_size > SPLIT_THRESHOLD:
+            # Dynamic split threshold based on Telegram account tier (4GB for Premium, 2GB for standard)
+            cached_user = TelegramClientManager._cached_me or {}
+            is_premium = cached_user.get("is_premium", False)
+            active_split_threshold = int(3.95 * 1024 * 1024 * 1024) if is_premium else SPLIT_THRESHOLD
+
+            # Check if file needs multi-part sequence slicing (> active_split_threshold)
+            if file_size > active_split_threshold:
                 item.status = UploadStatus.SPLITTING
-                item.total_parts = math.ceil(file_size / SPLIT_THRESHOLD)
+                item.total_parts = math.ceil(file_size / active_split_threshold)
                 item.progress = 100.0
                 self._notify_update(item)
-                logger.info(f"Zero-copy direct slice prepared for {item.display_filename}: {item.total_parts} sequence slices")
+                logger.info(f"Zero-copy direct slice prepared for {item.display_filename}: {item.total_parts} sequence slices (threshold: {active_split_threshold // (1024*1024)}MB, Premium={is_premium})")
             else:
                 item.total_parts = 1
 
@@ -251,8 +256,8 @@ class QueueManager:
 
             # Calculate slice byte boundaries
             slices = []
-            for part_index, offset in enumerate(range(0, file_size, SPLIT_THRESHOLD), start=1):
-                slice_len = min(SPLIT_THRESHOLD, file_size - offset)
+            for part_index, offset in enumerate(range(0, file_size, active_split_threshold), start=1):
+                slice_len = min(active_split_threshold, file_size - offset)
                 slices.append((part_index, offset, slice_len))
 
             # Upload each part via zero-copy direct range slicing

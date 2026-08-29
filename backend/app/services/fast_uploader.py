@@ -20,13 +20,16 @@ _active_sessions = {}
 def get_optimal_chunk_config(size: int):
     """
     Returns optimal MTProto chunk size and worker pool size based on file size.
+    Scales from 4 up to 12 concurrent workers for maximum fiber gigabit saturation.
     """
     if size <= 10 * 1024 * 1024:  # <= 10MB
         return SMALL_PART_SIZE, 4, False
-    elif size <= 200 * 1024 * 1024:  # 10MB - 200MB
-        return PART_SIZE, 6, True
-    else:  # > 200MB (large files & 2GB parts)
+    elif size <= 100 * 1024 * 1024:  # 10MB - 100MB
         return PART_SIZE, 8, True
+    elif size <= 500 * 1024 * 1024:  # 100MB - 500MB
+        return PART_SIZE, 10, True
+    else:  # > 500MB (large files & 2GB/4GB parts)
+        return PART_SIZE, 12, True
 
 
 async def upload_file_turbo(

@@ -73,7 +73,8 @@ class TelegramClientManager:
                     cls._cached_me = {
                         "id": getattr(me, "id", None),
                         "name": full_name or getattr(me, "username", "Telegram User"),
-                        "username": getattr(me, "username", None)
+                        "username": getattr(me, "username", None),
+                        "is_premium": getattr(me, "premium", False)
                     }
                     logger.info(f"Telegram user client authorized as: {getattr(me, 'first_name', '')} (@{getattr(me, 'username', 'N/A')})")
                 elif BOT_TOKEN:
