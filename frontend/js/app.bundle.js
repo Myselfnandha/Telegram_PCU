@@ -2591,7 +2591,7 @@
         <div class="video-play-overlay">\u25B6</div>
       </div>
       <div class="video-meta">
-        <span class="video-card-title" title="${v.filename}">${v.filename}</span>
+        <span class="video-card-title" title="${escapeHtml(v.filename)}">${escapeHtml(v.filename)}</span>
         <div class="video-card-sub">
           <span>${formatBytes(v.file_size)}</span>
           <span>\u2022</span>

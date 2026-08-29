@@ -2459,12 +2459,25 @@ html, body {
 }
 
 .video-card-title {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-main);
-  white-space: nowrap;
+  line-height: 1.36;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  transition: color 0.18s ease;
+}
+
+.video-card:hover .video-card-title {
+  -webkit-line-clamp: unset;
+  display: block;
+  overflow: visible;
+  color: #ffffff;
 }
 
 .video-card-sub {

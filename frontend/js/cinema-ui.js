@@ -414,7 +414,7 @@ function renderCinemaGrid(videos) {
         <div class="video-play-overlay">▶</div>
       </div>
       <div class="video-meta">
-        <span class="video-card-title" title="${v.filename}">${v.filename}</span>
+        <span class="video-card-title" title="${escapeHtml(v.filename)}">${escapeHtml(v.filename)}</span>
         <div class="video-card-sub">
           <span>${formatBytes(v.file_size)}</span>
           <span>•</span>
