@@ -94,6 +94,10 @@
           <span class="tab-icon">📜</span>
           <span class="tab-text">History</span>
         </button>
+        <button class="tab-btn" data-tab="cinema" type="button" id="tabBtnCinema" onclick="window._switchTab('cinema')">
+          <span class="tab-icon">🎬</span>
+          <span class="tab-text">Cinema</span>
+        </button>
         <button class="tab-btn" data-tab="settings" type="button" id="tabBtnSettings" onclick="window._switchTab('settings')">
           <span class="tab-icon">⚙️</span>
           <span class="tab-text">Settings</span>
@@ -596,6 +600,97 @@
       </div>
     </div>
 
+    <!-- Tab 5: Real-Time Video Cinema & Stream Archive -->
+    <div class="tab-pane" id="tabPaneCinema">
+      <div class="cinema-workspace">
+        
+        <!-- Left: Cinema Theater Player Stage -->
+        <div class="cinema-theater-pane glass-panel">
+          <div class="theater-header">
+            <div class="theater-title-block">
+              <span class="theater-badge">🎬 CINEMA THEATER</span>
+              <h2 class="theater-now-playing" id="cinemaNowPlayingTitle">Select a video to begin streaming</h2>
+              <div class="theater-meta-tags">
+                <span class="meta-pill" id="cinemaNowPlayingRes">HD Video</span>
+                <span class="meta-pill" id="cinemaNowPlayingSize">-- MB</span>
+                <span class="meta-pill" id="cinemaNowPlayingDur">--:--</span>
+                <span class="meta-pill" style="color: var(--accent-secondary); border-color: rgba(0, 206, 201, 0.3);">⚡ MTProto Stream</span>
+              </div>
+            </div>
+            <div class="theater-actions">
+              <button class="btn-secondary" id="btnCinemaFdm" type="button" title="Push to Free Download Manager">
+                <span>🚀</span><span>Send to FDM</span>
+              </button>
+              <button class="btn-secondary" id="btnCinemaCopyUrl" type="button" title="Copy direct HTTP stream link">
+                <span>📋</span><span>Copy URL</span>
+              </button>
+              <button class="btn-secondary" id="btnCinemaTheater" type="button" title="Toggle Fullscreen Theater Mode">
+                <span>🖥️</span><span>Theater Mode</span>
+              </button>
+              <button class="btn-secondary" id="btnCinemaNext" type="button" title="Play next video in archive">
+                <span>⏭️</span><span>Next</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="video-player-container">
+            <video id="cinemaVideoPlayer" controls preload="metadata" playsinline class="cinema-video-element">
+              Your browser does not support HTML5 video playback.
+            </video>
+          </div>
+
+          <div class="theater-footer-info">
+            <div class="shortcut-hints">
+              <span>⌨️ <strong>Space:</strong> Play/Pause</span>
+              <span>•</span>
+              <span><strong>←/→:</strong> Seek 5s</span>
+              <span>•</span>
+              <span><strong>M:</strong> Mute</span>
+              <span>•</span>
+              <span><strong>F:</strong> Fullscreen</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Channel Video Archive Browser & Queue Grid -->
+        <div class="cinema-archive-pane glass-panel">
+          <div class="archive-header">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.1rem;">📁</span>
+                <span style="font-weight: 700; font-size: 1rem; color: var(--text-main);">Video Archive</span>
+                <span class="count-badge" id="cinemaVideoCount">0 Videos</span>
+              </div>
+              <button class="btn-secondary" id="btnCinemaRefresh" type="button" style="padding: 4px 10px; font-size: 0.8rem;">
+                🔄 Refresh
+              </button>
+            </div>
+
+            <!-- Channel Selector & Live Search -->
+            <div class="archive-controls">
+              <div class="channel-select-wrap">
+                <label for="cinemaChannelSelect" class="archive-label">Source Channel / Chat</label>
+                <select id="cinemaChannelSelect" class="glass-input">
+                  <option value="me">☁️ Saved Messages (Personal Cloud)</option>
+                </select>
+              </div>
+
+              <div class="search-input-wrap">
+                <label for="cinemaSearchInput" class="archive-label">Search Videos</label>
+                <input type="text" id="cinemaSearchInput" class="glass-input" placeholder="🔍 Filter video titles...">
+              </div>
+            </div>
+          </div>
+
+          <!-- Video Cards Grid -->
+          <div class="cinema-video-grid-container" id="cinemaVideoGrid">
+            <!-- Dynamically populated via cinema-ui.js -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 
   <!-- Chat Selection Modal -->
@@ -705,6 +800,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=2.7.0"></script>
+  <script src="/js/app.bundle.js?v=2.8.0"></script>
 </body>
 </html>

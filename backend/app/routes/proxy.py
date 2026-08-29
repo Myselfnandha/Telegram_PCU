@@ -120,6 +120,132 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
     )
 
 
+@router.get("/dl/{chat_id}/{message_id}/thumb")
+async def get_media_thumbnail(chat_id: str, message_id: int):
+    """Fetches and caches the preview thumbnail for a Telegram video/document."""
+    client = await TelegramClientManager.get_client()
+    if not client or not client.is_connected():
+        raise HTTPException(status_code=503, detail="Telegram client is not connected.")
+
+    clean_chat_id: Union[int, str] = chat_id
+    if chat_id != "me":
+        try:
+            clean_chat_id = int(chat_id)
+        except ValueError:
+            clean_chat_id = chat_id
+
+    try:
+        message = sniffer_service._message_cache.get((clean_chat_id, message_id))
+        if not message:
+            message = await client.get_messages(clean_chat_id, ids=message_id)
+
+        if not message or not message.media:
+            raise HTTPException(status_code=404, detail="Media not found.")
+
+        # Download thumbnail into memory buffer
+        thumb_bytes = await client.download_media(message.media, thumb=-1, file=bytes)
+        if not thumb_bytes:
+            raise HTTPException(status_code=404, detail="No thumbnail available for this media.")
+
+        return Response(
+            content=thumb_bytes,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, immutable"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Failed to fetch thumbnail for {chat_id}/{message_id}: {e}")
+        raise HTTPException(status_code=404, detail="Failed to load thumbnail.")
+
+
+@router.get("/api/media/videos/{chat_id}")
+async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
+    """
+    Fetches video archives from a Telegram channel, group, or Saved Messages for the Cinema tab.
+    Extracts duration, resolution dimensions, file size, and direct stream URLs.
+    """
+    client = await TelegramClientManager.get_client()
+    if not client or not client.is_connected() or not await client.is_user_authorized():
+        raise HTTPException(status_code=401, detail="Telegram client not authorized.")
+
+    clean_chat_id: Union[int, str] = chat_id
+    if chat_id != "me":
+        try:
+            clean_chat_id = int(chat_id)
+        except ValueError:
+            clean_chat_id = chat_id
+
+    videos = []
+    try:
+        from telethon.tl.types import InputMessagesFilterVideo, DocumentAttributeVideo, DocumentAttributeFilename
+
+        # Fetch messages with video filter
+        messages = await client.get_messages(
+            clean_chat_id,
+            limit=limit,
+            offset_id=offset_id,
+            filter=InputMessagesFilterVideo
+        )
+
+        for msg in messages:
+            if not msg or not msg.media or not hasattr(msg, "file") or not msg.file:
+                continue
+
+            # Cache in sniffer message cache for instant stream resolution
+            sniffer_service._message_cache[(clean_chat_id, msg.id)] = msg
+
+            # Extract video metadata
+            duration = 0
+            width = 0
+            height = 0
+            filename = msg.file.name if msg.file.name else f"video_{msg.id}.mp4"
+
+            if hasattr(msg.media, "document") and msg.media.document:
+                for attr in msg.media.document.attributes:
+                    if isinstance(attr, DocumentAttributeVideo):
+                        duration = int(getattr(attr, "duration", 0))
+                        width = int(getattr(attr, "w", 0))
+                        height = int(getattr(attr, "h", 0))
+                    elif isinstance(attr, DocumentAttributeFilename):
+                        if getattr(attr, "file_name", None):
+                            filename = attr.file_name
+
+            raw_name = "".join([c for c in filename if (c.isalnum() or c in " .-_()")]).strip()
+            clean_name = auto_rename(raw_name)
+
+            has_thumb = False
+            if hasattr(msg.media, "document") and msg.media.document and getattr(msg.media.document, "thumbs", None):
+                has_thumb = True
+            elif hasattr(msg.media, "photo"):
+                has_thumb = True
+
+            videos.append({
+                "message_id": msg.id,
+                "chat_id": str(chat_id),
+                "filename": clean_name,
+                "file_size": int(msg.file.size),
+                "duration": duration,
+                "width": width,
+                "height": height,
+                "date": int(msg.date.timestamp()) if msg.date else 0,
+                "mime_type": msg.file.mime_type or "video/mp4",
+                "has_thumb": has_thumb,
+                "stream_url": f"/dl/{chat_id}/{msg.id}/{clean_name}",
+                "thumb_url": f"/dl/{chat_id}/{msg.id}/thumb" if has_thumb else None
+            })
+
+    except Exception as e:
+        logger.error(f"Error querying videos for {chat_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to query videos: {str(e)}")
+
+    return {
+        "chat_id": str(chat_id),
+        "count": len(videos),
+        "videos": videos
+    }
+
+
 @router.post("/api/proxy/trigger")
 async def trigger_proxy_download(chat_id: Union[int, str], message_id: int, manager: Optional[str] = "auto"):
     """1-Click manual trigger to push a Telegram file to external download manager."""

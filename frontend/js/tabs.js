@@ -17,6 +17,7 @@ export class TabController {
       uploader: document.getElementById("tabPaneUploader"),
       sniffer: document.getElementById("tabPaneSniffer"),
       history: document.getElementById("tabPaneHistory"),
+      cinema: document.getElementById("tabPaneCinema"),
       settings: document.getElementById("tabPaneSettings")
     };
 

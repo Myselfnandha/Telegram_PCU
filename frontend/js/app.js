@@ -13,6 +13,7 @@ import { tabController } from './tabs.js';
 import { snifferUI } from './sniffer-ui.js';
 import { settingsUI } from './settings-ui.js';
 import { telemetryController } from './telemetry.js';
+import { initCinema } from './cinema-ui.js';
 
 async function checkAuthStatus() {
   const badge = document.getElementById('authStatusBadge');
@@ -224,6 +225,13 @@ function initApp() {
     initHistoryControls();
   } catch (e) {
     console.error('History Controls error:', e);
+  }
+
+  // Initialize Cinema & Video Streaming Tab
+  try {
+    initCinema();
+  } catch (e) {
+    console.error('Cinema Controller error:', e);
   }
 
   // Batch Upload Action Buttons

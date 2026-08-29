@@ -55,6 +55,13 @@
       "description": "View upload history and export audit logs",
       "url": "/#history",
       "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Cinema Theater",
+      "short_name": "Cinema",
+      "description": "Real-time Telegram video playback & channel archive stream",
+      "url": "/#cinema",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

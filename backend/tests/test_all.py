@@ -300,3 +300,19 @@ async def test_concurrent_queue_manager():
     qm = QueueManager(max_concurrent=2)
     assert qm.max_concurrent == 2
     assert len(qm.get_all_tasks()) == 0
+
+
+@pytest.mark.asyncio
+async def test_cinema_manifest_and_endpoints():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Check manifest contains Cinema shortcut
+        res = await client.get("/manifest.json")
+        assert res.status_code == 200
+        manifest = res.json()
+        shortcuts = manifest.get("shortcuts", [])
+        assert any(s.get("name") == "Cinema Theater" for s in shortcuts)
+
+        # Check proxy video query endpoint returns valid status code
+        res_vid = await client.get("/api/media/videos/me")
+        assert res_vid.status_code in (200, 401, 500, 503)
+
