@@ -2510,17 +2510,25 @@
     return { isSeries: false, cleanTitle: clean };
   }
   function renderCinemaGrid(videos) {
-    const grid = document.getElementById("cinemaVideoGrid");
-    if (!grid) return;
-    grid.innerHTML = "";
+    const moviesGrid = document.getElementById("cinemaVideoGrid");
+    const seriesPane = document.getElementById("cinemaSeriesPane");
+    const seriesList = document.getElementById("cinemaSeriesList");
+    const moviesCountBadge = document.getElementById("cinemaMoviesCount");
+    const seriesCountBadge = document.getElementById("cinemaSeriesCount");
+    if (!moviesGrid) return;
+    moviesGrid.innerHTML = "";
+    if (seriesList) seriesList.innerHTML = "";
     if (videos.length === 0) {
-      grid.innerHTML = `
+      if (seriesPane) seriesPane.classList.add("hidden");
+      moviesGrid.innerHTML = `
       <div class="cinema-empty">
         <span style="font-size: 2.4rem; margin-bottom: 8px;">\u{1F3AC}</span>
         <p style="font-size: 1rem; font-weight: 600; color: var(--text-main);">No video files found</p>
         <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">This channel does not contain any video documents or movies</p>
       </div>
     `;
+      if (moviesCountBadge) moviesCountBadge.textContent = "0 Movies";
+      if (seriesCountBadge) seriesCountBadge.textContent = "0 Series";
       return;
     }
     const seriesMap = /* @__PURE__ */ new Map();
@@ -2542,124 +2550,145 @@
         standaloneList.push({ ...v, ...sInfo });
       }
     });
-    seriesMap.forEach((seriesGroup) => {
-      if (seriesGroup.episodes.length > 1) {
-        seriesGroup.episodes.sort((a, b) => a.filename.localeCompare(b.filename, void 0, { numeric: true }));
-        const totalBytes = seriesGroup.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
-        const leadThumb = seriesGroup.episodes.find((e) => e.has_thumb)?.thumb_url;
-        const seriesCard = document.createElement("div");
-        seriesCard.className = "hotstar-series-card";
-        seriesCard.innerHTML = `
-        <div class="hotstar-series-hero">
-          <div class="hotstar-series-poster">
-            ${leadThumb ? `<img src="${leadThumb}" alt="${escapeHtml(seriesGroup.seriesName)}" loading="lazy">` : `<div class="cinema-hub-thumb-fallback" style="font-size: 1.8rem;">\u{1F3AC}</div>`}
-          </div>
-          <div class="hotstar-series-info">
-            <div class="hotstar-series-tags">
-              <span class="hotstar-pill">HOTSTAR BUNDLE</span>
-              <span class="hotstar-pill" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border-color: rgba(0, 206, 201, 0.4);">${escapeHtml(seriesGroup.seasonLabel)}</span>
-              <span class="hotstar-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border-color: rgba(255, 121, 63, 0.4);">${seriesGroup.episodes.length} Episodes</span>
-              <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 4px;">Total: ${formatBytes(totalBytes)}</span>
+    const validSeriesGroups = [];
+    seriesMap.forEach((sg) => {
+      if (sg.episodes.length > 1) {
+        sg.episodes.sort((a, b) => a.filename.localeCompare(b.filename, void 0, { numeric: true }));
+        validSeriesGroups.push(sg);
+      } else {
+        standaloneList.push(...sg.episodes);
+      }
+    });
+    if (moviesCountBadge) moviesCountBadge.textContent = `${standaloneList.length} Movies`;
+    if (seriesCountBadge) seriesCountBadge.textContent = `${validSeriesGroups.length} Series`;
+    if (seriesPane && seriesList) {
+      if (validSeriesGroups.length === 0) {
+        seriesPane.classList.add("hidden");
+      } else {
+        seriesPane.classList.remove("hidden");
+        validSeriesGroups.forEach((seriesGroup) => {
+          const totalBytes = seriesGroup.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
+          const leadThumb = seriesGroup.episodes.find((e) => e.has_thumb)?.thumb_url;
+          const seriesCard = document.createElement("div");
+          seriesCard.className = "series-showcase-card";
+          seriesCard.innerHTML = `
+          <div class="series-showcase-hero">
+            <div class="series-showcase-poster">
+              ${leadThumb ? `<img src="${leadThumb}" alt="${escapeHtml(seriesGroup.seriesName)}" loading="lazy">` : `<div class="cinema-hub-thumb-fallback" style="font-size: 1.5rem;">\u{1F3AC}</div>`}
             </div>
-            <h3 class="hotstar-series-title">${escapeHtml(seriesGroup.seriesName)}</h3>
-            <p class="hotstar-series-sub">Continuous MTProto Turbo Streaming with instant keyframe seeking</p>
-            <div class="hotstar-series-actions">
-              <button class="hotstar-btn-binge btn-binge-all" type="button" title="Play entire season sequentially in VLC">
-                <span>\u25B6</span><span>Binge Season in VLC</span>
-              </button>
-              <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 7px 12px; font-size: 0.8rem;" title="Download complete Season .m3u playlist">
-                <span>\u{1F4E5}</span><span>Season Playlist</span>
-              </button>
+            <div class="series-showcase-info">
+              <div class="series-showcase-tags">
+                <span class="series-tag-pill" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid rgba(0, 206, 201, 0.4);">${escapeHtml(seriesGroup.seasonLabel)}</span>
+                <span class="series-tag-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border: 1px solid rgba(255, 121, 63, 0.4);">${seriesGroup.episodes.length} Episodes</span>
+                <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(totalBytes)}</span>
+              </div>
+              <h4 class="series-showcase-title" title="${escapeHtml(seriesGroup.seriesName)}">${escapeHtml(seriesGroup.seriesName)}</h4>
+              <div class="series-showcase-actions">
+                <button class="series-btn-binge btn-binge-all" type="button" title="Play full season sequentially in VLC">
+                  <span>\u25B6</span><span>Binge Season</span>
+                </button>
+                <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 5px 9px; font-size: 0.74rem;" title="Download complete Season .m3u playlist">
+                  <span>\u{1F4E5}</span><span>Playlist</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="hotstar-episode-drawer">
-          <div class="hotstar-episode-track">
-            ${seriesGroup.episodes.map((ep, epIdx) => {
-          const dur = ep.duration ? _formatDuration(ep.duration) : "";
-          return `
-                <div class="hotstar-ep-card" data-ep-idx="${epIdx}">
-                  <div class="hotstar-ep-thumb" title="Click to stream in VLC">
-                    ${ep.has_thumb ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
-                    <span class="hotstar-ep-badge">${escapeHtml(ep.epLabel)}</span>
-                    ${dur ? `<span class="video-duration-pill">${dur}</span>` : ""}
+          <div class="series-episode-drawer">
+            <div class="series-episode-track">
+              ${seriesGroup.episodes.map((ep, epIdx) => {
+            const dur = ep.duration ? _formatDuration(ep.duration) : "";
+            return `
+                  <div class="series-ep-card" data-ep-idx="${epIdx}">
+                    <div class="series-ep-thumb" title="Click to stream in VLC">
+                      ${ep.has_thumb ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
+                      <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
+                      ${dur ? `<span class="video-duration-pill">${dur}</span>` : ""}
+                    </div>
+                    <div class="series-ep-meta">
+                      <span class="series-ep-title" title="${escapeHtml(ep.cleanTitle)}">${escapeHtml(ep.cleanTitle)}</span>
+                      <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(ep.file_size)}</span>
+                    </div>
+                    <div class="series-ep-actions">
+                      <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.7rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
+                        <span>\u{1F3AC}</span><span>VLC</span>
+                      </button>
+                      <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.85; padding: 4px 6px; font-size: 0.7rem;">
+                        <span>\u{1F680}</span><span>FDM</span>
+                      </button>
+                    </div>
                   </div>
-                  <div class="hotstar-ep-meta">
-                    <span class="hotstar-ep-title" title="${escapeHtml(ep.cleanTitle)}">${escapeHtml(ep.cleanTitle)}</span>
-                    <span style="font-size: 0.7rem; color: var(--text-muted);">${formatBytes(ep.file_size)}</span>
-                  </div>
-                  <div class="hotstar-ep-actions">
-                    <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.72rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
-                      <span>\u{1F3AC}</span><span>VLC</span>
-                    </button>
-                    <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.9; padding: 4px 6px; font-size: 0.72rem;">
-                      <span>\u{1F680}</span><span>FDM</span>
-                    </button>
-                  </div>
-                </div>
-              `;
-        }).join("")}
+                `;
+          }).join("")}
+            </div>
           </div>
-        </div>
-      `;
-        const bingeBtn = seriesCard.querySelector(".btn-binge-all");
-        if (bingeBtn) {
-          bingeBtn.addEventListener("click", () => {
-            showToast2(`\u{1F3AC} Launching VLC playlist for ${seriesGroup.episodes.length} episodes of "${seriesGroup.seriesName}"...`, "info");
-            fetch("/api/media/vlc/play_batch", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                title: `${seriesGroup.seriesName} - ${seriesGroup.seasonLabel}`,
-                items: seriesGroup.episodes
-              })
-            }).then((r) => r.json()).then((res) => {
-              if (res.launched) {
-                showToast2(`\u{1F37F} Binging ${seriesGroup.seriesName} (${seriesGroup.episodes.length} episodes) in VLC!`, "success");
-              }
-            }).catch((err) => showToast2(`Playback error: ${err.message}`, "error"));
-          });
-        }
-        const playlistBtn = seriesCard.querySelector(".btn-binge-playlist");
-        if (playlistBtn) {
-          playlistBtn.addEventListener("click", async () => {
-            try {
-              const res = await fetch("/api/media/vlc/batch_playlist", {
+        `;
+          const bingeBtn = seriesCard.querySelector(".btn-binge-all");
+          if (bingeBtn) {
+            bingeBtn.addEventListener("click", () => {
+              showToast2(`\u{1F3AC} Launching VLC playlist for ${seriesGroup.episodes.length} episodes of "${seriesGroup.seriesName}"...`, "info");
+              fetch("/api/media/vlc/play_batch", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  title: `${seriesGroup.seriesName}_${seriesGroup.seasonLabel}`,
+                  title: `${seriesGroup.seriesName} - ${seriesGroup.seasonLabel}`,
                   items: seriesGroup.episodes
                 })
-              });
-              const blob = await res.blob();
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `${seriesGroup.seriesName}_${seriesGroup.seasonLabel}.m3u`;
-              document.body.appendChild(a);
-              a.click();
-              a.remove();
-              showToast2(`\u{1F4E5} Downloaded ${seriesGroup.seriesName} season playlist`, "success");
-            } catch (e) {
-              showToast2(`Error creating playlist: ${e.message}`, "error");
-            }
+              }).then((r) => r.json()).then((res) => {
+                if (res.launched) {
+                  showToast2(`\u{1F37F} Binging ${seriesGroup.seriesName} (${seriesGroup.episodes.length} episodes) in VLC!`, "success");
+                }
+              }).catch((err) => showToast2(`Playback error: ${err.message}`, "error"));
+            });
+          }
+          const playlistBtn = seriesCard.querySelector(".btn-binge-playlist");
+          if (playlistBtn) {
+            playlistBtn.addEventListener("click", async () => {
+              try {
+                const res = await fetch("/api/media/vlc/batch_playlist", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    title: `${seriesGroup.seriesName}_${seriesGroup.seasonLabel}`,
+                    items: seriesGroup.episodes
+                  })
+                });
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${seriesGroup.seriesName}_${seriesGroup.seasonLabel}.m3u`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                showToast2(`\u{1F4E5} Downloaded ${seriesGroup.seriesName} season playlist`, "success");
+              } catch (e) {
+                showToast2(`Error creating playlist: ${e.message}`, "error");
+              }
+            });
+          }
+          seriesCard.querySelectorAll(".series-ep-card").forEach((epCard, idx) => {
+            const ep = seriesGroup.episodes[idx];
+            const epThumb = epCard.querySelector(".series-ep-thumb");
+            const epVlc = epCard.querySelector(".btn-ep-vlc");
+            const epFdm = epCard.querySelector(".btn-ep-fdm");
+            if (epThumb) epThumb.addEventListener("click", () => playInVlc(ep));
+            if (epVlc) epVlc.addEventListener("click", () => playInVlc(ep));
+            if (epFdm) epFdm.addEventListener("click", () => triggerFdm(ep));
           });
-        }
-        seriesCard.querySelectorAll(".hotstar-ep-card").forEach((epCard, idx) => {
-          const ep = seriesGroup.episodes[idx];
-          const epThumb = epCard.querySelector(".hotstar-ep-thumb");
-          const epVlc = epCard.querySelector(".btn-ep-vlc");
-          const epFdm = epCard.querySelector(".btn-ep-fdm");
-          if (epThumb) epThumb.addEventListener("click", () => playInVlc(ep));
-          if (epVlc) epVlc.addEventListener("click", () => playInVlc(ep));
-          if (epFdm) epFdm.addEventListener("click", () => triggerFdm(ep));
+          seriesList.appendChild(seriesCard);
         });
-        grid.appendChild(seriesCard);
-      } else {
-        standaloneList.push(...seriesGroup.episodes);
       }
-    });
+    }
+    if (standaloneList.length === 0 && validSeriesGroups.length > 0) {
+      moviesGrid.innerHTML = `
+      <div class="cinema-empty" style="padding: 32px 12px;">
+        <span style="font-size: 1.8rem; margin-bottom: 6px;">\u{1F4FA}</span>
+        <p style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">All videos are TV series</p>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Browse seasons in the TV Series tab on the right</p>
+      </div>
+    `;
+      return;
+    }
     standaloneList.forEach((v, idx) => {
       const card = document.createElement("div");
       card.className = "cinema-hub-card";
@@ -2727,7 +2756,7 @@
           showToast2("\u{1F4E5} Downloaded VLC .m3u playlist", "success");
         });
       }
-      grid.appendChild(card);
+      moviesGrid.appendChild(card);
     });
   }
   function _filterCinemaGrid(query) {

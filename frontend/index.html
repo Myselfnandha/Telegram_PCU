@@ -646,9 +646,29 @@
           </div>
         </div>
 
-        <!-- Full-Width Responsive Video Grid -->
-        <div class="cinema-full-grid-wrap" id="cinemaVideoGrid">
-          <!-- Dynamically populated via cinema-ui.js -->
+        <!-- Split Cinema Layout: Left Movies & Right TV Series -->
+        <div class="cinema-split-layout" id="cinemaSplitLayout">
+          <!-- Left Column: Movies & Standalone Videos -->
+          <div class="cinema-movies-pane">
+            <div class="cinema-section-header">
+              <span class="cinema-section-title">🎥 Movies & Standalone Videos</span>
+              <span class="count-badge" id="cinemaMoviesCount">0 Movies</span>
+            </div>
+            <div class="cinema-movies-grid" id="cinemaVideoGrid">
+              <!-- Dynamically populated via cinema-ui.js -->
+            </div>
+          </div>
+
+          <!-- Right Column: TV Series & Seasons -->
+          <div class="cinema-series-pane" id="cinemaSeriesPane">
+            <div class="cinema-section-header">
+              <span class="cinema-section-title">📺 TV Series & Seasons</span>
+              <span class="count-badge" id="cinemaSeriesCount" style="background: rgba(108, 92, 231, 0.2); color: var(--accent-primary);">0 Series</span>
+            </div>
+            <div class="cinema-series-list" id="cinemaSeriesList">
+              <!-- Series Showcase Cards -->
+            </div>
+          </div>
         </div>
 
         <!-- Footer Info Bar -->
@@ -771,6 +791,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=3.0.7"></script>
+  <script src="/js/app.bundle.js?v=3.0.8"></script>
 </body>
 </html>
