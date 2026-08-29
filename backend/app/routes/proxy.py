@@ -739,3 +739,73 @@ async def clear_stream_cache():
     """Clears all local cached media chunks."""
     cleared = stream_cache_service.clear_cache()
     return {"success": True, "cleared_files": cleared}
+
+
+@router.post("/api/media/vlc/play")
+async def launch_vlc_stream(payload: Dict[str, Any]):
+    """Launch VLC Player directly on host machine with high-speed MTProto stream."""
+    import shutil
+    import subprocess
+    from app.config import PROXY_PORT
+
+    chat_id = payload.get("chat_id")
+    message_id = payload.get("message_id")
+    raw_url = payload.get("stream_url")
+    filename = payload.get("filename", "video.mp4")
+
+    if not raw_url and chat_id and message_id:
+        import urllib.parse
+        encoded_name = urllib.parse.quote(filename)
+        raw_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{chat_id}/{message_id}/{encoded_name}"
+    elif raw_url and raw_url.startswith("/"):
+        raw_url = f"http://127.0.0.1:{PROXY_PORT}{raw_url}"
+
+    vlc_bin = shutil.which("vlc") or "/usr/bin/vlc"
+    if not os.path.exists(vlc_bin):
+        mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
+        if os.path.exists(mpv_bin):
+            vlc_bin = mpv_bin
+
+    launched = False
+    if os.path.exists(vlc_bin):
+        try:
+            subprocess.Popen(
+                [vlc_bin, raw_url, "--network-caching=3000"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            launched = True
+            logger.info(f"Launched VLC player for stream: {raw_url}")
+        except Exception as e:
+            logger.warning(f"Could not launch VLC subprocess: {e}")
+
+    import urllib.parse
+    encoded_file = urllib.parse.quote(f"{filename}.m3u")
+    return {
+        "success": True,
+        "launched": launched,
+        "stream_url": raw_url,
+        "playlist_url": f"/api/media/vlc/playlist/{chat_id}/{message_id}/{encoded_file}"
+    }
+
+
+@router.get("/api/media/vlc/playlist/{chat_id}/{message_id}/{filename}")
+async def generate_vlc_playlist(chat_id: str, message_id: int, filename: str, request: Request):
+    """Generates an .m3u playlist file for 1-click opening in VLC on any device."""
+    from app.config import PROXY_PORT
+    host = request.headers.get("host", f"localhost:{PROXY_PORT}")
+    clean_filename = filename.replace(".m3u", "")
+    import urllib.parse
+    encoded_name = urllib.parse.quote(clean_filename)
+    stream_url = f"http://{host}/dl/{chat_id}/{message_id}/{encoded_name}"
+
+    m3u_content = f"#EXTM3U\n#EXTINF:-1,{clean_filename}\n{stream_url}\n"
+    return Response(
+        content=m3u_content,
+        media_type="audio/x-mpegurl",
+        headers={
+            "Content-Disposition": f'attachment; filename="{clean_filename}.m3u"',
+            "Content-Type": "audio/x-mpegurl; charset=utf-8"
+        }
+    )

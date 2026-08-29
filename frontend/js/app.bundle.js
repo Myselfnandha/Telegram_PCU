@@ -2355,6 +2355,48 @@
     videoPlayer.addEventListener("playing", () => {
       if (errorNotice) errorNotice.style.display = "none";
     });
+    const btnVlc = document.getElementById("btnCinemaVlc");
+    const btnVlcFallback = document.getElementById("btnCinemaVlcFallback");
+    async function _triggerVlcStream() {
+      if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) {
+        showToast2("Please select a video from the archive first", "info");
+        return;
+      }
+      const v = _cinemaVideos[_currentPlayingIndex];
+      showToast2(`\u{1F3AC} Launching VLC for "${v.filename}"...`, "info");
+      try {
+        const resp = await fetch("/api/media/vlc/play", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: v.chat_id,
+            message_id: v.message_id,
+            filename: v.filename,
+            stream_url: v.stream_url
+          })
+        });
+        const data = await resp.json();
+        if (data.launched) {
+          showToast2(`\u{1F3AC} VLC launched for "${v.filename}"!`, "success");
+        } else if (data.playlist_url) {
+          const a = document.createElement("a");
+          a.href = data.playlist_url;
+          a.download = `${v.filename}.m3u`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          showToast2("\u{1F3AC} Generated VLC .m3u playlist. Opening stream...", "success");
+        }
+      } catch (e) {
+        showToast2(`VLC launch notice: ${e.message}`, "warning");
+      }
+    }
+    if (btnVlc) {
+      btnVlc.addEventListener("click", _triggerVlcStream);
+    }
+    if (btnVlcFallback) {
+      btnVlcFallback.addEventListener("click", _triggerVlcStream);
+    }
     if (btnFdmFallback) {
       btnFdmFallback.addEventListener("click", () => btnFdm?.click());
     }
@@ -2415,7 +2457,6 @@
       } else if (e.code === "KeyM") {
         e.preventDefault();
         videoPlayer.muted = !videoPlayer.muted;
-        showToast2(videoPlayer.muted ? "\u{1F507} Muted" : "\u{1F50A} Unmuted", "info");
       } else if (e.code === "KeyF") {
         e.preventDefault();
         if (document.fullscreenElement) {
@@ -2423,6 +2464,9 @@
         } else {
           videoPlayer.requestFullscreen?.();
         }
+      } else if (e.code === "KeyV") {
+        e.preventDefault();
+        _triggerVlcStream();
       }
     });
     loadCinemaVideos("me");
