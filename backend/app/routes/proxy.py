@@ -16,10 +16,54 @@ logger = logging.getLogger("proxy_route")
 router = APIRouter(tags=["proxy"])
 
 _MESSAGE_CACHE = {}
-_ACTIVE_PREFETCH_TASKS: Dict[Tuple[str, int], asyncio.Task] = {}
 
 from app.services.stream_cache import stream_cache_service, BLOCK_SIZE
 from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_videos_db
+
+
+class StreamSlidingBuffer:
+    """
+    Sliding In-Memory Ring Buffer for real-time MTProto streams.
+    Holds up to 48MB of recent continuous video stream chunks in memory.
+    When small seeks (e.g. 5s forward or backward) occur, serves the target
+    chunks INSTANTANEOUSLY with 0ms latency directly from RAM without MTProto round-trips!
+    """
+    def __init__(self):
+        self._buffers: Dict[Tuple[str, int], dict] = {}
+
+    def push(self, chat_id: str, message_id: int, offset: int, data: bytes):
+        key = (str(chat_id), message_id)
+        if key not in self._buffers:
+            self._buffers[key] = {"start": offset, "data": bytearray(), "last_active": time.time()}
+        buf = self._buffers[key]
+        buf_end = buf["start"] + len(buf["data"])
+        if offset == buf_end:
+            buf["data"].extend(data)
+            if len(buf["data"]) > 48 * 1024 * 1024:
+                trim = len(buf["data"]) - 48 * 1024 * 1024
+                buf["data"] = buf["data"][trim:]
+                buf["start"] += trim
+        else:
+            buf["start"] = offset
+            buf["data"] = bytearray(data)
+        buf["last_active"] = time.time()
+
+    def get_slice(self, chat_id: str, message_id: int, start: int, length: int) -> Optional[bytes]:
+        key = (str(chat_id), message_id)
+        if key not in self._buffers:
+            return None
+        buf = self._buffers[key]
+        buf_start = buf["start"]
+        buf_end = buf_start + len(buf["data"])
+        if buf_start <= start < buf_end:
+            offset_in_buf = start - buf_start
+            available = len(buf["data"]) - offset_in_buf
+            read_len = min(length, available)
+            if read_len > 0:
+                return bytes(buf["data"][offset_in_buf:offset_in_buf + read_len])
+        return None
+
+_SLIDING_STREAM_BUFFER = StreamSlidingBuffer()
 
 
 async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id: int, file_size: int, filename: str, start_block: int = 0):
@@ -211,7 +255,43 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 2. Check if the requested range can be served directly from discrete block parts on disk (<0.1ms)
+    # 2. Check if the requested range can be served directly from in-memory sliding buffer (0ms instant small seek!)
+    buf_slice = _SLIDING_STREAM_BUFFER.get_slice(str(chat_id), message_id, start, length)
+    if buf_slice and len(buf_slice) >= min(length, 1024 * 1024):
+        async def buffered_streamer():
+            yield buf_slice
+            rem_bytes = length - len(buf_slice)
+            if rem_bytes > 0:
+                next_start = start + len(buf_slice)
+                next_aligned = next_start - (next_start % (512 * 1024))
+                next_discard = next_start - next_aligned
+                next_limit = rem_bytes + next_discard
+                first = True
+                curr_offset = next_start
+                async for raw in client.iter_download(
+                    message.media,
+                    offset=next_aligned,
+                    limit=next_limit,
+                    request_size=512 * 1024,
+                    chunk_size=512 * 1024,
+                ):
+                    if first:
+                        first = False
+                        if next_discard > 0:
+                            raw = raw[next_discard:]
+                    if raw:
+                        _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_offset, raw)
+                        curr_offset += len(raw)
+                        yield raw
+                        await asyncio.sleep(0)
+
+        return StreamingResponse(
+            buffered_streamer(),
+            status_code=status_code,
+            headers=headers
+        )
+
+    # 3. Check if the requested range can be served directly from discrete block parts on disk (<0.1ms)
     start_block = start // BLOCK_SIZE
     end_block = end // BLOCK_SIZE
     all_blocks_present = True
@@ -264,6 +344,7 @@ async def handle_proxy_download(
         async def _mtproto_producer():
             try:
                 first_chunk = True
+                curr_pos = aligned_start
                 async for raw_chunk in client.iter_download(
                     message.media,
                     offset=aligned_start,
@@ -271,10 +352,17 @@ async def handle_proxy_download(
                     request_size=align_unit,
                     chunk_size=align_unit,
                 ):
+                    raw_len = len(raw_chunk)
                     if first_chunk:
                         first_chunk = False
                         if discard_bytes > 0:
+                            _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_pos + discard_bytes, raw_chunk[discard_bytes:])
                             raw_chunk = raw_chunk[discard_bytes:]
+                        else:
+                            _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_pos, raw_chunk)
+                    else:
+                        _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_pos, raw_chunk)
+                    curr_pos += raw_len
                     if raw_chunk:
                         await chunk_queue.put(raw_chunk)
             except Exception as pe:
@@ -1143,12 +1231,11 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                     [
                         chosen_bin,
                         raw_url,
-                        "--input-fast-seek",
                         "--avcodec-threads=0",
                         "--avcodec-fast",
-                        "--network-caching=1500",
-                        "--file-caching=1000",
-                        "--live-caching=1000",
+                        "--network-caching=800",
+                        "--file-caching=600",
+                        "--live-caching=600",
                         "--clock-jitter=0",
                         "--no-qt-error-dialogs",
                         "--quiet"
