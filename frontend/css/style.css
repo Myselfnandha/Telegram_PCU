@@ -52,31 +52,17 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  scrollbar-width: none !important; /* Firefox */
-  -ms-overflow-style: none !important; /* IE and Edge */
 }
 
-/* Hide all visible scrollbars completely across Chrome, Safari, Chromium, Edge */
-::-webkit-scrollbar,
-*::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent !important;
+/* Hide scrollbars on root viewport */
+html, body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-
-::-webkit-scrollbar-thumb,
-*::-webkit-scrollbar-thumb {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent !important;
-}
-
-::-webkit-scrollbar-track,
-*::-webkit-scrollbar-track {
-  display: none !important;
-  background: transparent !important;
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 html, body {
@@ -1228,46 +1214,45 @@ html, body {
 
 .modal-body {
   padding: 12px;
-  overflow-y: auto;
+  overflow-y: scroll !important;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 6px;
   max-height: 480px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent-primary) rgba(255, 255, 255, 0.05);
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--accent-primary) rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Chrome / Safari / WebKit Scrollbar Styling for all Destination Modals */
 .modal-body::-webkit-scrollbar,
 #chatListContainer::-webkit-scrollbar,
 #watchChannelListContainer::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px !important;
+  height: 8px !important;
   display: block !important;
 }
 
 .modal-body::-webkit-scrollbar-track,
 #chatListContainer::-webkit-scrollbar-track,
 #watchChannelListContainer::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 4px;
-  margin: 4px 0;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-radius: 6px !important;
+  margin: 6px 0 !important;
 }
 
 .modal-body::-webkit-scrollbar-thumb,
 #chatListContainer::-webkit-scrollbar-thumb,
 #watchChannelListContainer::-webkit-scrollbar-thumb {
-  background: var(--accent-primary);
-  border-radius: 4px;
-  box-shadow: 0 0 8px rgba(108, 92, 231, 0.5);
-  transition: background 0.2s ease;
+  background: var(--accent-primary) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 0 10px rgba(108, 92, 231, 0.6) !important;
 }
 
 .modal-body::-webkit-scrollbar-thumb:hover,
 #chatListContainer::-webkit-scrollbar-thumb:hover,
 #watchChannelListContainer::-webkit-scrollbar-thumb:hover {
-  background: #a29bfe;
+  background: #a29bfe !important;
 }
 
 .chat-option-item {
