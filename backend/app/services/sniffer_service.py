@@ -71,7 +71,8 @@ _WATERMARK_WORDS = [
     'tamilyogi', 'moviesda', 'bollyflix', 'katmovie', 'vegamovies',
     'rarbg', 'yify', 'psa', 'pahe', 'tn69', 'cinemavilla', 'isaimini',
     'movies4u', 'cinemahub', 'tamilrockers', 'movierulz', 'cinevood',
-    'worldfree4u', 'khatrimaza', 'filmyzilla', '9xmovies', 'extramovies'
+    'worldfree4u', 'khatrimaza', 'filmyzilla', '9xmovies', 'extramovies',
+    'starflixtamil', 'starflix', 'moviesnation', 'mkvking', 'skymovies'
 ]
 _NOISE_RE = re.compile(
     r'\b(2160p?|4k|uhd|1080p?|720p?|480p?|360p?|1p|hdrip|bdrip|bluray|blu-ray|webrip|web-dl|web|hdtv|dvdrip|hq|'

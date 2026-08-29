@@ -78,32 +78,66 @@ export function getFileCategory(file) {
   return 'document';
 }
 
-export function cleanFileName(raw) {
+export function cleanFileName(raw, channelContext = null) {
   if (!raw) return '';
   const lastDot = raw.lastIndexOf('.');
   const name = lastDot !== -1 ? raw.slice(0, lastDot) : raw;
   const ext = lastDot !== -1 ? raw.slice(lastDot) : '';
 
   let cleaned = name;
+
+  // 1. Strip URLs & site domains
   cleaned = cleaned.replace(/https?:\/\/\S+/gi, ' ');
   cleaned = cleaned.replace(/\b(?:t|telegram)\.me\/[\w\+\-_/]+/gi, ' ');
   cleaned = cleaned.replace(/\b(?:www\.[a-z0-9\.\-_]+|[a-z0-9\.\-_]+\.(?:com|org|net|in|yt|vip|me|to|is|cx|ms|li|co|cc|ws|site|xyz|online|live|tv))\b/gi, ' ');
+
+  // 2. Convert underscores and dots to spaces
   cleaned = cleaned.replace(/[\._]+/g, ' ');
+
+  // 3. Strip @ handles (e.g. @channel or @user)
   cleaned = cleaned.replace(/@\S+/g, ' ');
+
+  // 4. Strip bracketed / brace prefixes
   cleaned = cleaned.replace(/^[\[\{][^\]\}]+[\]\}]\s*/g, ' ');
 
+  // 5. Adaptive Channel Token Extraction
+  if (channelContext) {
+    const rawContext = typeof channelContext === 'string' ? channelContext : `${channelContext.name || ''} ${channelContext.username || ''}`;
+    const channelTokens = rawContext
+      .replace(/[\._\-@#\$%^&\*()\[\]{}|\\/]/g, ' ')
+      .split(/\s+/)
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t.length > 2 && !/^(the|and|for|official|channel|group|hd|cloud|saved|messages)$/i.test(t));
+
+    if (channelTokens.length > 0) {
+      const escaped = channelTokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      cleaned = cleaned.replace(new RegExp(`\\b(?:${escaped.join('|')})\\b`, 'gi'), ' ');
+    }
+  }
+
+  // 6. Common provider / release group watermark signatures
   const watermarks = [
     'tamilmovoo', 'tamildbox', 'tamilblasters', 'tamilmv', '1tamilmv',
     'tamilyogi', 'moviesda', 'bollyflix', 'katmovie', 'vegamovies',
     'rarbg', 'yify', 'psa', 'pahe', 'tn69', 'cinemavilla', 'isaimini',
     'movies4u', 'cinemahub', 'tamilrockers', 'movierulz', 'cinevood',
-    'worldfree4u', 'khatrimaza', 'filmyzilla', '9xmovies', 'extramovies'
+    'worldfree4u', 'khatrimaza', 'filmyzilla', '9xmovies', 'extramovies',
+    'starflixtamil', 'starflix', 'moviesnation', 'mkvking', 'skymovies',
+    'cinehub', 'filmywap', 'coolmoviez', 'todaypk', 'desiremovies'
   ];
   cleaned = cleaned.replace(new RegExp(`\\b(?:${watermarks.join('|')})\\b`, 'gi'), ' ');
+
+  // 7. Strip media noise / codecs / audio specs
   cleaned = cleaned.replace(/\b(2160p?|4k|uhd|1080p?|720p?|480p?|360p?|1p|hdrip|bdrip|bluray|blu-ray|webrip|web-dl|web|hdtv|dvdrip|hq|x264|x265|hevc|avc|xvid|divx|10bit|8bit|aac|ac3|eac3|ddp?\d?|dts|atmos|mp3|esub|esubs|subrip|subs?|sub|multi|dual|hindi|tamil|telugu|kannada|malayalam|english|dubbed)\b/gi, ' ');
+
+  // 8. Dynamic prefix pattern stripper (e.g. "SiteName org Movie" -> "Movie")
+  cleaned = cleaned.replace(/^[a-z0-9\-_]+\s+(?:org|com|net|in|tv|vip|me|cc|site|hub|flix|movies|channel)\s+/i, ' ');
+
+  // 9. Clean punctuation & extra whitespace
   cleaned = cleaned.replace(/[\/\\:*?"<>|\[\]\(\)\{\}\-]/g, ' ');
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
+  // 10. Format year (YYYY)
   const yearMatch = cleaned.match(/\b(19\d\d|20\d\d)\b/);
   if (yearMatch) {
     const year = yearMatch[1];

@@ -4,6 +4,7 @@ import { chatPicker } from './chat-picker.js';
 
 let _cinemaVideos = [];
 let _currentChatId = 'me';
+let _currentChatName = 'Saved Messages (Personal Cloud)';
 
 export async function initCinema() {
   const btnChooseChat = document.getElementById('btnCinemaChooseChat');
@@ -54,6 +55,7 @@ function _initCinemaDestinationPicker() {
 
 function _onCinemaChatSelected(chat) {
   _currentChatId = chat.id;
+  _currentChatName = chat.name || 'Chat';
   const nameEl = document.getElementById('cinemaCurrentChatName');
   const typeEl = document.getElementById('cinemaCurrentChatType');
   const iconEl = document.getElementById('cinemaCurrentChatIcon');
@@ -162,18 +164,20 @@ export async function loadCinemaVideos(chatId = 'me') {
 window._reloadCinema = () => loadCinemaVideos(_currentChatId);
 
 function _detectSeriesInfo(filename) {
-  const clean = cleanFileName(filename) || filename;
+  const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
+  const clean = cleanFileName(filename, channelContext) || filename;
   // Match S01E01, S1E1, S01 EP01, Season 1 Episode 2, EP01, Part 1, etc.
   const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}|ep\s*\d{1,3}|episode\s*\d{1,3}|part\s*\d{1,2}))(.*)$/i;
   const m = clean.match(regex);
   if (m) {
     let sName = (m[1] || '').replace(/\.\w+$/, '').replace(/[._\-\(\)]+$/, '').trim();
     if (!sName) sName = clean.replace(/\.\w+$/, '').trim();
+    sName = cleanFileName(sName, channelContext).replace(/\.\w+$/, '').trim();
     const sSeason = (m[2] || 'S01').toUpperCase().replace(/\s+/g, ' ');
     const sEp = (m[3] || 'EP01').toUpperCase().replace(/\s+/g, ' ');
     return {
       isSeries: true,
-      seriesName: sName,
+      seriesName: sName || 'Series',
       seasonLabel: sSeason.startsWith('S') && !sSeason.includes('EASON') ? `Season ${parseInt(sSeason.slice(1)) || 1}` : sSeason,
       epLabel: sEp,
       cleanTitle: clean
@@ -211,6 +215,7 @@ export function renderCinemaGrid(videos) {
   // 1. Group TV series vs Standalone Movies
   const seriesMap = new Map();
   const standaloneList = [];
+  const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
 
   videos.forEach((v) => {
     const sInfo = _detectSeriesInfo(v.filename);
@@ -250,19 +255,19 @@ export function renderCinemaGrid(videos) {
       seriesPane.classList.add('hidden');
     } else {
       seriesPane.classList.remove('hidden');
-      validSeriesGroups.forEach((seriesGroup) => {
+      validSeriesGroups.forEach((seriesGroup, groupIdx) => {
         const totalBytes = seriesGroup.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
         const leadThumb = seriesGroup.episodes.find((e) => e.has_thumb)?.thumb_url;
 
         const seriesCard = document.createElement('div');
-        seriesCard.className = 'series-showcase-card';
+        seriesCard.className = `series-showcase-card ${groupIdx === 0 ? 'expanded' : ''}`;
         seriesCard.innerHTML = `
           <div class="series-showcase-hero">
             <div class="series-showcase-poster">
               ${leadThumb
-                ? `<img src="${leadThumb}" alt="${escapeHtml(seriesGroup.seriesName)}" loading="lazy">`
-                : `<div class="cinema-hub-thumb-fallback" style="font-size: 1.5rem;">🎬</div>`
-              }
+            ? `<img src="${leadThumb}" alt="${escapeHtml(seriesGroup.seriesName)}" loading="lazy">`
+            : `<div class="series-thumb-fallback">🎬</div>`
+          }
             </div>
             <div class="series-showcase-info">
               <div class="series-showcase-tags">
@@ -278,20 +283,23 @@ export function renderCinemaGrid(videos) {
                 <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 5px 9px; font-size: 0.74rem;" title="Download complete Season .m3u playlist">
                   <span>📥</span><span>Playlist</span>
                 </button>
+                <button class="btn-secondary btn-toggle-episodes" type="button" style="padding: 5px 9px; font-size: 0.74rem; margin-left: auto;">
+                  <span class="ep-toggle-label">▾ Episodes</span>
+                </button>
               </div>
             </div>
           </div>
           <div class="series-episode-drawer">
             <div class="series-episode-track">
               ${seriesGroup.episodes.map((ep, epIdx) => {
-                const dur = ep.duration ? _formatDuration(ep.duration) : '';
-                return `
+            const dur = ep.duration ? _formatDuration(ep.duration) : '';
+            return `
                   <div class="series-ep-card" data-ep-idx="${epIdx}">
                     <div class="series-ep-thumb" title="Click to stream in VLC">
                       ${ep.has_thumb
-                        ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
-                        : `<div class="cinema-hub-thumb-fallback">🎬</div>`
-                      }
+                ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'series-thumb-fallback\\'>🎬</div>'">`
+                : `<div class="series-thumb-fallback">🎬</div>`
+              }
                       <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
                       ${dur ? `<span class="video-duration-pill">${dur}</span>` : ''}
                     </div>
@@ -309,16 +317,28 @@ export function renderCinemaGrid(videos) {
                     </div>
                   </div>
                 `;
-              }).join('')}
+          }).join('')}
             </div>
           </div>
         `;
 
+        // Toggle Episode Drawer
+        const toggleBtn = seriesCard.querySelector('.btn-toggle-episodes');
+        if (toggleBtn) {
+          toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            seriesCard.classList.toggle('expanded');
+            const isExp = seriesCard.classList.contains('expanded');
+            const lbl = toggleBtn.querySelector('.ep-toggle-label');
+            if (lbl) lbl.textContent = isExp ? '▴ Hide' : '▾ Episodes';
+          });
+        }
+
         // Binge Season Playback in VLC
         const bingeBtn = seriesCard.querySelector('.btn-binge-all');
         if (bingeBtn) {
-          bingeBtn.addEventListener('click', () => {
-            showToast(`🎬 Launching VLC playlist for ${seriesGroup.episodes.length} episodes of "${seriesGroup.seriesName}"...`, 'info');
+          bingeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             fetch('/api/media/vlc/play_batch', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -337,7 +357,8 @@ export function renderCinemaGrid(videos) {
         // Download Complete Season M3U
         const playlistBtn = seriesCard.querySelector('.btn-binge-playlist');
         if (playlistBtn) {
-          playlistBtn.addEventListener('click', async () => {
+          playlistBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
             try {
               const res = await fetch('/api/media/vlc/batch_playlist', {
                 method: 'POST',
@@ -402,9 +423,9 @@ export function renderCinemaGrid(videos) {
     card.innerHTML = `
       <div class="cinema-hub-thumb" title="Click to stream in VLC Player">
         ${v.has_thumb
-          ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
-          : `<div class="cinema-hub-thumb-fallback">🎬</div>`
-        }
+        ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
+        : `<div class="cinema-hub-thumb-fallback">🎬</div>`
+      }
         ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ''}
       </div>
       <div class="cinema-hub-meta">
@@ -486,7 +507,6 @@ function _filterCinemaGrid(query) {
 
 export async function playInVlc(v, playerType = 'auto') {
   const isMpv = playerType === 'mpv';
-  showToast(`🎬 Launching ${isMpv ? 'MPV' : 'VLC'} for "${v.filename}"...`, 'info');
   try {
     const resp = await fetch('/api/media/vlc/play', {
       method: 'POST',

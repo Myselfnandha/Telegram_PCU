@@ -145,7 +145,7 @@
     if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt"].includes(ext)) return "document";
     return "document";
   }
-  function cleanFileName(raw) {
+  function cleanFileName(raw, channelContext = null) {
     if (!raw) return "";
     const lastDot = raw.lastIndexOf(".");
     const name = lastDot !== -1 ? raw.slice(0, lastDot) : raw;
@@ -157,6 +157,14 @@
     cleaned = cleaned.replace(/[\._]+/g, " ");
     cleaned = cleaned.replace(/@\S+/g, " ");
     cleaned = cleaned.replace(/^[\[\{][^\]\}]+[\]\}]\s*/g, " ");
+    if (channelContext) {
+      const rawContext = typeof channelContext === "string" ? channelContext : `${channelContext.name || ""} ${channelContext.username || ""}`;
+      const channelTokens = rawContext.replace(/[\._\-@#\$%^&\*()\[\]{}|\\/]/g, " ").split(/\s+/).map((t) => t.trim().toLowerCase()).filter((t) => t.length > 2 && !/^(the|and|for|official|channel|group|hd|cloud|saved|messages)$/i.test(t));
+      if (channelTokens.length > 0) {
+        const escaped = channelTokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        cleaned = cleaned.replace(new RegExp(`\\b(?:${escaped.join("|")})\\b`, "gi"), " ");
+      }
+    }
     const watermarks = [
       "tamilmovoo",
       "tamildbox",
@@ -184,10 +192,21 @@
       "khatrimaza",
       "filmyzilla",
       "9xmovies",
-      "extramovies"
+      "extramovies",
+      "starflixtamil",
+      "starflix",
+      "moviesnation",
+      "mkvking",
+      "skymovies",
+      "cinehub",
+      "filmywap",
+      "coolmoviez",
+      "todaypk",
+      "desiremovies"
     ];
     cleaned = cleaned.replace(new RegExp(`\\b(?:${watermarks.join("|")})\\b`, "gi"), " ");
     cleaned = cleaned.replace(/\b(2160p?|4k|uhd|1080p?|720p?|480p?|360p?|1p|hdrip|bdrip|bluray|blu-ray|webrip|web-dl|web|hdtv|dvdrip|hq|x264|x265|hevc|avc|xvid|divx|10bit|8bit|aac|ac3|eac3|ddp?\d?|dts|atmos|mp3|esub|esubs|subrip|subs?|sub|multi|dual|hindi|tamil|telugu|kannada|malayalam|english|dubbed)\b/gi, " ");
+    cleaned = cleaned.replace(/^[a-z0-9\-_]+\s+(?:org|com|net|in|tv|vip|me|cc|site|hub|flix|movies|channel)\s+/i, " ");
     cleaned = cleaned.replace(/[\/\\:*?"<>|\[\]\(\)\{\}\-]/g, " ");
     cleaned = cleaned.replace(/\s+/g, " ").trim();
     const yearMatch = cleaned.match(/\b(19\d\d|20\d\d)\b/);
@@ -2365,6 +2384,7 @@
   // frontend/js/cinema-ui.js
   var _cinemaVideos = [];
   var _currentChatId = "me";
+  var _currentChatName = "Saved Messages (Personal Cloud)";
   async function initCinema() {
     const btnChooseChat = document.getElementById("btnCinemaChooseChat");
     const videoSearch = document.getElementById("cinemaSearchInput");
@@ -2401,6 +2421,7 @@
   }
   function _onCinemaChatSelected(chat) {
     _currentChatId = chat.id;
+    _currentChatName = chat.name || "Chat";
     const nameEl = document.getElementById("cinemaCurrentChatName");
     const typeEl = document.getElementById("cinemaCurrentChatType");
     const iconEl = document.getElementById("cinemaCurrentChatIcon");
@@ -2491,17 +2512,19 @@
   }
   window._reloadCinema = () => loadCinemaVideos(_currentChatId);
   function _detectSeriesInfo(filename) {
-    const clean = cleanFileName(filename) || filename;
+    const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
+    const clean = cleanFileName(filename, channelContext) || filename;
     const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}|ep\s*\d{1,3}|episode\s*\d{1,3}|part\s*\d{1,2}))(.*)$/i;
     const m = clean.match(regex);
     if (m) {
       let sName = (m[1] || "").replace(/\.\w+$/, "").replace(/[._\-\(\)]+$/, "").trim();
       if (!sName) sName = clean.replace(/\.\w+$/, "").trim();
+      sName = cleanFileName(sName, channelContext).replace(/\.\w+$/, "").trim();
       const sSeason = (m[2] || "S01").toUpperCase().replace(/\s+/g, " ");
       const sEp = (m[3] || "EP01").toUpperCase().replace(/\s+/g, " ");
       return {
         isSeries: true,
-        seriesName: sName,
+        seriesName: sName || "Series",
         seasonLabel: sSeason.startsWith("S") && !sSeason.includes("EASON") ? `Season ${parseInt(sSeason.slice(1)) || 1}` : sSeason,
         epLabel: sEp,
         cleanTitle: clean
@@ -2533,6 +2556,7 @@
     }
     const seriesMap = /* @__PURE__ */ new Map();
     const standaloneList = [];
+    const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
     videos.forEach((v) => {
       const sInfo = _detectSeriesInfo(v.filename);
       if (sInfo.isSeries) {
@@ -2566,15 +2590,15 @@
         seriesPane.classList.add("hidden");
       } else {
         seriesPane.classList.remove("hidden");
-        validSeriesGroups.forEach((seriesGroup) => {
+        validSeriesGroups.forEach((seriesGroup, groupIdx) => {
           const totalBytes = seriesGroup.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
           const leadThumb = seriesGroup.episodes.find((e) => e.has_thumb)?.thumb_url;
           const seriesCard = document.createElement("div");
-          seriesCard.className = "series-showcase-card";
+          seriesCard.className = `series-showcase-card ${groupIdx === 0 ? "expanded" : ""}`;
           seriesCard.innerHTML = `
           <div class="series-showcase-hero">
             <div class="series-showcase-poster">
-              ${leadThumb ? `<img src="${leadThumb}" alt="${escapeHtml(seriesGroup.seriesName)}" loading="lazy">` : `<div class="cinema-hub-thumb-fallback" style="font-size: 1.5rem;">\u{1F3AC}</div>`}
+              ${leadThumb ? `<img src="${leadThumb}" alt="${escapeHtml(seriesGroup.seriesName)}" loading="lazy">` : `<div class="series-thumb-fallback">\u{1F3AC}</div>`}
             </div>
             <div class="series-showcase-info">
               <div class="series-showcase-tags">
@@ -2590,6 +2614,9 @@
                 <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 5px 9px; font-size: 0.74rem;" title="Download complete Season .m3u playlist">
                   <span>\u{1F4E5}</span><span>Playlist</span>
                 </button>
+                <button class="btn-secondary btn-toggle-episodes" type="button" style="padding: 5px 9px; font-size: 0.74rem; margin-left: auto;">
+                  <span class="ep-toggle-label">\u25BE Episodes</span>
+                </button>
               </div>
             </div>
           </div>
@@ -2600,7 +2627,7 @@
             return `
                   <div class="series-ep-card" data-ep-idx="${epIdx}">
                     <div class="series-ep-thumb" title="Click to stream in VLC">
-                      ${ep.has_thumb ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
+                      ${ep.has_thumb ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'series-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="series-thumb-fallback">\u{1F3AC}</div>`}
                       <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
                       ${dur ? `<span class="video-duration-pill">${dur}</span>` : ""}
                     </div>
@@ -2622,10 +2649,20 @@
             </div>
           </div>
         `;
+          const toggleBtn = seriesCard.querySelector(".btn-toggle-episodes");
+          if (toggleBtn) {
+            toggleBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              seriesCard.classList.toggle("expanded");
+              const isExp = seriesCard.classList.contains("expanded");
+              const lbl = toggleBtn.querySelector(".ep-toggle-label");
+              if (lbl) lbl.textContent = isExp ? "\u25B4 Hide" : "\u25BE Episodes";
+            });
+          }
           const bingeBtn = seriesCard.querySelector(".btn-binge-all");
           if (bingeBtn) {
-            bingeBtn.addEventListener("click", () => {
-              showToast2(`\u{1F3AC} Launching VLC playlist for ${seriesGroup.episodes.length} episodes of "${seriesGroup.seriesName}"...`, "info");
+            bingeBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
               fetch("/api/media/vlc/play_batch", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -2642,7 +2679,8 @@
           }
           const playlistBtn = seriesCard.querySelector(".btn-binge-playlist");
           if (playlistBtn) {
-            playlistBtn.addEventListener("click", async () => {
+            playlistBtn.addEventListener("click", async (e) => {
+              e.stopPropagation();
               try {
                 const res = await fetch("/api/media/vlc/batch_playlist", {
                   method: "POST",
@@ -2661,8 +2699,8 @@
                 a.click();
                 a.remove();
                 showToast2(`\u{1F4E5} Downloaded ${seriesGroup.seriesName} season playlist`, "success");
-              } catch (e) {
-                showToast2(`Error creating playlist: ${e.message}`, "error");
+              } catch (e2) {
+                showToast2(`Error creating playlist: ${e2.message}`, "error");
               }
             });
           }
@@ -2769,7 +2807,6 @@
   }
   async function playInVlc(v, playerType = "auto") {
     const isMpv = playerType === "mpv";
-    showToast2(`\u{1F3AC} Launching ${isMpv ? "MPV" : "VLC"} for "${v.filename}"...`, "info");
     try {
       const resp = await fetch("/api/media/vlc/play", {
         method: "POST",

@@ -2269,12 +2269,14 @@ html, body {
 .series-showcase-card {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid rgba(108, 92, 231, 0.35);
   background: radial-gradient(circle at 15% 20%, rgba(30, 35, 60, 0.95) 0%, rgba(12, 14, 24, 0.98) 100%);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 20px rgba(108, 92, 231, 0.15);
   transition: all 0.25s ease;
+  min-height: fit-content;
 }
 
 .series-showcase-card:hover {
@@ -2292,14 +2294,17 @@ html, body {
 }
 
 .series-showcase-poster {
-  width: 90px;
-  aspect-ratio: 16 / 9;
+  width: 92px;
+  height: 54px;
   border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
-  background: #000;
+  background: #080a14;
   flex-shrink: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .series-showcase-poster img {
@@ -2308,17 +2313,28 @@ html, body {
   object-fit: cover;
 }
 
+.series-thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: radial-gradient(circle at center, rgba(35, 42, 68, 0.8) 0%, rgba(12, 14, 24, 0.95) 100%);
+  color: var(--accent-secondary);
+}
+
 .series-showcase-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   flex: 1;
   min-width: 0;
 }
 
 .series-showcase-tags {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -2328,18 +2344,19 @@ html, body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  padding: 1px 7px;
+  padding: 2px 7px;
   border-radius: var(--radius-full);
 }
 
 .series-showcase-title {
-  font-size: 0.98rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: #ffffff;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.2px;
 }
 
 .series-showcase-actions {
@@ -2347,11 +2364,11 @@ html, body {
   gap: 6px;
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .series-btn-binge {
-  padding: 5px 12px;
+  padding: 6px 14px;
   font-size: 0.76rem;
   font-weight: 700;
   border-radius: var(--radius-full);
@@ -2371,15 +2388,21 @@ html, body {
 }
 
 .series-episode-drawer {
+  display: none;
   padding: 10px 12px;
   background: rgba(10, 12, 20, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.series-showcase-card.expanded .series-episode-drawer {
+  display: block;
 }
 
 .series-episode-track {
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 6px;
   scroll-snap-type: x mandatory;
 }
 
