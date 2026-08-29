@@ -2387,6 +2387,41 @@ html, body {
   transform: translateY(-1px);
 }
 
+.series-season-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(12, 15, 26, 0.75);
+  border-bottom: 1px solid var(--border-glass);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.series-season-tab {
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-glass);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.series-season-tab:hover {
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.series-season-tab.active {
+  border-color: var(--accent-secondary) !important;
+  background: rgba(0, 206, 201, 0.18) !important;
+  color: var(--accent-secondary) !important;
+  box-shadow: 0 0 10px rgba(0, 206, 201, 0.3) !important;
+}
+
 .series-episode-drawer {
   display: none;
   padding: 10px 12px;
@@ -2497,6 +2532,25 @@ html, body {
   text-align: center;
   padding-top: 4px;
   flex-shrink: 0;
+}
+
+@keyframes microPulsePlay {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 206, 201, 0.7);
+    border-color: var(--accent-secondary);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(0, 206, 201, 0.6);
+    border-color: var(--accent-secondary);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 206, 201, 0);
+  }
+}
+
+.playing-pulse {
+  animation: microPulsePlay 1s ease-out !important;
+  border-color: var(--accent-secondary) !important;
 }
 
 

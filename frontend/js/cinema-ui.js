@@ -163,22 +163,36 @@ export async function loadCinemaVideos(chatId = 'me') {
 
 window._reloadCinema = () => loadCinemaVideos(_currentChatId);
 
-function _detectSeriesInfo(filename) {
+function _extractSeriesInfo(filename) {
   const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
   const clean = cleanFileName(filename, channelContext) || filename;
-  // Match S01E01, S1E1, S01 EP01, Season 1 Episode 2, EP01, Part 1, etc.
+
+  // Match Season and Episode patterns:
+  // e.g. S01E01, S1E1, S01 EP01, Season 1 Episode 2, EP01, Episode 01, Part 1
   const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}|ep\s*\d{1,3}|episode\s*\d{1,3}|part\s*\d{1,2}))(.*)$/i;
   const m = clean.match(regex);
   if (m) {
-    let sName = (m[1] || '').replace(/\.\w+$/, '').replace(/[._\-\(\)]+$/, '').trim();
-    if (!sName) sName = clean.replace(/\.\w+$/, '').trim();
-    sName = cleanFileName(sName, channelContext).replace(/\.\w+$/, '').trim();
+    let rawName = (m[1] || '').replace(/\.\w+$/, '').replace(/[._\-\(\)]+$/, '').trim();
+    if (!rawName) rawName = clean.replace(/\.\w+$/, '').trim();
+
+    // Canonical title: strip channel noise, domain signatures, watermarks, and year
+    let canonical = cleanFileName(rawName, channelContext)
+      .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!canonical) canonical = 'TV Series';
+
     const sSeason = (m[2] || 'S01').toUpperCase().replace(/\s+/g, ' ');
     const sEp = (m[3] || 'EP01').toUpperCase().replace(/\s+/g, ' ');
+    const seasonNum = parseInt(sSeason.replace(/\D/g, '')) || 1;
+    const seasonLabel = `Season ${seasonNum}`;
+
     return {
       isSeries: true,
-      seriesName: sName || 'Series',
-      seasonLabel: sSeason.startsWith('S') && !sSeason.includes('EASON') ? `Season ${parseInt(sSeason.slice(1)) || 1}` : sSeason,
+      canonicalTitle: canonical,
+      seasonNum: seasonNum,
+      seasonLabel: seasonLabel,
       epLabel: sEp,
       cleanTitle: clean
     };
@@ -212,75 +226,133 @@ export function renderCinemaGrid(videos) {
     return;
   }
 
-  // 1. Group TV series vs Standalone Movies
-  const seriesMap = new Map();
+  // 1. Group TV series into Unified Show Bundles
+  const rawShowsMap = new Map();
   const standaloneList = [];
   const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
 
   videos.forEach((v) => {
-    const sInfo = _detectSeriesInfo(v.filename);
+    const sInfo = _extractSeriesInfo(v.filename);
     if (sInfo.isSeries) {
-      const groupKey = `${sInfo.seriesName}__${sInfo.seasonLabel}`.toLowerCase();
-      if (!seriesMap.has(groupKey)) {
-        seriesMap.set(groupKey, {
-          type: 'series',
-          seriesName: sInfo.seriesName,
-          seasonLabel: sInfo.seasonLabel,
+      const key = sInfo.canonicalTitle.toLowerCase();
+      if (!rawShowsMap.has(key)) {
+        rawShowsMap.set(key, {
+          canonicalTitle: sInfo.canonicalTitle,
           episodes: []
         });
       }
-      seriesMap.get(groupKey).episodes.push({ ...v, ...sInfo });
+      rawShowsMap.get(key).episodes.push({ ...v, ...sInfo });
     } else {
       standaloneList.push({ ...v, ...sInfo });
     }
   });
 
-  const validSeriesGroups = [];
-  seriesMap.forEach((sg) => {
-    if (sg.episodes.length > 1) {
-      sg.episodes.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }));
-      validSeriesGroups.push(sg);
+  // 2. Fuzzy merge shows sharing substring titles (e.g. "Lost in Space" vs "Space")
+  const mergedShowsMap = new Map();
+  const rawKeys = Array.from(rawShowsMap.keys()).sort((a, b) => b.length - a.length);
+
+  rawKeys.forEach((key) => {
+    const showData = rawShowsMap.get(key);
+    if (!showData) return;
+
+    let mergedIntoExisting = false;
+    for (const [existingKey, existingData] of mergedShowsMap.entries()) {
+      if (existingKey.includes(key) || key.includes(existingKey)) {
+        existingData.episodes.push(...showData.episodes);
+        if (showData.canonicalTitle.length > existingData.canonicalTitle.length) {
+          existingData.canonicalTitle = showData.canonicalTitle;
+        }
+        mergedIntoExisting = true;
+        break;
+      }
+    }
+
+    if (!mergedIntoExisting) {
+      mergedShowsMap.set(key, showData);
+    }
+  });
+
+  // 3. Build Unified Shows with Multi-Season Maps
+  const validShows = [];
+  mergedShowsMap.forEach((show) => {
+    if (show.episodes.length > 1) {
+      const seasonsMap = new Map();
+      show.episodes.forEach((ep) => {
+        const sLabel = ep.seasonLabel || 'Season 1';
+        if (!seasonsMap.has(sLabel)) {
+          seasonsMap.set(sLabel, []);
+        }
+        seasonsMap.get(sLabel).push(ep);
+      });
+
+      // Sort episodes inside each season numerically
+      seasonsMap.forEach((eps) => {
+        eps.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }));
+      });
+
+      // Sort seasons numerically (Season 1, Season 2, Season 3...)
+      const sortedSeasonKeys = Array.from(seasonsMap.keys()).sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, '')) || 1;
+        const numB = parseInt(b.replace(/\D/g, '')) || 1;
+        return numA - numB;
+      });
+
+      const totalBytes = show.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
+      const leadThumb = show.episodes.find((e) => e.has_thumb)?.thumb_url;
+
+      validShows.push({
+        showTitle: show.canonicalTitle,
+        totalEpisodes: show.episodes.length,
+        totalBytes: totalBytes,
+        leadThumb: leadThumb,
+        seasonsMap: seasonsMap,
+        seasonKeys: sortedSeasonKeys,
+        activeSeason: sortedSeasonKeys[0] || 'Season 1'
+      });
     } else {
-      standaloneList.push(...sg.episodes);
+      standaloneList.push(...show.episodes);
     }
   });
 
   // Update Section Counters
   if (moviesCountBadge) moviesCountBadge.textContent = `${standaloneList.length} Movies`;
-  if (seriesCountBadge) seriesCountBadge.textContent = `${validSeriesGroups.length} Series`;
+  if (seriesCountBadge) seriesCountBadge.textContent = `${validShows.length} Shows`;
 
-  // 2. Right Pane: Render TV Series & Seasons (if any)
+  // 4. Right Pane: Render Unified Show Showcase Cards
   if (seriesPane && seriesList) {
-    if (validSeriesGroups.length === 0) {
+    if (validShows.length === 0) {
       seriesPane.classList.add('hidden');
     } else {
       seriesPane.classList.remove('hidden');
-      validSeriesGroups.forEach((seriesGroup, groupIdx) => {
-        const totalBytes = seriesGroup.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
-        const leadThumb = seriesGroup.episodes.find((e) => e.has_thumb)?.thumb_url;
+      validShows.forEach((show, showIdx) => {
+        let currentSeason = show.activeSeason;
 
-        const seriesCard = document.createElement('div');
-        seriesCard.className = `series-showcase-card ${groupIdx === 0 ? 'expanded' : ''}`;
-        seriesCard.innerHTML = `
+        const showCard = document.createElement('div');
+        showCard.className = `series-showcase-card ${showIdx === 0 ? 'expanded' : ''}`;
+
+        const hasMultipleSeasons = show.seasonKeys.length > 1;
+
+        showCard.innerHTML = `
           <div class="series-showcase-hero">
             <div class="series-showcase-poster">
-              ${leadThumb
-            ? `<img src="${leadThumb}" alt="${escapeHtml(seriesGroup.seriesName)}" loading="lazy">`
-            : `<div class="series-thumb-fallback">🎬</div>`
-          }
+              ${show.leadThumb
+                ? `<img src="${show.leadThumb}" alt="${escapeHtml(show.showTitle)}" loading="lazy">`
+                : `<div class="series-thumb-fallback">🎬</div>`
+              }
             </div>
             <div class="series-showcase-info">
               <div class="series-showcase-tags">
-                <span class="series-tag-pill" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid rgba(0, 206, 201, 0.4);">${escapeHtml(seriesGroup.seasonLabel)}</span>
-                <span class="series-tag-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border: 1px solid rgba(255, 121, 63, 0.4);">${seriesGroup.episodes.length} Episodes</span>
-                <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(totalBytes)}</span>
+                <span class="series-tag-pill active-season-tag" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid rgba(0, 206, 201, 0.4);">${escapeHtml(currentSeason)}</span>
+                ${hasMultipleSeasons ? `<span class="series-tag-pill" style="background: rgba(108, 92, 231, 0.2); color: var(--accent-primary); border: 1px solid rgba(108, 92, 231, 0.4);">${show.seasonKeys.length} Seasons</span>` : ''}
+                <span class="series-tag-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border: 1px solid rgba(255, 121, 63, 0.4);">${show.totalEpisodes} Episodes Total</span>
+                <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(show.totalBytes)}</span>
               </div>
-              <h4 class="series-showcase-title" title="${escapeHtml(seriesGroup.seriesName)}">${escapeHtml(seriesGroup.seriesName)}</h4>
+              <h4 class="series-showcase-title" title="${escapeHtml(show.showTitle)}">${escapeHtml(show.showTitle)}</h4>
               <div class="series-showcase-actions">
-                <button class="series-btn-binge btn-binge-all" type="button" title="Play full season sequentially in VLC">
-                  <span>▶</span><span>Binge Season</span>
+                <button class="series-btn-binge btn-binge-all" type="button" title="Play full active season sequentially in VLC">
+                  <span>▶</span><span class="binge-btn-label">Binge ${escapeHtml(currentSeason)}</span>
                 </button>
-                <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 5px 9px; font-size: 0.74rem;" title="Download complete Season .m3u playlist">
+                <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 5px 9px; font-size: 0.74rem;" title="Download Season .m3u playlist">
                   <span>📥</span><span>Playlist</span>
                 </button>
                 <button class="btn-secondary btn-toggle-episodes" type="button" style="padding: 5px 9px; font-size: 0.74rem; margin-left: auto;">
@@ -289,112 +361,163 @@ export function renderCinemaGrid(videos) {
               </div>
             </div>
           </div>
-          <div class="series-episode-drawer">
-            <div class="series-episode-track">
-              ${seriesGroup.episodes.map((ep, epIdx) => {
-            const dur = ep.duration ? _formatDuration(ep.duration) : '';
-            return `
-                  <div class="series-ep-card" data-ep-idx="${epIdx}">
-                    <div class="series-ep-thumb" title="Click to stream in VLC">
-                      ${ep.has_thumb
-                ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'series-thumb-fallback\\'>🎬</div>'">`
-                : `<div class="series-thumb-fallback">🎬</div>`
-              }
-                      <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
-                      ${dur ? `<span class="video-duration-pill">${dur}</span>` : ''}
-                    </div>
-                    <div class="series-ep-meta">
-                      <span class="series-ep-title" title="${escapeHtml(ep.cleanTitle)}">${escapeHtml(ep.cleanTitle)}</span>
-                      <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(ep.file_size)}</span>
-                    </div>
-                    <div class="series-ep-actions">
-                      <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.7rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
-                        <span>🎬</span><span>VLC</span>
-                      </button>
-                      <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.85; padding: 4px 6px; font-size: 0.7rem;">
-                        <span>🚀</span><span>FDM</span>
-                      </button>
-                    </div>
-                  </div>
+
+          ${hasMultipleSeasons ? `
+            <div class="series-season-tabs">
+              ${show.seasonKeys.map((sKey) => {
+                const sEps = show.seasonsMap.get(sKey) || [];
+                const isActive = sKey === currentSeason;
+                return `
+                  <button class="series-season-tab ${isActive ? 'active' : ''}" type="button" data-season="${escapeHtml(sKey)}">
+                    ${escapeHtml(sKey)} (${sEps.length} EPs)
+                  </button>
                 `;
-          }).join('')}
+              }).join('')}
+            </div>
+          ` : ''}
+
+          <div class="series-episode-drawer">
+            <div class="series-episode-track" id="episodeTrack_${showIdx}">
+              <!-- Rendered via updateSeasonTrack -->
             </div>
           </div>
         `;
 
+        // Function to update the episode track for a chosen season
+        const updateSeasonTrack = (seasonName) => {
+          currentSeason = seasonName;
+          const track = showCard.querySelector(`#episodeTrack_${showIdx}`);
+          const seasonTag = showCard.querySelector('.active-season-tag');
+          const bingeLabel = showCard.querySelector('.binge-btn-label');
+
+          if (seasonTag) seasonTag.textContent = seasonName;
+          if (bingeLabel) bingeLabel.textContent = `Binge ${seasonName}`;
+
+          const episodes = show.seasonsMap.get(seasonName) || [];
+          if (track) {
+            track.innerHTML = episodes.map((ep, epIdx) => {
+              const dur = ep.duration ? _formatDuration(ep.duration) : '';
+              return `
+                <div class="series-ep-card" data-ep-idx="${epIdx}">
+                  <div class="series-ep-thumb" title="Click to stream in VLC">
+                    ${ep.has_thumb
+                      ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'series-thumb-fallback\\'>🎬</div>'">`
+                      : `<div class="series-thumb-fallback">🎬</div>`
+                    }
+                    <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
+                    ${dur ? `<span class="video-duration-pill">${dur}</span>` : ''}
+                  </div>
+                  <div class="series-ep-meta">
+                    <span class="series-ep-title" title="${escapeHtml(ep.cleanTitle)}">${escapeHtml(ep.cleanTitle)}</span>
+                    <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(ep.file_size)}</span>
+                  </div>
+                  <div class="series-ep-actions">
+                    <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.7rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
+                      <span>🎬</span><span>VLC</span>
+                    </button>
+                    <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.85; padding: 4px 6px; font-size: 0.7rem;">
+                      <span>🚀</span><span>FDM</span>
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            // Attach Episode Actions
+            track.querySelectorAll('.series-ep-card').forEach((epCard, idx) => {
+              const ep = episodes[idx];
+              const epThumb = epCard.querySelector('.series-ep-thumb');
+              const epVlc = epCard.querySelector('.btn-ep-vlc');
+              const epFdm = epCard.querySelector('.btn-ep-fdm');
+              if (epThumb) epThumb.addEventListener('click', () => playInVlc(ep, 'auto', epCard));
+              if (epVlc) epVlc.addEventListener('click', () => playInVlc(ep, 'auto', epCard));
+              if (epFdm) epFdm.addEventListener('click', () => triggerFdm(ep));
+            });
+          }
+        };
+
+        // Initial Episode Track rendering
+        updateSeasonTrack(currentSeason);
+
+        // Season Tab Switchers
+        showCard.querySelectorAll('.series-season-tab').forEach((tabBtn) => {
+          tabBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const sName = tabBtn.getAttribute('data-season');
+            showCard.querySelectorAll('.series-season-tab').forEach((t) => t.classList.remove('active'));
+            tabBtn.classList.add('active');
+            updateSeasonTrack(sName);
+            if (!showCard.classList.contains('expanded')) {
+              showCard.classList.add('expanded');
+              const lbl = showCard.querySelector('.ep-toggle-label');
+              if (lbl) lbl.textContent = '▴ Hide';
+            }
+          });
+        });
+
         // Toggle Episode Drawer
-        const toggleBtn = seriesCard.querySelector('.btn-toggle-episodes');
+        const toggleBtn = showCard.querySelector('.btn-toggle-episodes');
         if (toggleBtn) {
           toggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            seriesCard.classList.toggle('expanded');
-            const isExp = seriesCard.classList.contains('expanded');
+            showCard.classList.toggle('expanded');
+            const isExp = showCard.classList.contains('expanded');
             const lbl = toggleBtn.querySelector('.ep-toggle-label');
             if (lbl) lbl.textContent = isExp ? '▴ Hide' : '▾ Episodes';
           });
         }
 
-        // Binge Season Playback in VLC
-        const bingeBtn = seriesCard.querySelector('.btn-binge-all');
+        // Binge Active Season Playback in VLC (Silent Instant Launch with Micro Indicator)
+        const bingeBtn = showCard.querySelector('.btn-binge-all');
         if (bingeBtn) {
           bingeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            bingeBtn.classList.add('playing-pulse');
+            setTimeout(() => bingeBtn.classList.remove('playing-pulse'), 1200);
+
+            const eps = show.seasonsMap.get(currentSeason) || [];
             fetch('/api/media/vlc/play_batch', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                title: `${seriesGroup.seriesName} - ${seriesGroup.seasonLabel}`,
-                items: seriesGroup.episodes
+                title: `${show.showTitle} - ${currentSeason}`,
+                items: eps
               })
-            }).then((r) => r.json()).then((res) => {
-              if (res.launched) {
-                showToast(`🍿 Binging ${seriesGroup.seriesName} (${seriesGroup.episodes.length} episodes) in VLC!`, 'success');
-              }
             }).catch((err) => showToast(`Playback error: ${err.message}`, 'error'));
           });
         }
 
         // Download Complete Season M3U
-        const playlistBtn = seriesCard.querySelector('.btn-binge-playlist');
+        const playlistBtn = showCard.querySelector('.btn-binge-playlist');
         if (playlistBtn) {
           playlistBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
+            const eps = show.seasonsMap.get(currentSeason) || [];
             try {
               const res = await fetch('/api/media/vlc/batch_playlist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  title: `${seriesGroup.seriesName}_${seriesGroup.seasonLabel}`,
-                  items: seriesGroup.episodes
+                  title: `${show.showTitle}_${currentSeason}`,
+                  items: eps
                 })
               });
               const blob = await res.blob();
               const url = window.URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `${seriesGroup.seriesName}_${seriesGroup.seasonLabel}.m3u`;
+              a.download = `${show.showTitle}_${currentSeason}.m3u`;
               document.body.appendChild(a);
               a.click();
               a.remove();
-              showToast(`📥 Downloaded ${seriesGroup.seriesName} season playlist`, 'success');
-            } catch (e) {
-              showToast(`Error creating playlist: ${e.message}`, 'error');
+              showToast(`📥 Downloaded ${show.showTitle} season playlist`, 'success');
+            } catch (err) {
+              showToast(`Error creating playlist: ${err.message}`, 'error');
             }
           });
         }
 
-        // Episode Actions
-        seriesCard.querySelectorAll('.series-ep-card').forEach((epCard, idx) => {
-          const ep = seriesGroup.episodes[idx];
-          const epThumb = epCard.querySelector('.series-ep-thumb');
-          const epVlc = epCard.querySelector('.btn-ep-vlc');
-          const epFdm = epCard.querySelector('.btn-ep-fdm');
-          if (epThumb) epThumb.addEventListener('click', () => playInVlc(ep));
-          if (epVlc) epVlc.addEventListener('click', () => playInVlc(ep));
-          if (epFdm) epFdm.addEventListener('click', () => triggerFdm(ep));
-        });
-
-        seriesList.appendChild(seriesCard);
+        seriesList.appendChild(showCard);
       });
     }
   }
@@ -454,11 +577,11 @@ export function renderCinemaGrid(videos) {
       </div>
     `;
 
-    // 1. Click thumbnail or VLC button -> Launches VLC
+    // 1. Click thumbnail or VLC button -> Launches VLC silently with micro indicator
     const thumbEl = card.querySelector('.cinema-hub-thumb');
     const vlcBtn = card.querySelector('.btn-card-vlc');
-    if (thumbEl) thumbEl.addEventListener('click', () => playInVlc(v));
-    if (vlcBtn) vlcBtn.addEventListener('click', () => playInVlc(v));
+    if (thumbEl) thumbEl.addEventListener('click', () => playInVlc(v, 'auto', card));
+    if (vlcBtn) vlcBtn.addEventListener('click', () => playInVlc(v, 'auto', card));
 
     // 2. Click FDM button -> Push to Download Manager
     const fdmBtn = card.querySelector('.btn-card-fdm');
@@ -505,8 +628,12 @@ function _filterCinemaGrid(query) {
   renderCinemaGrid(filtered);
 }
 
-export async function playInVlc(v, playerType = 'auto') {
-  const isMpv = playerType === 'mpv';
+export async function playInVlc(v, playerType = 'auto', element = null) {
+  if (element) {
+    element.classList.add('playing-pulse');
+    setTimeout(() => element.classList.remove('playing-pulse'), 1200);
+  }
+
   try {
     const resp = await fetch('/api/media/vlc/play', {
       method: 'POST',
@@ -520,19 +647,16 @@ export async function playInVlc(v, playerType = 'auto') {
       })
     });
     const data = await resp.json();
-    if (data.launched) {
-      showToast(`🎬 Media Player streaming "${v.filename}"!`, 'success');
-    } else if (data.playlist_url) {
+    if (!data.launched && data.playlist_url) {
       const a = document.createElement('a');
       a.href = data.playlist_url;
       a.download = `${v.filename}.m3u`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      showToast('🎬 Opening stream via .m3u playlist...', 'success');
     }
   } catch (e) {
-    showToast(`Player launch notice: ${e.message}`, 'warning');
+    showToast(`Player launch error: ${e.message}`, 'warning');
   }
 }
 
