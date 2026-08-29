@@ -69,7 +69,7 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
         status_code = 206
 
     length = int(end - start + 1)
-    align_unit = 512 * 1024
+    align_unit = 1024 * 1024
     aligned_start = start - (start % align_unit)
     discard_bytes = start - aligned_start
     aligned_limit = length + discard_bytes
@@ -108,7 +108,7 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
                     f.seek(start)
                     rem = length
                     while rem > 0:
-                        read_sz = min(rem, 128 * 1024)
+                        read_sz = min(rem, 1024 * 1024)
                         chunk = f.read(read_sz)
                         if not chunk:
                             break
@@ -822,7 +822,14 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
             if "mpv" in chosen_bin:
                 player_name = "mpv"
                 subprocess.Popen(
-                    [chosen_bin, raw_url, "--cache=yes", "--demuxer-max-bytes=64M"],
+                    [
+                        chosen_bin,
+                        raw_url,
+                        "--cache=yes",
+                        "--cache-pause=no",
+                        "--demuxer-max-bytes=128M",
+                        "--demuxer-readahead-secs=30"
+                    ],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True
@@ -830,13 +837,23 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
             else:
                 player_name = "vlc"
                 subprocess.Popen(
-                    [chosen_bin, raw_url, "--network-caching=3000", "--no-qt-error-dialogs", "--quiet"],
+                    [
+                        chosen_bin,
+                        raw_url,
+                        "--network-caching=350",
+                        "--file-caching=300",
+                        "--live-caching=300",
+                        "--avcodec-fast",
+                        "--clock-synchro=0",
+                        "--no-qt-error-dialogs",
+                        "--quiet"
+                    ],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True
                 )
             launched = True
-            logger.info(f"Launched {player_name.upper()} player for stream: {raw_url}")
+            logger.info(f"Launched {player_name.upper()} player (Turbo Streaming) for: {raw_url}")
         except Exception as e:
             logger.warning(f"Could not launch media player subprocess: {e}")
 
