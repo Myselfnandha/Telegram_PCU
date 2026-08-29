@@ -2471,11 +2471,6 @@
       <div class="cinema-hub-thumb" title="Click to stream in VLC Player">
         ${v.has_thumb ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
         ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ""}
-        <div class="cinema-hub-play-overlay">
-          <div class="cinema-hub-play-btn">
-            <span>\u25B6</span><span>Stream in VLC</span>
-          </div>
-        </div>
       </div>
       <div class="cinema-hub-meta">
         <span class="cinema-hub-title" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>

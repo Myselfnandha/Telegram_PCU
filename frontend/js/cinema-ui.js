@@ -194,11 +194,6 @@ export function renderCinemaGrid(videos) {
           : `<div class="cinema-hub-thumb-fallback">🎬</div>`
         }
         ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ''}
-        <div class="cinema-hub-play-overlay">
-          <div class="cinema-hub-play-btn">
-            <span>▶</span><span>Stream in VLC</span>
-          </div>
-        </div>
       </div>
       <div class="cinema-hub-meta">
         <span class="cinema-hub-title" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
