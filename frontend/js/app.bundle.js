@@ -2489,25 +2489,21 @@
     const chipsContainer = document.getElementById("cinemaWatchedChips");
     if (!chipsContainer) return;
     chipsContainer.innerHTML = "";
-    const savedChip = document.createElement("button");
-    savedChip.type = "button";
-    savedChip.className = "cinema-chip active";
-    savedChip.setAttribute("data-chat-id", "me");
-    savedChip.innerHTML = `<span>\u2601\uFE0F</span><span>Saved Messages</span>`;
-    savedChip.addEventListener("click", () => {
-      _onCinemaChatSelected({ id: "me", name: "Saved Messages (Personal Cloud)", type: "saved_messages" });
-    });
-    chipsContainer.appendChild(savedChip);
     try {
       const resp = await fetch("/api/sniffer/status");
       const data = await resp.json();
       const channels = data.watched_channels || [];
+      if (channels.length === 0) {
+        chipsContainer.style.display = "none";
+        return;
+      }
+      chipsContainer.style.display = "flex";
       channels.forEach((ch) => {
         fetch(`/api/media/videos/${encodeURIComponent(ch.id)}`).catch(() => {
         });
         const chip = document.createElement("button");
         chip.type = "button";
-        chip.className = "cinema-chip";
+        chip.className = "cinema-chip" + (_currentChatId == ch.id ? " active" : "");
         chip.setAttribute("data-chat-id", ch.id);
         const icon = ch.type === "channel" ? "\u{1F4E2}" : ch.type === "supergroup" || ch.type === "group" ? "\u{1F465}" : "\u{1F4AC}";
         chip.innerHTML = `
@@ -2521,6 +2517,7 @@
       });
     } catch (err) {
       console.debug("Could not load watched channels for chips:", err);
+      chipsContainer.style.display = "none";
     }
   }
   async function loadCinemaVideos(chatId = "me", forceRefresh = false) {

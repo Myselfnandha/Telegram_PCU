@@ -94,22 +94,17 @@ async function _loadCinemaWatchedChips() {
 
   chipsContainer.innerHTML = '';
 
-  // 1. Saved Messages Chip
-  const savedChip = document.createElement('button');
-  savedChip.type = 'button';
-  savedChip.className = 'cinema-chip active';
-  savedChip.setAttribute('data-chat-id', 'me');
-  savedChip.innerHTML = `<span>☁️</span><span>Saved Messages</span>`;
-  savedChip.addEventListener('click', () => {
-    _onCinemaChatSelected({ id: 'me', name: 'Saved Messages (Personal Cloud)', type: 'saved_messages' });
-  });
-  chipsContainer.appendChild(savedChip);
-
-  // 2. Fetch watched channels from sniffer status
   try {
     const resp = await fetch('/api/sniffer/status');
     const data = await resp.json();
     const channels = data.watched_channels || [];
+
+    if (channels.length === 0) {
+      chipsContainer.style.display = 'none';
+      return;
+    }
+
+    chipsContainer.style.display = 'flex';
 
     channels.forEach((ch) => {
       // Background pre-warm channel video cache for 0ms instant switching
@@ -117,7 +112,7 @@ async function _loadCinemaWatchedChips() {
 
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = 'cinema-chip';
+      chip.className = 'cinema-chip' + (_currentChatId == ch.id ? ' active' : '');
       chip.setAttribute('data-chat-id', ch.id);
       const icon = ch.type === 'channel' ? '📢' : (ch.type === 'supergroup' || ch.type === 'group' ? '👥' : '💬');
       chip.innerHTML = `
@@ -131,6 +126,7 @@ async function _loadCinemaWatchedChips() {
     });
   } catch (err) {
     console.debug('Could not load watched channels for chips:', err);
+    chipsContainer.style.display = 'none';
   }
 }
 
