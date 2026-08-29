@@ -19,6 +19,30 @@ _MESSAGE_CACHE = {}
 
 from app.services.stream_cache import stream_cache_service
 
+def compute_dynamic_align_unit(file_size: int, start: int, length: int, user_agent: str = "") -> int:
+    """
+    Adaptive MTProto chunk alignment strategy:
+    - 128 KB for header probing / tiny seeks (<50ms response)
+    - 256 KB for fast-forward scrubbing & mid-stream seeks
+    - 512 KB for standard continuous video streaming
+    - 1024 KB for large multi-part download manager requests
+    """
+    ua = user_agent.lower()
+    is_download_manager = any(dm in ua for dm in ("fdm", "aria2", "idm", "wget", "curl"))
+
+    if length <= 2 * 1024 * 1024:
+        return 128 * 1024  # 128 KB for ultra-fast <50ms header/keyframe response
+
+    if start > 0 and not is_download_manager:
+        if length <= 8 * 1024 * 1024:
+            return 256 * 1024  # 256 KB for instant keyframe scrubbing
+        return 512 * 1024
+
+    if is_download_manager and length > 16 * 1024 * 1024:
+        return 1024 * 1024  # 1 MB for maximum bulk download throughput
+
+    return 512 * 1024
+
 @router.get("/dl/{chat_id}/{message_id}")
 @router.get("/dl/{chat_id}/{message_id}/{filename}")
 async def handle_proxy_download(chat_id: str, message_id: int, request: Request, filename: Optional[str] = None):
@@ -69,7 +93,8 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
         status_code = 206
 
     length = int(end - start + 1)
-    align_unit = 512 * 1024  # 512 KB: Native MTProto chunk boundary for instant seek and fast-forward
+    user_agent = request.headers.get("User-Agent", "")
+    align_unit = compute_dynamic_align_unit(file_size, start, length, user_agent)
     aligned_start = start - (start % align_unit)
     discard_bytes = start - aligned_start
     aligned_limit = length + discard_bytes
@@ -126,20 +151,11 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
             headers=headers
         )
 
-    # 2. Otherwise stream from MTProto and buffer in background
-    cache_path = stream_cache_service.get_cache_path(str(chat_id), message_id, clean_name)
-    part_path = cache_path.with_suffix(".part")
-
+    # Stream directly from MTProto with high-throughput in-memory lookahead (zero disk cache footprint)
     async def stream_generator():
         bytes_written = 0
-        cache_f = None
-        if start == 0 and not cache_path.exists():
-            try:
-                cache_f = open(part_path, "wb")
-            except Exception:
-                pass
 
-        # High-throughput asynchronous MTProto chunk lookahead queue (16MB buffer)
+        # High-throughput asynchronous in-memory MTProto lookahead queue (16MB buffer)
         chunk_queue = asyncio.Queue(maxsize=16)
         producer_done = asyncio.Event()
 
@@ -177,24 +193,12 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
                 if len(chunk) > remaining:
                     chunk = chunk[:remaining]
 
-                if cache_f:
-                    try:
-                        cache_f.write(chunk)
-                    except Exception:
-                        pass
-
                 yield chunk
                 bytes_written += len(chunk)
                 await asyncio.sleep(0)
                 if bytes_written >= length:
                     break
 
-            if cache_f:
-                cache_f.close()
-                cache_f = None
-                if bytes_written == file_size:
-                    part_path.rename(cache_path)
-                    stream_cache_service.evict_if_needed()
         except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError):
             logger.debug(f"Client disconnected during streaming of {clean_name}")
         except Exception as err:
@@ -202,11 +206,6 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
         finally:
             if not prod_task.done():
                 prod_task.cancel()
-            if cache_f:
-                try:
-                    cache_f.close()
-                except Exception:
-                    pass
 
     return StreamingResponse(
         stream_generator(),
