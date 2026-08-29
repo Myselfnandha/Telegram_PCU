@@ -242,7 +242,10 @@
       this.modal.classList.add("open");
       if (this.searchInput) {
         this.searchInput.value = "";
-        this.searchInput.focus();
+        setTimeout(() => {
+          this.searchInput.focus();
+          this.searchInput.select();
+        }, 50);
       }
       if (this.chats.length === 0) {
         this.renderLoading();
