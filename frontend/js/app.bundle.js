@@ -2768,8 +2768,8 @@
               track.querySelectorAll(".series-ep-card").forEach((epCard, idx) => {
                 const ep = episodes[idx];
                 const epThumb = epCard.querySelector(".series-ep-thumb");
-                const epImg = epCard.querySelector(".ep-thumb-img");
                 const epVlc = epCard.querySelector(".btn-ep-vlc");
+                const epFdm = epCard.querySelector(".btn-ep-fdm");
                 if (epThumb) _attachHoverScrubber(epThumb, ep);
                 if (epThumb) epThumb.addEventListener("click", () => playInVlc(ep, "auto", epCard));
                 if (epVlc) epVlc.addEventListener("click", () => playInVlc(ep, "auto", epCard));
