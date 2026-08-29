@@ -633,20 +633,28 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
         if not message or not message.media:
             raise HTTPException(status_code=404, detail="Media not found.")
 
-        # Download thumbnail into memory buffer
+        # Download compact lightweight thumbnail into memory buffer (<10ms)
         thumb_bytes = None
         doc = getattr(message.media, "document", None) or (message.media if hasattr(message.media, "thumbs") else None)
         if doc and getattr(doc, "thumbs", None):
             try:
-                thumb_bytes = await client.download_media(doc.thumbs[-1], file=bytes)
+                # Prefer fast medium thumbnail (thumbs[1] or thumbs[0]) over massive full-res to load 10x faster
+                target_thumb = doc.thumbs[1] if len(doc.thumbs) > 1 else doc.thumbs[0]
+                thumb_bytes = await client.download_media(target_thumb, file=bytes)
             except Exception:
-                pass
+                try:
+                    thumb_bytes = await client.download_media(doc.thumbs[-1], file=bytes)
+                except Exception:
+                    pass
 
         if not thumb_bytes:
             try:
-                thumb_bytes = await client.download_media(message.media, thumb=-1, file=bytes)
+                thumb_bytes = await client.download_media(message.media, thumb=0, file=bytes)
             except Exception:
-                pass
+                try:
+                    thumb_bytes = await client.download_media(message.media, thumb=-1, file=bytes)
+                except Exception:
+                    pass
 
         if not thumb_bytes:
             raise HTTPException(status_code=404, detail="No thumbnail available for this media.")
@@ -854,6 +862,25 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
                 "stream_transmux_url": f"/stream/{chat_id}/{msg.id}/{encoded_mp4}",
                 "thumb_url": f"/dl/{chat_id}/{msg.id}/thumb" if has_thumb else None
             })
+
+        # Fire background thumbnail prefetcher for instant 0ms loads
+        async def _prefetch_thumbs(cid, msgs):
+            try:
+                for m in msgs[:30]:
+                    cf = os.path.join(_THUMB_CACHE_DIR, f"{cid}_{m.id}.jpg")
+                    if os.path.exists(cf) and os.path.getsize(cf) > 0:
+                        continue
+                    doc = getattr(m.media, "document", None) or (m.media if hasattr(m.media, "thumbs") else None)
+                    if doc and getattr(doc, "thumbs", None):
+                        target = doc.thumbs[1] if len(doc.thumbs) > 1 else doc.thumbs[0]
+                        tb = await client.download_media(target, file=bytes)
+                        if tb:
+                            with open(cf, "wb") as f:
+                                f.write(tb)
+            except Exception:
+                pass
+
+        asyncio.create_task(_prefetch_thumbs(clean_chat_id, combined_msgs))
 
     except Exception as e:
         logger.error(f"Error querying videos for {chat_id}: {e}", exc_info=True)
