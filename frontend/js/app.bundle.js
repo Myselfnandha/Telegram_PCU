@@ -2447,13 +2447,11 @@
         const totalDur = _knownDuration || videoPlayer.duration || currentPos + 60;
         const newPos = Math.min(totalDur, currentPos + 10);
         _seekToPosition(newPos);
-        showToast2(`\u23E9 Fast Forward (+10s) \u2192 ${_formatDuration(newPos)}`, "info");
       } else if (e.code === "ArrowLeft" || e.code === "KeyJ") {
         e.preventDefault();
         const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
         const newPos = Math.max(0, currentPos - 10);
         _seekToPosition(newPos);
-        showToast2(`\u23EA Rewind (-10s) \u2192 ${_formatDuration(newPos)}`, "info");
       } else if (e.code === "KeyM") {
         e.preventDefault();
         videoPlayer.muted = !videoPlayer.muted;

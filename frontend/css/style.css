@@ -2060,15 +2060,19 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 6px 6px 8px 6px;
+  box-sizing: border-box;
 }
 
 .cinema-video-element {
   width: 100%;
   height: 100%;
+  max-height: 100%;
   object-fit: contain;
   background: #000000;
   outline: none;
   display: block;
+  border-radius: calc(var(--radius-md) - 6px);
 }
 
 .video-standby-overlay {

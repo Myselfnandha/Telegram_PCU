@@ -235,13 +235,11 @@ export async function initCinema() {
       const totalDur = _knownDuration || videoPlayer.duration || (currentPos + 60);
       const newPos = Math.min(totalDur, currentPos + 10);
       _seekToPosition(newPos);
-      showToast(`⏩ Fast Forward (+10s) → ${_formatDuration(newPos)}`, 'info');
     } else if (e.code === 'ArrowLeft' || e.code === 'KeyJ') {
       e.preventDefault();
       const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
       const newPos = Math.max(0, currentPos - 10);
       _seekToPosition(newPos);
-      showToast(`⏪ Rewind (-10s) → ${_formatDuration(newPos)}`, 'info');
     } else if (e.code === 'KeyM') {
       e.preventDefault();
       videoPlayer.muted = !videoPlayer.muted;
