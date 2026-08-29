@@ -69,7 +69,7 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
         status_code = 206
 
     length = int(end - start + 1)
-    align_unit = 1024 * 1024
+    align_unit = 512 * 1024  # 512 KB: Native MTProto chunk boundary for instant seek and fast-forward
     aligned_start = start - (start % align_unit)
     discard_bytes = start - aligned_start
     aligned_limit = length + discard_bytes
@@ -991,8 +991,9 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                         "--hr-seek-framedrop=yes",
                         "--cache=yes",
                         "--cache-pause=no",
-                        "--demuxer-max-bytes=256M",
-                        "--demuxer-readahead-secs=60",
+                        "--cache-secs=30",
+                        "--demuxer-max-bytes=128M",
+                        "--demuxer-readahead-secs=30",
                         "--vd-lavc-threads=0",
                         "--vd-lavc-fast=yes"
                     ],
@@ -1008,12 +1009,11 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                         raw_url,
                         "--input-fast-seek",
                         "--avcodec-threads=0",
-                        "--avcodec-skiploopfilter=4",
                         "--avcodec-fast",
-                        "--network-caching=300",
-                        "--file-caching=200",
-                        "--live-caching=200",
-                        "--clock-synchro=0",
+                        "--network-caching=800",
+                        "--file-caching=500",
+                        "--live-caching=500",
+                        "--clock-jitter=0",
                         "--no-qt-error-dialogs",
                         "--quiet"
                     ],
