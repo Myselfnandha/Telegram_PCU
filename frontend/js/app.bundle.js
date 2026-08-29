@@ -2683,7 +2683,7 @@
         validShows.forEach((show, showIdx) => {
           let currentSeason = show.activeSeason;
           const showCard = document.createElement("div");
-          showCard.className = `series-showcase-card ${showIdx === 0 ? "expanded" : ""}`;
+          showCard.className = "series-showcase-card";
           const hasMultipleSeasons = show.seasonKeys.length > 1;
           showCard.innerHTML = `
           <div class="series-showcase-hero">
