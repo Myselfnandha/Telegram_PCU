@@ -92,22 +92,26 @@ class NetworkWatchdog {
           this.consecutiveFailures = 0;
         } else {
           this.consecutiveFailures++;
-          if (this.consecutiveFailures >= 4 && this.isOnline) {
-            this._handleOffline('Backend Server Unreachable');
+          if (this.consecutiveFailures >= 6 && this.isOnline) {
+            this._handleOffline('Backend Server Reconnecting');
           }
         }
       } catch (e) {
         this.consecutiveFailures++;
-        if (this.consecutiveFailures >= 4 && this.isOnline) {
+        if (this.consecutiveFailures >= 6 && this.isOnline) {
           this._handleOffline('Connection Interrupted');
         }
       }
-    }, 6000);
+    }, 8000);
   }
 
   _handleOffline(reason = 'Network Offline') {
     this.isOnline = false;
     this.wasInterrupted = true;
+
+    const hasActiveTransfers = uploader.queue.some(
+      (task) => task.status === 'uploading' || task.status === 'streaming' || task.status === 'splitting'
+    );
 
     // Identify and auto-pause currently uploading/streaming tasks
     uploader.queue.forEach((task) => {
@@ -117,8 +121,13 @@ class NetworkWatchdog {
       }
     });
 
-    this._showBanner(`⚠️ ${reason} — Pausing active transfers safely. Waiting for reconnection...`, 'offline');
-    showToast('Network connection lost. Uploads paused safely.', 'warning');
+    // Only show intrusive notification if active uploads are currently running
+    if (hasActiveTransfers) {
+      this._showBanner(`⚠️ ${reason} — Pausing active transfers safely. Waiting for reconnection...`, 'offline');
+      showToast('Network connection lost. Uploads paused safely.', 'warning');
+    } else {
+      console.debug(`[NetworkWatchdog] Idle connection blip (${reason}). Silently reconnecting...`);
+    }
   }
 
   _handleOnline() {
@@ -126,8 +135,10 @@ class NetworkWatchdog {
     this.consecutiveFailures = 0;
 
     if (this.wasInterrupted) {
-      this._showBanner('⚡ Connection Restored — Auto-resuming upload queue...', 'online');
-      showToast('Back online! Auto-resuming upload queue...', 'success');
+      if (this.interruptedTasks.size > 0) {
+        this._showBanner('⚡ Connection Restored — Auto-resuming upload queue...', 'online');
+        showToast('Back online! Auto-resuming upload queue...', 'success');
+      }
 
       // Reconnect socket if disconnected
       socketManager.init();
@@ -146,7 +157,7 @@ class NetworkWatchdog {
 
         setTimeout(() => {
           this._hideBanner();
-        }, 2500);
+        }, 2000);
       }, 1000);
     } else {
       this._hideBanner();

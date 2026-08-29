@@ -1266,36 +1266,45 @@
             this.consecutiveFailures = 0;
           } else {
             this.consecutiveFailures++;
-            if (this.consecutiveFailures >= 4 && this.isOnline) {
-              this._handleOffline("Backend Server Unreachable");
+            if (this.consecutiveFailures >= 6 && this.isOnline) {
+              this._handleOffline("Backend Server Reconnecting");
             }
           }
         } catch (e) {
           this.consecutiveFailures++;
-          if (this.consecutiveFailures >= 4 && this.isOnline) {
+          if (this.consecutiveFailures >= 6 && this.isOnline) {
             this._handleOffline("Connection Interrupted");
           }
         }
-      }, 6e3);
+      }, 8e3);
     }
     _handleOffline(reason = "Network Offline") {
       this.isOnline = false;
       this.wasInterrupted = true;
+      const hasActiveTransfers = uploader.queue.some(
+        (task) => task.status === "uploading" || task.status === "streaming" || task.status === "splitting"
+      );
       uploader.queue.forEach((task) => {
         if (task.status === "uploading" || task.status === "streaming" || task.status === "splitting") {
           this.interruptedTasks.add(task.id);
           uploader.pause(task.id);
         }
       });
-      this._showBanner(`\u26A0\uFE0F ${reason} \u2014 Pausing active transfers safely. Waiting for reconnection...`, "offline");
-      showToast2("Network connection lost. Uploads paused safely.", "warning");
+      if (hasActiveTransfers) {
+        this._showBanner(`\u26A0\uFE0F ${reason} \u2014 Pausing active transfers safely. Waiting for reconnection...`, "offline");
+        showToast2("Network connection lost. Uploads paused safely.", "warning");
+      } else {
+        console.debug(`[NetworkWatchdog] Idle connection blip (${reason}). Silently reconnecting...`);
+      }
     }
     _handleOnline() {
       this.isOnline = true;
       this.consecutiveFailures = 0;
       if (this.wasInterrupted) {
-        this._showBanner("\u26A1 Connection Restored \u2014 Auto-resuming upload queue...", "online");
-        showToast2("Back online! Auto-resuming upload queue...", "success");
+        if (this.interruptedTasks.size > 0) {
+          this._showBanner("\u26A1 Connection Restored \u2014 Auto-resuming upload queue...", "online");
+          showToast2("Back online! Auto-resuming upload queue...", "success");
+        }
         socketManager.init();
         setTimeout(() => {
           if (this.interruptedTasks.size > 0) {
@@ -1309,7 +1318,7 @@
           this.wasInterrupted = false;
           setTimeout(() => {
             this._hideBanner();
-          }, 2500);
+          }, 2e3);
         }, 1e3);
       } else {
         this._hideBanner();
