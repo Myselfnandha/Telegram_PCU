@@ -53,7 +53,7 @@ class NetworkWatchdog {
     this.heartbeatTimer = setInterval(async () => {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
         
         const res = await fetch('/api/auth/status', {
           method: 'GET',
@@ -69,17 +69,17 @@ class NetworkWatchdog {
           this.consecutiveFailures = 0;
         } else {
           this.consecutiveFailures++;
-          if (this.consecutiveFailures >= 2 && this.isOnline) {
+          if (this.consecutiveFailures >= 3 && this.isOnline) {
             this._handleOffline('Backend Server Unreachable');
           }
         }
       } catch (e) {
         this.consecutiveFailures++;
-        if (this.consecutiveFailures >= 2 && this.isOnline) {
+        if (this.consecutiveFailures >= 3 && this.isOnline) {
           this._handleOffline('Connection Interrupted');
         }
       }
-    }, 4000);
+    }, 5000);
   }
 
   _handleOffline(reason = 'Network Offline') {

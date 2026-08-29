@@ -204,21 +204,22 @@ async def handle_transmux_stream(chat_id: str, message_id: int, request: Request
                 request_size=chunk_unit,
                 chunk_size=chunk_unit
             ):
-                if not chunk:
+                if not chunk or proc.returncode is not None:
                     break
-                if proc.stdin.is_closing():
+                if proc.stdin and not proc.stdin.is_closing():
+                    proc.stdin.write(chunk)
+                    await proc.stdin.drain()
+                    await asyncio.sleep(0)
+                else:
                     break
-                proc.stdin.write(chunk)
-                await proc.stdin.drain()
         except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError, BrokenPipeError):
             pass
         except Exception as e:
-            logger.debug(f"Feed stdin finished or interrupted: {e}")
+            logger.debug(f"Feed stdin ended: {e}")
         finally:
             try:
                 if proc.stdin and not proc.stdin.is_closing():
                     proc.stdin.close()
-                    await proc.stdin.wait_closed()
             except Exception:
                 pass
 
@@ -231,13 +232,14 @@ async def handle_transmux_stream(chat_id: str, message_id: int, request: Request
                 if not data:
                     break
                 yield data
-        except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError):
-            logger.debug("Client closed stream connection")
+        except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError, GeneratorExit):
+            logger.debug("Transmux stream client disconnected or cancelled")
         finally:
             feeder_task.cancel()
             try:
-                proc.kill()
-                await proc.wait()
+                if proc.returncode is None:
+                    proc.kill()
+                    await asyncio.shield(proc.wait())
             except Exception:
                 pass
 

@@ -114,9 +114,11 @@ class TelegramClientManager:
 
     @classmethod
     async def is_authorized(cls) -> bool:
-        """Check if user or bot session is authorized without raising."""
+        """Check if client is authorized (instant memory check first)."""
         try:
-            if not API_ID or not API_HASH:
+            if cls._client is not None and cls._client.is_connected() and cls._cached_me:
+                return True
+            if not SESSION_FILE_PATH.exists():
                 return False
             client = await cls.get_client()
             return await client.is_user_authorized()
@@ -126,20 +128,25 @@ class TelegramClientManager:
 
     @classmethod
     async def get_me_info(cls) -> Optional[dict]:
-        """Fetch current authenticated Telegram user info."""
+        """Fetch current authenticated Telegram user info (served from memory cache)."""
+        if cls._cached_me:
+            return cls._cached_me
         try:
             client = await cls.get_client()
             if not await client.is_user_authorized():
                 return None
             me = await client.get_me()
-            return {
+            full_name = f"{getattr(me, 'first_name', '') or ''} {getattr(me, 'last_name', '') or ''}".strip()
+            cls._cached_me = {
                 "id": me.id,
-                "first_name": me.first_name,
-                "last_name": me.last_name,
-                "username": me.username,
-                "phone": me.phone,
-                "is_bot": me.bot
+                "first_name": getattr(me, "first_name", ""),
+                "last_name": getattr(me, "last_name", ""),
+                "name": full_name or getattr(me, "username", "Telegram User"),
+                "username": getattr(me, "username", None),
+                "phone": getattr(me, "phone", None),
+                "is_bot": getattr(me, "bot", False)
             }
+            return cls._cached_me
         except Exception as e:
             logger.error(f"Error getting Telegram profile: {e}")
             return None

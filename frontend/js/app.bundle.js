@@ -1159,7 +1159,7 @@
       this.heartbeatTimer = setInterval(async () => {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3500);
+          const timeoutId = setTimeout(() => controller.abort(), 6e3);
           const res = await fetch("/api/auth/status", {
             method: "GET",
             signal: controller.signal,
@@ -1173,17 +1173,17 @@
             this.consecutiveFailures = 0;
           } else {
             this.consecutiveFailures++;
-            if (this.consecutiveFailures >= 2 && this.isOnline) {
+            if (this.consecutiveFailures >= 3 && this.isOnline) {
               this._handleOffline("Backend Server Unreachable");
             }
           }
         } catch (e) {
           this.consecutiveFailures++;
-          if (this.consecutiveFailures >= 2 && this.isOnline) {
+          if (this.consecutiveFailures >= 3 && this.isOnline) {
             this._handleOffline("Connection Interrupted");
           }
         }
-      }, 4e3);
+      }, 5e3);
     }
     _handleOffline(reason = "Network Offline") {
       this.isOnline = false;
