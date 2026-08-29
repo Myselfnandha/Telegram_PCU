@@ -1,7 +1,8 @@
 /**
  * Cinema & Real-Time Video Streaming Controller.
  * Powers the dedicated Cinema tab with Channel Media Archive browser,
- * instant HTTP Range streaming playback, search filtering, and queue auto-advance.
+ * instant HTTP Range streaming playback, multi-audio language switching,
+ * WebVTT subtitle extraction, full-duration timeline seeking, and queue auto-advance.
  */
 
 import { showToast } from './ui.js';
@@ -10,6 +11,11 @@ import { formatBytes } from './utils.js';
 let _cinemaVideos = [];
 let _currentPlayingIndex = -1;
 let _currentChatId = 'me';
+let _currentAudioTrack = 0;
+let _currentSubtitleTrack = 'off';
+let _knownDuration = 0;
+let _seekBaseOffset = 0;
+let _isScrubbing = false;
 
 export async function initCinema() {
   const channelSelect = document.getElementById('cinemaChannelSelect');
@@ -20,6 +26,9 @@ export async function initCinema() {
   const btnCopyStream = document.getElementById('btnCinemaCopyUrl');
   const btnTheaterMode = document.getElementById('btnCinemaTheater');
   const btnNextTrack = document.getElementById('btnCinemaNext');
+  const audioSelect = document.getElementById('cinemaAudioSelect');
+  const subSelect = document.getElementById('cinemaSubtitleSelect');
+  const scrubber = document.getElementById('cinemaScrubber');
 
   if (!channelSelect || !videoPlayer) return;
 
@@ -44,6 +53,57 @@ export async function initCinema() {
     });
   }
 
+  // Audio Track Selection Change
+  if (audioSelect) {
+    audioSelect.addEventListener('change', (e) => {
+      _currentAudioTrack = parseInt(e.target.value, 10) || 0;
+      const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
+      _reloadStreamWithParams(currentPos);
+      showToast(`🔊 Audio: ${audioSelect.options[audioSelect.selectedIndex]?.text}`, 'info');
+    });
+  }
+
+  // Subtitle Track Selection Change
+  if (subSelect) {
+    subSelect.addEventListener('change', (e) => {
+      _currentSubtitleTrack = e.target.value;
+      _applySubtitleTrack(_currentSubtitleTrack);
+    });
+  }
+
+  // Custom Full Duration Scrubber
+  if (scrubber) {
+    scrubber.addEventListener('input', () => {
+      _isScrubbing = true;
+      const currentElem = document.getElementById('cinemaCurrentTime');
+      if (currentElem) currentElem.textContent = _formatDuration(parseFloat(scrubber.value));
+    });
+
+    scrubber.addEventListener('change', () => {
+      _isScrubbing = false;
+      const targetSec = parseFloat(scrubber.value);
+      _seekToPosition(targetSec);
+    });
+  }
+
+  // Video Player Time Update Sync
+  videoPlayer.addEventListener('timeupdate', () => {
+    if (_isScrubbing) return;
+    const currentElem = document.getElementById('cinemaCurrentTime');
+    const totalElem = document.getElementById('cinemaTotalDuration');
+    const scrubberElem = document.getElementById('cinemaScrubber');
+
+    const totalDur = _knownDuration || videoPlayer.duration || 0;
+    const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
+
+    if (currentElem) currentElem.textContent = _formatDuration(currentPos);
+    if (totalElem && totalDur > 0) totalElem.textContent = _formatDuration(totalDur);
+    if (scrubberElem && totalDur > 0) {
+      scrubberElem.max = totalDur;
+      scrubberElem.value = currentPos;
+    }
+  });
+
   // Video Error & Codec Handling
   const errorNotice = document.getElementById('cinemaPlayerErrorNotice');
   const btnFdmFallback = document.getElementById('btnCinemaFdmFallback');
@@ -53,7 +113,6 @@ export async function initCinema() {
     if (_currentPlayingIndex >= 0 && _cinemaVideos[_currentPlayingIndex]) {
       const v = _cinemaVideos[_currentPlayingIndex];
       const currentSrc = videoPlayer.getAttribute('src') || '';
-      // If native stream failed, try transmuxed MP4 stream automatically
       if (!currentSrc.includes('/stream/') && v.stream_transmux_url) {
         console.log('Native stream unsupported. Auto-switching to real-time transmux stream...');
         videoPlayer.src = v.stream_transmux_url;
@@ -132,7 +191,6 @@ export async function initCinema() {
 
   // Keyboard Shortcuts for Video Player
   document.addEventListener('keydown', (e) => {
-    // Only when Cinema tab is active and not typing in an input
     const cinemaTab = document.getElementById('tabPaneCinema');
     if (!cinemaTab || !cinemaTab.classList.contains('active')) return;
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
@@ -142,10 +200,12 @@ export async function initCinema() {
       videoPlayer.paused ? videoPlayer.play() : videoPlayer.pause();
     } else if (e.code === 'ArrowRight') {
       e.preventDefault();
-      videoPlayer.currentTime = Math.min(videoPlayer.duration || 0, videoPlayer.currentTime + 5);
+      const newPos = Math.min((_knownDuration || videoPlayer.duration || 0), _seekBaseOffset + videoPlayer.currentTime + 10);
+      _seekToPosition(newPos);
     } else if (e.code === 'ArrowLeft') {
       e.preventDefault();
-      videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 5);
+      const newPos = Math.max(0, _seekBaseOffset + videoPlayer.currentTime - 10);
+      _seekToPosition(newPos);
     } else if (e.code === 'KeyM') {
       e.preventDefault();
       videoPlayer.muted = !videoPlayer.muted;
@@ -247,7 +307,6 @@ function renderCinemaGrid(videos) {
     card.className = `video-card glass-panel ${_currentPlayingIndex === idx ? 'active' : ''}`;
     card.id = `videoCard_${idx}`;
 
-    // Resolution pill
     let resLabel = '';
     if (v.height >= 2160 || v.width >= 3840) resLabel = '4K UHD';
     else if (v.height >= 1080 || v.width >= 1920) resLabel = '1080p';
@@ -295,9 +354,12 @@ function _filterCinemaGrid(query) {
   renderCinemaGrid(filtered);
 }
 
-export function selectCinemaVideo(idx, autoPlay = true) {
+export async function selectCinemaVideo(idx, autoPlay = true) {
   if (idx < 0 || idx >= _cinemaVideos.length) return;
   _currentPlayingIndex = idx;
+  _currentAudioTrack = 0;
+  _currentSubtitleTrack = 'off';
+  _seekBaseOffset = 0;
   const v = _cinemaVideos[idx];
 
   const videoPlayer = document.getElementById('cinemaVideoPlayer');
@@ -307,6 +369,8 @@ export function selectCinemaVideo(idx, autoPlay = true) {
   const resElem = document.getElementById('cinemaNowPlayingRes');
   const sizeElem = document.getElementById('cinemaNowPlayingSize');
   const durElem = document.getElementById('cinemaNowPlayingDur');
+  const timelineContainer = document.getElementById('cinemaTimelineContainer');
+  const scrubber = document.getElementById('cinemaScrubber');
 
   if (standbyNotice) standbyNotice.style.display = 'none';
   if (errorNotice) errorNotice.style.display = 'none';
@@ -319,24 +383,149 @@ export function selectCinemaVideo(idx, autoPlay = true) {
     resElem.textContent = resText;
   }
   if (sizeElem) sizeElem.textContent = formatBytes(v.file_size);
-  if (durElem) durElem.textContent = v.duration > 0 ? _formatDuration(v.duration) : '--:--';
+  
+  _knownDuration = v.duration || 0;
+  if (durElem) durElem.textContent = _knownDuration > 0 ? _formatDuration(_knownDuration) : '--:--';
+
+  // Enable timeline scrubber
+  if (timelineContainer && _knownDuration > 0) {
+    timelineContainer.style.display = 'flex';
+    if (scrubber) {
+      scrubber.max = _knownDuration;
+      scrubber.value = 0;
+    }
+  }
 
   // Highlight active card
   document.querySelectorAll('.video-card').forEach((c) => c.classList.remove('active'));
   const activeCard = document.getElementById(`videoCard_${idx}`);
   if (activeCard) activeCard.classList.add('active');
 
-  // Load stream (use transmux endpoint directly for MKV/AVI/TS/non-MP4 files for immediate chunked playback)
-  if (videoPlayer) {
-    const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
-    const streamUrl = (isMkv && v.stream_transmux_url) ? v.stream_transmux_url : v.stream_url;
-    videoPlayer.src = streamUrl;
-    videoPlayer.load();
-    if (autoPlay) {
-      videoPlayer.play().catch((err) => {
-        console.debug('Autoplay hindered:', err);
+  // Probe media streams (audio languages & subtitles) in background
+  _probeAndPopulateTracks(v.chat_id, v.message_id);
+
+  // Load initial video source
+  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+  const streamUrl = (isMkv && v.stream_transmux_url) ? v.stream_transmux_url : v.stream_url;
+  
+  videoPlayer.src = streamUrl;
+  videoPlayer.load();
+  if (autoPlay) {
+    videoPlayer.play().catch((err) => {
+      console.debug('Autoplay notice:', err);
+    });
+  }
+}
+
+async function _probeAndPopulateTracks(chatId, messageId) {
+  const audioGroup = document.getElementById('cinemaAudioGroup');
+  const subGroup = document.getElementById('cinemaSubtitleGroup');
+  const audioSelect = document.getElementById('cinemaAudioSelect');
+  const subSelect = document.getElementById('cinemaSubtitleSelect');
+
+  if (audioGroup) audioGroup.style.display = 'none';
+  if (subGroup) subGroup.style.display = 'none';
+
+  try {
+    const resp = await fetch(`/api/media/streams/${encodeURIComponent(chatId)}/${messageId}`);
+    if (!resp.ok) return;
+    const info = await resp.json();
+
+    // Populate Audio Tracks
+    if (audioSelect && info.audio_tracks && info.audio_tracks.length > 0) {
+      audioSelect.innerHTML = '';
+      info.audio_tracks.forEach((t) => {
+        const opt = document.createElement('option');
+        opt.value = t.index;
+        opt.textContent = t.title;
+        audioSelect.appendChild(opt);
       });
+      if (audioGroup) audioGroup.style.display = 'flex';
     }
+
+    // Populate Subtitle Tracks
+    if (subSelect && info.subtitle_tracks && info.subtitle_tracks.length > 0) {
+      subSelect.innerHTML = '<option value="off">Off</option>';
+      info.subtitle_tracks.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s.vtt_url;
+        opt.textContent = s.title;
+        subSelect.appendChild(opt);
+      });
+      if (subGroup) subGroup.style.display = 'flex';
+    }
+  } catch (e) {
+    console.debug('Probe streams notice:', e);
+  }
+}
+
+function _reloadStreamWithParams(startSeconds = 0) {
+  if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
+  const v = _cinemaVideos[_currentPlayingIndex];
+  const videoPlayer = document.getElementById('cinemaVideoPlayer');
+  if (!videoPlayer) return;
+
+  _seekBaseOffset = startSeconds;
+  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+  
+  if (isMkv) {
+    const baseUrl = v.stream_transmux_url.split('?')[0];
+    videoPlayer.src = `${baseUrl}?audio=${_currentAudioTrack}&ss=${startSeconds}`;
+  } else {
+    videoPlayer.currentTime = startSeconds;
+  }
+
+  videoPlayer.load();
+  videoPlayer.play().catch(() => {});
+}
+
+function _seekToPosition(targetSeconds) {
+  if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
+  const v = _cinemaVideos[_currentPlayingIndex];
+  const videoPlayer = document.getElementById('cinemaVideoPlayer');
+  if (!videoPlayer) return;
+
+  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+  if (isMkv) {
+    _reloadStreamWithParams(targetSeconds);
+  } else {
+    videoPlayer.currentTime = targetSeconds;
+  }
+}
+
+function _applySubtitleTrack(vttUrl) {
+  const videoPlayer = document.getElementById('cinemaVideoPlayer');
+  if (!videoPlayer) return;
+
+  // Remove existing subtitle tracks
+  const oldTracks = videoPlayer.querySelectorAll('track');
+  oldTracks.forEach((t) => t.remove());
+
+  if (vttUrl !== 'off') {
+    const track = document.createElement('track');
+    track.kind = 'subtitles';
+    track.label = 'Subtitles';
+    track.srclang = 'en';
+    track.src = vttUrl;
+    track.default = true;
+    videoPlayer.appendChild(track);
+
+    setTimeout(() => {
+      if (videoPlayer.textTracks && videoPlayer.textTracks.length > 0) {
+        for (let i = 0; i < videoPlayer.textTracks.length; i++) {
+          videoPlayer.textTracks[i].mode = 'showing';
+        }
+      }
+    }, 200);
+
+    showToast('💬 Subtitles enabled', 'success');
+  } else {
+    if (videoPlayer.textTracks) {
+      for (let i = 0; i < videoPlayer.textTracks.length; i++) {
+        videoPlayer.textTracks[i].mode = 'disabled';
+      }
+    }
+    showToast('💬 Subtitles disabled', 'info');
   }
 }
 
@@ -348,7 +537,7 @@ function _playNextVideo() {
 }
 
 function _formatDuration(seconds) {
-  if (!seconds) return '00:00';
+  if (!seconds || isNaN(seconds)) return '00:00';
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);

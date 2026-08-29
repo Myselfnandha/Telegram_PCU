@@ -2249,6 +2249,11 @@
   var _cinemaVideos = [];
   var _currentPlayingIndex = -1;
   var _currentChatId = "me";
+  var _currentAudioTrack = 0;
+  var _currentSubtitleTrack = "off";
+  var _knownDuration = 0;
+  var _seekBaseOffset = 0;
+  var _isScrubbing = false;
   async function initCinema() {
     const channelSelect = document.getElementById("cinemaChannelSelect");
     const videoSearch = document.getElementById("cinemaSearchInput");
@@ -2258,6 +2263,9 @@
     const btnCopyStream = document.getElementById("btnCinemaCopyUrl");
     const btnTheaterMode = document.getElementById("btnCinemaTheater");
     const btnNextTrack = document.getElementById("btnCinemaNext");
+    const audioSelect = document.getElementById("cinemaAudioSelect");
+    const subSelect = document.getElementById("cinemaSubtitleSelect");
+    const scrubber = document.getElementById("cinemaScrubber");
     if (!channelSelect || !videoPlayer) return;
     await _loadCinemaChannels();
     channelSelect.addEventListener("change", (e) => {
@@ -2272,6 +2280,46 @@
         _filterCinemaGrid(e.target.value.toLowerCase().trim());
       });
     }
+    if (audioSelect) {
+      audioSelect.addEventListener("change", (e) => {
+        _currentAudioTrack = parseInt(e.target.value, 10) || 0;
+        const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
+        _reloadStreamWithParams(currentPos);
+        showToast2(`\u{1F50A} Audio: ${audioSelect.options[audioSelect.selectedIndex]?.text}`, "info");
+      });
+    }
+    if (subSelect) {
+      subSelect.addEventListener("change", (e) => {
+        _currentSubtitleTrack = e.target.value;
+        _applySubtitleTrack(_currentSubtitleTrack);
+      });
+    }
+    if (scrubber) {
+      scrubber.addEventListener("input", () => {
+        _isScrubbing = true;
+        const currentElem = document.getElementById("cinemaCurrentTime");
+        if (currentElem) currentElem.textContent = _formatDuration(parseFloat(scrubber.value));
+      });
+      scrubber.addEventListener("change", () => {
+        _isScrubbing = false;
+        const targetSec = parseFloat(scrubber.value);
+        _seekToPosition(targetSec);
+      });
+    }
+    videoPlayer.addEventListener("timeupdate", () => {
+      if (_isScrubbing) return;
+      const currentElem = document.getElementById("cinemaCurrentTime");
+      const totalElem = document.getElementById("cinemaTotalDuration");
+      const scrubberElem = document.getElementById("cinemaScrubber");
+      const totalDur = _knownDuration || videoPlayer.duration || 0;
+      const currentPos = _seekBaseOffset + (videoPlayer.currentTime || 0);
+      if (currentElem) currentElem.textContent = _formatDuration(currentPos);
+      if (totalElem && totalDur > 0) totalElem.textContent = _formatDuration(totalDur);
+      if (scrubberElem && totalDur > 0) {
+        scrubberElem.max = totalDur;
+        scrubberElem.value = currentPos;
+      }
+    });
     const errorNotice = document.getElementById("cinemaPlayerErrorNotice");
     const btnFdmFallback = document.getElementById("btnCinemaFdmFallback");
     const btnCopyFallback = document.getElementById("btnCinemaCopyFallback");
@@ -2352,10 +2400,12 @@
         videoPlayer.paused ? videoPlayer.play() : videoPlayer.pause();
       } else if (e.code === "ArrowRight") {
         e.preventDefault();
-        videoPlayer.currentTime = Math.min(videoPlayer.duration || 0, videoPlayer.currentTime + 5);
+        const newPos = Math.min(_knownDuration || videoPlayer.duration || 0, _seekBaseOffset + videoPlayer.currentTime + 10);
+        _seekToPosition(newPos);
       } else if (e.code === "ArrowLeft") {
         e.preventDefault();
-        videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 5);
+        const newPos = Math.max(0, _seekBaseOffset + videoPlayer.currentTime - 10);
+        _seekToPosition(newPos);
       } else if (e.code === "KeyM") {
         e.preventDefault();
         videoPlayer.muted = !videoPlayer.muted;
@@ -2480,9 +2530,12 @@
     const filtered = _cinemaVideos.filter((v) => v.filename.toLowerCase().includes(query));
     renderCinemaGrid(filtered);
   }
-  function selectCinemaVideo(idx, autoPlay = true) {
+  async function selectCinemaVideo(idx, autoPlay = true) {
     if (idx < 0 || idx >= _cinemaVideos.length) return;
     _currentPlayingIndex = idx;
+    _currentAudioTrack = 0;
+    _currentSubtitleTrack = "off";
+    _seekBaseOffset = 0;
     const v = _cinemaVideos[idx];
     const videoPlayer = document.getElementById("cinemaVideoPlayer");
     const standbyNotice = document.getElementById("cinemaPlayerStandbyNotice");
@@ -2491,6 +2544,8 @@
     const resElem = document.getElementById("cinemaNowPlayingRes");
     const sizeElem = document.getElementById("cinemaNowPlayingSize");
     const durElem = document.getElementById("cinemaNowPlayingDur");
+    const timelineContainer = document.getElementById("cinemaTimelineContainer");
+    const scrubber = document.getElementById("cinemaScrubber");
     if (standbyNotice) standbyNotice.style.display = "none";
     if (errorNotice) errorNotice.style.display = "none";
     if (videoPlayer) videoPlayer.style.display = "block";
@@ -2501,20 +2556,121 @@
       resElem.textContent = resText;
     }
     if (sizeElem) sizeElem.textContent = formatBytes(v.file_size);
-    if (durElem) durElem.textContent = v.duration > 0 ? _formatDuration(v.duration) : "--:--";
+    _knownDuration = v.duration || 0;
+    if (durElem) durElem.textContent = _knownDuration > 0 ? _formatDuration(_knownDuration) : "--:--";
+    if (timelineContainer && _knownDuration > 0) {
+      timelineContainer.style.display = "flex";
+      if (scrubber) {
+        scrubber.max = _knownDuration;
+        scrubber.value = 0;
+      }
+    }
     document.querySelectorAll(".video-card").forEach((c) => c.classList.remove("active"));
     const activeCard = document.getElementById(`videoCard_${idx}`);
     if (activeCard) activeCard.classList.add("active");
-    if (videoPlayer) {
-      const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
-      const streamUrl = isMkv && v.stream_transmux_url ? v.stream_transmux_url : v.stream_url;
-      videoPlayer.src = streamUrl;
-      videoPlayer.load();
-      if (autoPlay) {
-        videoPlayer.play().catch((err) => {
-          console.debug("Autoplay hindered:", err);
+    _probeAndPopulateTracks(v.chat_id, v.message_id);
+    const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+    const streamUrl = isMkv && v.stream_transmux_url ? v.stream_transmux_url : v.stream_url;
+    videoPlayer.src = streamUrl;
+    videoPlayer.load();
+    if (autoPlay) {
+      videoPlayer.play().catch((err) => {
+        console.debug("Autoplay notice:", err);
+      });
+    }
+  }
+  async function _probeAndPopulateTracks(chatId, messageId) {
+    const audioGroup = document.getElementById("cinemaAudioGroup");
+    const subGroup = document.getElementById("cinemaSubtitleGroup");
+    const audioSelect = document.getElementById("cinemaAudioSelect");
+    const subSelect = document.getElementById("cinemaSubtitleSelect");
+    if (audioGroup) audioGroup.style.display = "none";
+    if (subGroup) subGroup.style.display = "none";
+    try {
+      const resp = await fetch(`/api/media/streams/${encodeURIComponent(chatId)}/${messageId}`);
+      if (!resp.ok) return;
+      const info = await resp.json();
+      if (audioSelect && info.audio_tracks && info.audio_tracks.length > 0) {
+        audioSelect.innerHTML = "";
+        info.audio_tracks.forEach((t) => {
+          const opt = document.createElement("option");
+          opt.value = t.index;
+          opt.textContent = t.title;
+          audioSelect.appendChild(opt);
         });
+        if (audioGroup) audioGroup.style.display = "flex";
       }
+      if (subSelect && info.subtitle_tracks && info.subtitle_tracks.length > 0) {
+        subSelect.innerHTML = '<option value="off">Off</option>';
+        info.subtitle_tracks.forEach((s) => {
+          const opt = document.createElement("option");
+          opt.value = s.vtt_url;
+          opt.textContent = s.title;
+          subSelect.appendChild(opt);
+        });
+        if (subGroup) subGroup.style.display = "flex";
+      }
+    } catch (e) {
+      console.debug("Probe streams notice:", e);
+    }
+  }
+  function _reloadStreamWithParams(startSeconds = 0) {
+    if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
+    const v = _cinemaVideos[_currentPlayingIndex];
+    const videoPlayer = document.getElementById("cinemaVideoPlayer");
+    if (!videoPlayer) return;
+    _seekBaseOffset = startSeconds;
+    const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+    if (isMkv) {
+      const baseUrl = v.stream_transmux_url.split("?")[0];
+      videoPlayer.src = `${baseUrl}?audio=${_currentAudioTrack}&ss=${startSeconds}`;
+    } else {
+      videoPlayer.currentTime = startSeconds;
+    }
+    videoPlayer.load();
+    videoPlayer.play().catch(() => {
+    });
+  }
+  function _seekToPosition(targetSeconds) {
+    if (_currentPlayingIndex < 0 || !_cinemaVideos[_currentPlayingIndex]) return;
+    const v = _cinemaVideos[_currentPlayingIndex];
+    const videoPlayer = document.getElementById("cinemaVideoPlayer");
+    if (!videoPlayer) return;
+    const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+    if (isMkv) {
+      _reloadStreamWithParams(targetSeconds);
+    } else {
+      videoPlayer.currentTime = targetSeconds;
+    }
+  }
+  function _applySubtitleTrack(vttUrl) {
+    const videoPlayer = document.getElementById("cinemaVideoPlayer");
+    if (!videoPlayer) return;
+    const oldTracks = videoPlayer.querySelectorAll("track");
+    oldTracks.forEach((t) => t.remove());
+    if (vttUrl !== "off") {
+      const track = document.createElement("track");
+      track.kind = "subtitles";
+      track.label = "Subtitles";
+      track.srclang = "en";
+      track.src = vttUrl;
+      track.default = true;
+      videoPlayer.appendChild(track);
+      setTimeout(() => {
+        if (videoPlayer.textTracks && videoPlayer.textTracks.length > 0) {
+          for (let i = 0; i < videoPlayer.textTracks.length; i++) {
+            videoPlayer.textTracks[i].mode = "showing";
+          }
+        }
+      }, 200);
+      showToast2("\u{1F4AC} Subtitles enabled", "success");
+    } else {
+      if (videoPlayer.textTracks) {
+        for (let i = 0; i < videoPlayer.textTracks.length; i++) {
+          videoPlayer.textTracks[i].mode = "disabled";
+        }
+      }
+      showToast2("\u{1F4AC} Subtitles disabled", "info");
     }
   }
   function _playNextVideo() {
@@ -2524,7 +2680,7 @@
     showToast2(`\u23ED\uFE0F Now Playing: ${_cinemaVideos[nextIdx].filename}`, "info");
   }
   function _formatDuration(seconds) {
-    if (!seconds) return "00:00";
+    if (!seconds || isNaN(seconds)) return "00:00";
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor(seconds % 3600 / 60);
     const secs = Math.floor(seconds % 60);
