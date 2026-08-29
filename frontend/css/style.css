@@ -148,10 +148,14 @@ html, body {
   justify-content: space-between;
   gap: 12px;
   padding: 4px 16px;
-  background: rgba(18, 24, 38, 0.65);
+  background: var(--bg-card);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-md);
   flex-shrink: 0;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  transition: var(--transition-smooth);
 }
 
 .telemetry-item {

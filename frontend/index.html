@@ -16,8 +16,8 @@
   <link rel="icon" type="image/png" href="/assets/icon-192.png">
 
   <!-- Local Instant Socket.IO Client (Zero CDN Latency) -->
-  <script src="/js/socket.io.min.js?v=3.1.8"></script>
-  <link rel="stylesheet" href="/css/style.css?v=3.1.8">
+  <script src="/js/socket.io.min.js?v=3.2.4"></script>
+  <link rel="stylesheet" href="/css/style.css?v=3.2.4">
   <script>
     // Early instantaneous auth status check & tab switching logic
     window._earlyCheckAuth = function() {
@@ -602,23 +602,23 @@
         <div class="cinema-hub-header">
           <!-- Top Row: Source Destination Bar, Search, and Refresh -->
           <div class="cinema-hub-top-bar">
-            <!-- Source Channel Destination Selector -->
-            <div class="destination-bar glass-panel" style="padding: 6px 14px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-width: 320px; flex: 1.1; box-sizing: border-box;">
+            <!-- Source Channel Selector (Flat Integrated Header) -->
+            <div class="cinema-dest-bar" style="padding: 6px 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-width: 300px; flex: 1.1; box-sizing: border-box; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); border-radius: var(--radius-md);">
               <div class="dest-info" style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
-                <div class="dest-icon" style="background: rgba(108, 92, 231, 0.15); color: var(--accent-primary); width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <div class="dest-icon" style="background: rgba(108, 92, 231, 0.15); color: var(--accent-primary); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                   <span id="cinemaCurrentChatIcon" style="font-size: 1.1rem;">☁️</span>
                 </div>
                 <div class="dest-text" style="min-width: 0; flex: 1;">
                   <div class="label" style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Source Channel / Chat</div>
-                  <div class="target-name" style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px;">
+                  <div class="target-name" style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px;">
                     <span id="cinemaCurrentChatName">Saved Messages (Personal Cloud)</span>
                     <span class="chat-type-tag" id="cinemaCurrentChatType" style="font-size: 0.65rem; padding: 1px 6px;">CLOUD</span>
                   </div>
                 </div>
               </div>
 
-              <button class="btn-choose-chat" id="btnCinemaChooseChat" type="button" style="padding: 6px 12px; font-size: 0.8rem; white-space: nowrap; flex-shrink: 0;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <button class="btn-choose-chat" id="btnCinemaChooseChat" type="button" style="padding: 5px 10px; font-size: 0.78rem; white-space: nowrap; flex-shrink: 0;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
@@ -791,6 +791,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=3.2.1"></script>
+  <script src="/js/app.bundle.js?v=3.2.4"></script>
 </body>
 </html>

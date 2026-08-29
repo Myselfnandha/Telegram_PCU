@@ -30,7 +30,7 @@ export async function initCinema() {
 
   // Refresh
   if (btnRefresh) {
-    btnRefresh.addEventListener('click', () => loadCinemaVideos(_currentChatId));
+    btnRefresh.addEventListener('click', () => loadCinemaVideos(_currentChatId, true));
   }
 
   // Search Filter
@@ -131,12 +131,31 @@ async function _loadCinemaWatchedChips() {
   }
 }
 
-export async function loadCinemaVideos(chatId = 'me') {
+export async function loadCinemaVideos(chatId = 'me', forceRefresh = false) {
   _currentChatId = chatId;
   const grid = document.getElementById('cinemaVideoGrid');
   const countBadge = document.getElementById('cinemaVideoCount');
 
-  if (grid) {
+  // 1. Instant Cache Render (<1ms from localStorage)
+  const cacheKey = 'tg_cinema_cache_' + chatId;
+  let hasRenderedCached = false;
+
+  if (!forceRefresh) {
+    try {
+      const localCached = localStorage.getItem(cacheKey);
+      if (localCached) {
+        const cachedData = JSON.parse(localCached);
+        if (Array.isArray(cachedData) && cachedData.length > 0) {
+          _cinemaVideos = cachedData;
+          if (countBadge) countBadge.textContent = `${_cinemaVideos.length} Videos`;
+          renderCinemaGrid(_cinemaVideos);
+          hasRenderedCached = true;
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (!hasRenderedCached && grid) {
     grid.innerHTML = `
       <div class="cinema-loading">
         <div class="spinner" style="margin-bottom: 12px;"></div>
@@ -146,10 +165,17 @@ export async function loadCinemaVideos(chatId = 'me') {
   }
 
   try {
-    const resp = await fetch(`/api/media/videos/${encodeURIComponent(chatId)}`);
+    const url = forceRefresh
+      ? `/api/media/videos/${encodeURIComponent(chatId)}?force_refresh=true`
+      : `/api/media/videos/${encodeURIComponent(chatId)}`;
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     _cinemaVideos = data.videos || [];
+
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(_cinemaVideos));
+    } catch (e) {}
 
     if (countBadge) {
       countBadge.textContent = `${_cinemaVideos.length} Videos`;
@@ -157,7 +183,7 @@ export async function loadCinemaVideos(chatId = 'me') {
 
     renderCinemaGrid(_cinemaVideos);
   } catch (err) {
-    if (grid) {
+    if (!hasRenderedCached && grid) {
       grid.innerHTML = `
         <div class="cinema-empty">
           <span style="font-size: 2.2rem; margin-bottom: 8px;">⚠️</span>
@@ -172,7 +198,7 @@ export async function loadCinemaVideos(chatId = 'me') {
   }
 }
 
-window._reloadCinema = () => loadCinemaVideos(_currentChatId);
+window._reloadCinema = () => loadCinemaVideos(_currentChatId, true);
 
 function _attachHoverScrubber(containerEl, videoItem) {
   if (!containerEl || !videoItem) return;
