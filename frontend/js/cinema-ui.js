@@ -175,9 +175,11 @@ function _extractSeriesInfo(filename) {
     let rawName = (m[1] || '').replace(/\.\w+$/, '').replace(/[._\-\(\)]+$/, '').trim();
     if (!rawName) rawName = clean.replace(/\.\w+$/, '').trim();
 
-    // Canonical title: strip channel noise, domain signatures, watermarks, and year
+    // Canonical title: strip channel noise, domain signatures, watermarks, year, and empty brackets
     let canonical = cleanFileName(rawName, channelContext)
       .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
+      .replace(/[\(\)\[\]\{\}]/g, ' ')
+      .replace(/^(?:org|com|net|tv|hd|link|linkzz|official)\s+/i, '')
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -188,16 +190,19 @@ function _extractSeriesInfo(filename) {
     const seasonNum = parseInt(sSeason.replace(/\D/g, '')) || 1;
     const seasonLabel = `Season ${seasonNum}`;
 
+    const cleanedTitle = clean.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '').replace(/\s+/g, ' ').trim();
+
     return {
       isSeries: true,
       canonicalTitle: canonical,
       seasonNum: seasonNum,
       seasonLabel: seasonLabel,
       epLabel: sEp,
-      cleanTitle: clean
+      cleanTitle: cleanedTitle
     };
   }
-  return { isSeries: false, cleanTitle: clean };
+  const cleanedTitle = clean.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '').replace(/\s+/g, ' ').trim();
+  return { isSeries: false, cleanTitle: cleanedTitle };
 }
 
 export function renderCinemaGrid(videos) {
@@ -257,7 +262,7 @@ export function renderCinemaGrid(videos) {
 
     let mergedIntoExisting = false;
     for (const [existingKey, existingData] of mergedShowsMap.entries()) {
-      if (existingKey.includes(key) || key.includes(existingKey)) {
+      if (existingKey === key || existingKey.includes(key) || key.includes(existingKey)) {
         existingData.episodes.push(...showData.episodes);
         if (showData.canonicalTitle.length > existingData.canonicalTitle.length) {
           existingData.canonicalTitle = showData.canonicalTitle;
@@ -336,7 +341,7 @@ export function renderCinemaGrid(videos) {
           <div class="series-showcase-hero">
             <div class="series-showcase-poster">
               ${show.leadThumb
-                ? `<img src="${show.leadThumb}" alt="${escapeHtml(show.showTitle)}" loading="lazy">`
+                ? `<img src="${show.leadThumb}" alt="" loading="lazy" onerror="this.remove()">`
                 : `<div class="series-thumb-fallback">🎬</div>`
               }
             </div>
@@ -401,7 +406,7 @@ export function renderCinemaGrid(videos) {
                 <div class="series-ep-card" data-ep-idx="${epIdx}">
                   <div class="series-ep-thumb" title="Click to stream in VLC">
                     ${ep.has_thumb
-                      ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'series-thumb-fallback\\'>🎬</div>'">`
+                      ? `<img src="${ep.thumb_url}" alt="" loading="lazy" onerror="this.remove()">`
                       : `<div class="series-thumb-fallback">🎬</div>`
                     }
                     <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
@@ -546,9 +551,9 @@ export function renderCinemaGrid(videos) {
     card.innerHTML = `
       <div class="cinema-hub-thumb" title="Click to stream in VLC Player">
         ${v.has_thumb
-        ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
-        : `<div class="cinema-hub-thumb-fallback">🎬</div>`
-      }
+          ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="" loading="lazy" onerror="this.remove()">`
+          : `<div class="cinema-hub-thumb-fallback">🎬</div>`
+        }
         ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ''}
       </div>
       <div class="cinema-hub-meta">
