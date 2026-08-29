@@ -914,3 +914,109 @@ async def generate_vlc_playlist(chat_id: str, message_id: int, filename: str, re
             "Content-Type": "audio/x-mpegurl; charset=utf-8"
         }
     )
+
+
+@router.post("/api/media/vlc/play_batch")
+async def launch_vlc_batch(payload: Dict[str, Any]):
+    """Launch VLC Player with an entire TV Series / Season playlist queued for seamless binge watching."""
+    import shutil
+    import subprocess
+    from app.config import PROXY_PORT
+
+    items = payload.get("items", [])
+    title = payload.get("title", "Season Playlist")
+    if not items:
+        raise HTTPException(status_code=400, detail="No video items provided for batch playback.")
+
+    vlc_bin = shutil.which("vlc") or "/usr/bin/vlc"
+    mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
+
+    stream_urls = []
+    for item in items:
+        chat_id = item.get("chat_id")
+        msg_id = item.get("message_id")
+        fn = item.get("filename", "video.mp4")
+        raw_url = item.get("stream_url")
+        if not raw_url and chat_id and msg_id:
+            import urllib.parse
+            encoded_name = urllib.parse.quote(fn)
+            raw_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{chat_id}/{msg_id}/{encoded_name}"
+        elif raw_url and raw_url.startswith("/"):
+            raw_url = f"http://127.0.0.1:{PROXY_PORT}{raw_url}"
+        if raw_url:
+            stream_urls.append(raw_url)
+
+    launched = False
+    player_name = "vlc"
+    chosen_bin = vlc_bin if os.path.exists(vlc_bin) else (mpv_bin if os.path.exists(mpv_bin) else None)
+
+    if chosen_bin and stream_urls:
+        try:
+            if "mpv" in chosen_bin:
+                player_name = "mpv"
+                cmd = [
+                    chosen_bin,
+                    *stream_urls,
+                    "--hr-seek=yes",
+                    "--cache=yes",
+                    "--demuxer-max-bytes=256M"
+                ]
+            else:
+                player_name = "vlc"
+                cmd = [
+                    chosen_bin,
+                    *stream_urls,
+                    "--input-fast-seek",
+                    "--avcodec-threads=0",
+                    "--avcodec-fast",
+                    "--network-caching=300",
+                    "--no-qt-error-dialogs",
+                    "--quiet"
+                ]
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            launched = True
+            logger.info(f"Launched batch binge session for {len(stream_urls)} episodes: {title}")
+        except Exception as e:
+            logger.warning(f"Could not launch batch player subprocess: {e}")
+
+    return {
+        "success": True,
+        "launched": launched,
+        "episodes_count": len(stream_urls),
+        "title": title
+    }
+
+
+@router.post("/api/media/vlc/batch_playlist")
+async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
+    """Generates a complete multi-episode .m3u playlist for a TV Series season."""
+    from app.config import PROXY_PORT
+    host = request.headers.get("host", f"localhost:{PROXY_PORT}")
+    items = payload.get("items", [])
+    title = payload.get("title", "Season_Playlist").replace(" ", "_")
+
+    m3u_lines = ["#EXTM3U"]
+    for item in items:
+        chat_id = item.get("chat_id")
+        msg_id = item.get("message_id")
+        fn = item.get("filename", "episode.mp4")
+        import urllib.parse
+        encoded_name = urllib.parse.quote(fn)
+        stream_url = f"http://{host}/dl/{chat_id}/{msg_id}/{encoded_name}"
+        m3u_lines.append(f"#EXTINF:-1,{fn}")
+        m3u_lines.append(stream_url)
+
+    m3u_content = "\n".join(m3u_lines) + "\n"
+    return Response(
+        content=m3u_content,
+        media_type="audio/x-mpegurl",
+        headers={
+            "Content-Disposition": f'attachment; filename="{title}.m3u"',
+            "Content-Type": "audio/x-mpegurl; charset=utf-8"
+        }
+    )

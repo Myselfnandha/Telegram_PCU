@@ -161,6 +161,27 @@ export async function loadCinemaVideos(chatId = 'me') {
 
 window._reloadCinema = () => loadCinemaVideos(_currentChatId);
 
+function _detectSeriesInfo(filename) {
+  const clean = cleanFileName(filename) || filename;
+  // Match S01E01, S1E1, S01 EP01, Season 1 Episode 2, EP01, Part 1, etc.
+  const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}|ep\s*\d{1,3}|episode\s*\d{1,3}|part\s*\d{1,2}))(.*)$/i;
+  const m = clean.match(regex);
+  if (m) {
+    let sName = (m[1] || '').replace(/\.\w+$/, '').replace(/[._\-\(\)]+$/, '').trim();
+    if (!sName) sName = clean.replace(/\.\w+$/, '').trim();
+    const sSeason = (m[2] || 'S01').toUpperCase().replace(/\s+/g, ' ');
+    const sEp = (m[3] || 'EP01').toUpperCase().replace(/\s+/g, ' ');
+    return {
+      isSeries: true,
+      seriesName: sName,
+      seasonLabel: sSeason.startsWith('S') && !sSeason.includes('EASON') ? `Season ${parseInt(sSeason.slice(1)) || 1}` : sSeason,
+      epLabel: sEp,
+      cleanTitle: clean
+    };
+  }
+  return { isSeries: false, cleanTitle: clean };
+}
+
 export function renderCinemaGrid(videos) {
   const grid = document.getElementById('cinemaVideoGrid');
   if (!grid) return;
@@ -178,7 +199,164 @@ export function renderCinemaGrid(videos) {
     return;
   }
 
-  videos.forEach((v, idx) => {
+  // 1. Group TV series into JioHotstar Season Bundles
+  const seriesMap = new Map();
+  const standaloneList = [];
+
+  videos.forEach((v) => {
+    const sInfo = _detectSeriesInfo(v.filename);
+    if (sInfo.isSeries) {
+      const groupKey = `${sInfo.seriesName}__${sInfo.seasonLabel}`.toLowerCase();
+      if (!seriesMap.has(groupKey)) {
+        seriesMap.set(groupKey, {
+          type: 'series',
+          seriesName: sInfo.seriesName,
+          seasonLabel: sInfo.seasonLabel,
+          episodes: []
+        });
+      }
+      seriesMap.get(groupKey).episodes.push({ ...v, ...sInfo });
+    } else {
+      standaloneList.push({ ...v, ...sInfo });
+    }
+  });
+
+  // 2. Render JioHotstar Series Bundles (for groups with >1 episode)
+  seriesMap.forEach((seriesGroup) => {
+    if (seriesGroup.episodes.length > 1) {
+      seriesGroup.episodes.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }));
+      const totalBytes = seriesGroup.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
+      const leadThumb = seriesGroup.episodes.find((e) => e.has_thumb)?.thumb_url;
+
+      const seriesCard = document.createElement('div');
+      seriesCard.className = 'hotstar-series-card';
+      seriesCard.innerHTML = `
+        <div class="hotstar-series-hero">
+          <div class="hotstar-series-poster">
+            ${leadThumb
+              ? `<img src="${leadThumb}" alt="${escapeHtml(seriesGroup.seriesName)}" loading="lazy">`
+              : `<div class="cinema-hub-thumb-fallback" style="font-size: 1.8rem;">🎬</div>`
+            }
+          </div>
+          <div class="hotstar-series-info">
+            <div class="hotstar-series-tags">
+              <span class="hotstar-pill">HOTSTAR BUNDLE</span>
+              <span class="hotstar-pill" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border-color: rgba(0, 206, 201, 0.4);">${escapeHtml(seriesGroup.seasonLabel)}</span>
+              <span class="hotstar-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border-color: rgba(255, 121, 63, 0.4);">${seriesGroup.episodes.length} Episodes</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 4px;">Total: ${formatBytes(totalBytes)}</span>
+            </div>
+            <h3 class="hotstar-series-title">${escapeHtml(seriesGroup.seriesName)}</h3>
+            <p class="hotstar-series-sub">Continuous MTProto Turbo Streaming with instant keyframe seeking</p>
+            <div class="hotstar-series-actions">
+              <button class="hotstar-btn-binge btn-binge-all" type="button" title="Play entire season sequentially in VLC">
+                <span>▶</span><span>Binge Season in VLC</span>
+              </button>
+              <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 7px 12px; font-size: 0.8rem;" title="Download complete Season .m3u playlist">
+                <span>📥</span><span>Season Playlist</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="hotstar-episode-drawer">
+          <div class="hotstar-episode-track">
+            ${seriesGroup.episodes.map((ep, epIdx) => {
+              const dur = ep.duration ? _formatDuration(ep.duration) : '';
+              return `
+                <div class="hotstar-ep-card" data-ep-idx="${epIdx}">
+                  <div class="hotstar-ep-thumb" title="Click to stream in VLC">
+                    ${ep.has_thumb
+                      ? `<img src="${ep.thumb_url}" alt="${escapeHtml(ep.cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
+                      : `<div class="cinema-hub-thumb-fallback">🎬</div>`
+                    }
+                    <span class="hotstar-ep-badge">${escapeHtml(ep.epLabel)}</span>
+                    ${dur ? `<span class="video-duration-pill">${dur}</span>` : ''}
+                  </div>
+                  <div class="hotstar-ep-meta">
+                    <span class="hotstar-ep-title" title="${escapeHtml(ep.cleanTitle)}">${escapeHtml(ep.cleanTitle)}</span>
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">${formatBytes(ep.file_size)}</span>
+                  </div>
+                  <div class="hotstar-ep-actions">
+                    <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.72rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
+                      <span>🎬</span><span>VLC</span>
+                    </button>
+                    <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.9; padding: 4px 6px; font-size: 0.72rem;">
+                      <span>🚀</span><span>FDM</span>
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+
+      // Binge Season Playback in VLC
+      const bingeBtn = seriesCard.querySelector('.btn-binge-all');
+      if (bingeBtn) {
+        bingeBtn.addEventListener('click', () => {
+          showToast(`🎬 Launching VLC playlist for ${seriesGroup.episodes.length} episodes of "${seriesGroup.seriesName}"...`, 'info');
+          fetch('/api/media/vlc/play_batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: `${seriesGroup.seriesName} - ${seriesGroup.seasonLabel}`,
+              items: seriesGroup.episodes
+            })
+          }).then((r) => r.json()).then((res) => {
+            if (res.launched) {
+              showToast(`🍿 Binging ${seriesGroup.seriesName} (${seriesGroup.episodes.length} episodes) in VLC!`, 'success');
+            }
+          }).catch((err) => showToast(`Playback error: ${err.message}`, 'error'));
+        });
+      }
+
+      // Download Complete Season M3U
+      const playlistBtn = seriesCard.querySelector('.btn-binge-playlist');
+      if (playlistBtn) {
+        playlistBtn.addEventListener('click', async () => {
+          try {
+            const res = await fetch('/api/media/vlc/batch_playlist', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: `${seriesGroup.seriesName}_${seriesGroup.seasonLabel}`,
+                items: seriesGroup.episodes
+              })
+            });
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${seriesGroup.seriesName}_${seriesGroup.seasonLabel}.m3u`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            showToast(`📥 Downloaded ${seriesGroup.seriesName} season playlist`, 'success');
+          } catch (e) {
+            showToast(`Error creating playlist: ${e.message}`, 'error');
+          }
+        });
+      }
+
+      // Episode Cards Actions
+      seriesCard.querySelectorAll('.hotstar-ep-card').forEach((epCard, idx) => {
+        const ep = seriesGroup.episodes[idx];
+        const epThumb = epCard.querySelector('.hotstar-ep-thumb');
+        const epVlc = epCard.querySelector('.btn-ep-vlc');
+        const epFdm = epCard.querySelector('.btn-ep-fdm');
+        if (epThumb) epThumb.addEventListener('click', () => playInVlc(ep));
+        if (epVlc) epVlc.addEventListener('click', () => playInVlc(ep));
+        if (epFdm) epFdm.addEventListener('click', () => triggerFdm(ep));
+      });
+
+      grid.appendChild(seriesCard);
+    } else {
+      standaloneList.push(...seriesGroup.episodes);
+    }
+  });
+
+  // 3. Render Standalone Movies & Videos
+  standaloneList.forEach((v, idx) => {
     const card = document.createElement('div');
     card.className = 'cinema-hub-card';
     card.id = `videoCard_${idx}`;
