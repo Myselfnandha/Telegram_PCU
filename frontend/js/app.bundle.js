@@ -239,6 +239,7 @@
         name: "Saved Messages (Personal Cloud)",
         type: "saved_messages"
       };
+      this.activeFilter = "all";
       this.onSelectCallback = null;
       this.storageKey = "tg_selected_chat";
       this.isLoading = false;
@@ -262,6 +263,15 @@
           this.renderList(e.target.value);
         });
       }
+      const filterChips = document.querySelectorAll("#chatModalFilterTabs .filter-chip");
+      filterChips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          filterChips.forEach((c) => c.classList.remove("active"));
+          chip.classList.add("active");
+          this.activeFilter = chip.getAttribute("data-filter") || "all";
+          this.renderList(this.searchInput ? this.searchInput.value : "");
+        });
+      });
       this.loadSavedSelection();
       setTimeout(() => this.fetchChats(), 100);
     }
@@ -369,15 +379,22 @@
       if (!this.listContainer) return;
       const q = filter.trim().toLowerCase();
       const filtered = this.chats.filter((c) => {
+        if (this.activeFilter && this.activeFilter !== "all") {
+          const cType = (c.type || "").toLowerCase();
+          if (this.activeFilter === "channel" && cType !== "channel") return false;
+          if (this.activeFilter === "group" && !cType.includes("group") && cType !== "megagroup") return false;
+          if (this.activeFilter === "bot" && cType !== "bot") return false;
+          if (this.activeFilter === "user" && cType !== "user" && cType !== "saved_messages") return false;
+        }
         if (!q) return true;
-        const nameMatch = c.name.toLowerCase().includes(q);
+        const nameMatch = (c.name || "").toLowerCase().includes(q);
         const userMatch = c.username ? c.username.toLowerCase().includes(q) : false;
         return nameMatch || userMatch;
       });
       if (filtered.length === 0) {
         this.listContainer.innerHTML = `
         <div style="padding: 24px; text-align: center; color: var(--text-muted);">
-          No chats found matching "${escapeHtml(filter)}"
+          No ${this.activeFilter !== "all" ? this.activeFilter + "s" : "chats"} found matching "${escapeHtml(filter)}"
         </div>
       `;
         return;

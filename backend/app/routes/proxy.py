@@ -19,6 +19,7 @@ _MESSAGE_CACHE = {}
 _ACTIVE_PREFETCH_TASKS: Dict[Tuple[str, int], asyncio.Task] = {}
 
 from app.services.stream_cache import stream_cache_service, BLOCK_SIZE
+from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_videos_db
 
 
 async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id: int, file_size: int, filename: str, start_block: int = 0):
@@ -1016,6 +1017,8 @@ async def _fetch_and_cache_videos(chat_id: str, limit: int = 50, offset_id: int 
         "data": res,
         "timestamp": time.time()
     }
+    # Persist to SQLite database for instant cross-session recall
+    asyncio.create_task(save_cinema_cached_videos_db(str(chat_id), videos))
     return res
 
 
@@ -1023,17 +1026,34 @@ async def _fetch_and_cache_videos(chat_id: str, limit: int = 50, offset_id: int 
 async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0, force_refresh: bool = False):
     """
     Fetches video archives from a Telegram channel, group, or Saved Messages for the Cinema tab.
-    Implements Stale-While-Revalidate caching for instantaneous (<1ms) response times.
+    Implements multi-layer Memory + SQLite Stale-While-Revalidate caching for instantaneous (<1ms) response times.
     """
     cache_key = f"{chat_id}_{offset_id}"
     now = time.time()
 
+    # 1. Fast Memory Cache (<0.1ms)
     if not force_refresh and cache_key in _CINEMA_VIDEOS_CACHE:
         cached_entry = _CINEMA_VIDEOS_CACHE[cache_key]
         if (now - cached_entry["timestamp"]) > 60:
             asyncio.create_task(_fetch_and_cache_videos(chat_id, limit, offset_id))
         return cached_entry["data"]
 
+    # 2. Fast SQLite Persistent Cache (<1ms)
+    if not force_refresh:
+        try:
+            db_cached = await get_cinema_cached_videos_db(chat_id)
+            if db_cached and db_cached.get("count", 0) > 0:
+                _CINEMA_VIDEOS_CACHE[cache_key] = {
+                    "data": db_cached,
+                    "timestamp": db_cached.get("updated_at", now)
+                }
+                if (now - db_cached.get("updated_at", 0)) > 60:
+                    asyncio.create_task(_fetch_and_cache_videos(chat_id, limit, offset_id))
+                return db_cached
+        except Exception as e:
+            logger.debug(f"SQLite cache lookup error: {e}")
+
+    # 3. Synchronous fetch from MTProto
     return await _fetch_and_cache_videos(chat_id, limit, offset_id)
 
 

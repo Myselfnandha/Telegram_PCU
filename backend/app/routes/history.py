@@ -42,6 +42,14 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_history_created 
             ON upload_history (created_at DESC);
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS cinema_videos_cache (
+                chat_id TEXT PRIMARY KEY,
+                videos_json TEXT NOT NULL,
+                video_count INTEGER NOT NULL,
+                updated_at REAL NOT NULL
+            );
+        """)
         await db.commit()
     logger.info(f"Initialized high-performance upload history DB at {DB_PATH}")
 
@@ -115,3 +123,44 @@ async def clear_history():
         return {"status": "success", "message": "Upload history cleared"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def get_cinema_cached_videos_db(chat_id: str) -> Optional[dict]:
+    """Retrieves cached video metadata list for a chat from SQLite in <1ms."""
+    try:
+        async with aiosqlite.connect(str(DB_PATH), timeout=5.0) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT videos_json, video_count, updated_at FROM cinema_videos_cache WHERE chat_id = ?", (str(chat_id),))
+            row = await cursor.fetchone()
+            if row:
+                import json
+                return {
+                    "chat_id": str(chat_id),
+                    "count": row["video_count"],
+                    "videos": json.loads(row["videos_json"]),
+                    "updated_at": row["updated_at"]
+                }
+    except Exception as e:
+        logger.debug(f"SQLite cinema cache read notice: {e}")
+    return None
+
+
+async def save_cinema_cached_videos_db(chat_id: str, videos: list):
+    """Persists fetched video metadata list for a chat into SQLite."""
+    try:
+        import json
+        videos_json = json.dumps(videos)
+        count = len(videos)
+        now = datetime.utcnow().timestamp()
+        async with aiosqlite.connect(str(DB_PATH), timeout=5.0) as db:
+            await db.execute("""
+                INSERT INTO cinema_videos_cache (chat_id, videos_json, video_count, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(chat_id) DO UPDATE SET
+                    videos_json = excluded.videos_json,
+                    video_count = excluded.video_count,
+                    updated_at = excluded.updated_at
+            """, (str(chat_id), videos_json, count, now))
+            await db.commit()
+    except Exception as e:
+        logger.debug(f"SQLite cinema cache write notice: {e}")

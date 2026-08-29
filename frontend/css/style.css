@@ -1233,6 +1233,41 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 480px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-primary) rgba(255, 255, 255, 0.05);
+}
+
+/* Chrome / Safari / WebKit Scrollbar Styling for all Destination Modals */
+.modal-body::-webkit-scrollbar,
+#chatListContainer::-webkit-scrollbar,
+#watchChannelListContainer::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  display: block !important;
+}
+
+.modal-body::-webkit-scrollbar-track,
+#chatListContainer::-webkit-scrollbar-track,
+#watchChannelListContainer::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  margin: 4px 0;
+}
+
+.modal-body::-webkit-scrollbar-thumb,
+#chatListContainer::-webkit-scrollbar-thumb,
+#watchChannelListContainer::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(108, 92, 231, 0.5);
+  transition: background 0.2s ease;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover,
+#chatListContainer::-webkit-scrollbar-thumb:hover,
+#watchChannelListContainer::-webkit-scrollbar-thumb:hover {
+  background: #a29bfe;
 }
 
 .chat-option-item {

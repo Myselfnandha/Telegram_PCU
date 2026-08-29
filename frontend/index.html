@@ -16,8 +16,8 @@
   <link rel="icon" type="image/png" href="/assets/icon-192.png">
 
   <!-- Local Instant Socket.IO Client (Zero CDN Latency) -->
-  <script src="/js/socket.io.min.js?v=3.2.5"></script>
-  <link rel="stylesheet" href="/css/style.css?v=3.2.5">
+  <script src="/js/socket.io.min.js?v=3.2.6"></script>
+  <link rel="stylesheet" href="/css/style.css?v=3.2.6">
   <script>
     // Early instantaneous auth status check & tab switching logic
     window._earlyCheckAuth = function() {
@@ -694,6 +694,13 @@
       </div>
       <div class="modal-search">
         <input type="text" class="modal-search-input" id="chatSearchInput" placeholder="Search chats, channels, groups by name or @username...">
+        <div class="modal-filter-tabs" id="chatModalFilterTabs" style="display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px;">
+          <button class="filter-chip active" data-filter="all" type="button">All Dialogs</button>
+          <button class="filter-chip" data-filter="channel" type="button">📢 Channels</button>
+          <button class="filter-chip" data-filter="group" type="button">👥 Groups</button>
+          <button class="filter-chip" data-filter="bot" type="button">🤖 Bots</button>
+          <button class="filter-chip" data-filter="user" type="button">👤 Contacts</button>
+        </div>
       </div>
       <div class="modal-body" id="chatListContainer">
         <!-- Injected via chat-picker.js -->
@@ -791,6 +798,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=3.2.5"></script>
+  <script src="/js/app.bundle.js?v=3.2.6"></script>
 </body>
 </html>
