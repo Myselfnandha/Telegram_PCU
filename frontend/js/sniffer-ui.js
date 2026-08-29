@@ -4,7 +4,7 @@
  * Auto-Dispatch Engine status, and Live Dispatched Stream.
  */
 
-import { showToast, escapeHtml } from "./utils.js";
+import { showToast, escapeHtml, cleanFileName } from "./utils.js";
 
 export class SnifferUI {
   constructor() {
@@ -546,13 +546,13 @@ export class SnifferUI {
   }
 
   _renderFeedCardHtml(item) {
+    const cleanName = cleanFileName(item.filename) || item.filename;
     return `
       <div class="feed-card" data-chat="${item.chat_id}" data-msg="${item.message_id}" data-url="${item.download_url}">
         <div class="feed-card-left">
-          <div class="feed-filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</div>
+          <div class="feed-filename" title="${escapeHtml(cleanName)}">${escapeHtml(cleanName)}</div>
           <div class="feed-meta">
             <span style="color: var(--accent-secondary); font-weight: 600;">${escapeHtml(item.size_formatted)}</span>
-            <span style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;">${escapeHtml(item.quality)}</span>
             <span>Manager: <b>${escapeHtml(item.manager)}</b></span>
             <span class="${item.status === 'dispatched' ? 'badge-status-online' : 'badge-status-offline'}">${escapeHtml(item.status.toUpperCase())}</span>
           </div>

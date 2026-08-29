@@ -237,8 +237,7 @@ async def test_socket_item_serialization():
 async def test_auto_rename_helper():
     raw_name = "Avengers.Endgame.2019.1080p.BluRay.x264.DTS-HD.MA.7.1-FGT.mkv"
     cleaned = auto_rename(raw_name)
-    assert "Avengers Endgame 2019" in cleaned
-    assert "[1080P]" in cleaned
+    assert "Avengers Endgame (2019)" in cleaned
     assert cleaned.endswith(".mkv")
 
 

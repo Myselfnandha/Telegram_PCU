@@ -1,5 +1,5 @@
 import { showToast } from './ui.js';
-import { formatBytes, escapeHtml } from './utils.js';
+import { formatBytes, escapeHtml, cleanFileName } from './utils.js';
 import { chatPicker } from './chat-picker.js';
 
 let _cinemaVideos = [];
@@ -183,24 +183,16 @@ export function renderCinemaGrid(videos) {
     card.className = 'cinema-hub-card';
     card.id = `videoCard_${idx}`;
 
-    let resLabel = '';
-    if (v.width && v.height) {
-      if (v.width >= 3840 || v.height >= 2160) resLabel = '4K';
-      else if (v.width >= 1920 || v.height >= 1080) resLabel = '1080p';
-      else if (v.width >= 1280 || v.height >= 720) resLabel = '720p';
-      else if (v.height > 0) resLabel = `${v.height}p`;
-    }
-
+    const cleanTitle = cleanFileName(v.filename) || v.filename;
     const durationStr = v.duration ? _formatDuration(v.duration) : '';
     const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
 
     card.innerHTML = `
       <div class="cinema-hub-thumb" title="Click to stream in VLC Player">
         ${v.has_thumb
-          ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(v.filename)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
+          ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
           : `<div class="cinema-hub-thumb-fallback">🎬</div>`
         }
-        ${resLabel ? `<span class="video-res-pill">${resLabel}</span>` : ''}
         ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ''}
         <div class="cinema-hub-play-overlay">
           <div class="cinema-hub-play-btn">
@@ -209,7 +201,7 @@ export function renderCinemaGrid(videos) {
         </div>
       </div>
       <div class="cinema-hub-meta">
-        <span class="cinema-hub-title" title="${escapeHtml(v.filename)}">${escapeHtml(v.filename)}</span>
+        <span class="cinema-hub-title" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
         <div class="cinema-hub-sub">
           <span>${formatBytes(v.file_size)}</span>
           <span>•</span>

@@ -64,41 +64,70 @@ def send_desktop_notification(
 
 
 # ────────────────────────────────────────────────────────
-#  Filename Cleaning & Formatting
+#  Filename Cleaning & Formatting (Scrapes Watermarks, Channels & URLs)
 # ────────────────────────────────────────────────────────
+_WATERMARK_WORDS = [
+    'tamilmovoo', 'tamildbox', 'tamilblasters', 'tamilmv', '1tamilmv',
+    'tamilyogi', 'moviesda', 'bollyflix', 'katmovie', 'vegamovies',
+    'rarbg', 'yify', 'psa', 'pahe', 'tn69', 'cinemavilla', 'isaimini',
+    'movies4u', 'cinemahub', 'tamilrockers', 'movierulz', 'cinevood',
+    'worldfree4u', 'khatrimaza', 'filmyzilla', '9xmovies', 'extramovies'
+]
 _NOISE_RE = re.compile(
-    r"[\._\-\s]+("
-    r"hdrip|bdrip|bluray|blu-ray|webrip|web-dl|web|hdtv|dvdrip|hq"
-    r"|x264|x265|hevc|avc|xvid|divx"
-    r"|aac|ac3|eac3|dd\d|dts|atmos|mp3"
-    r"|esub|subs?|sub"
-    r"|multi|dual|hindi|tamil|telugu|english|dubbed"
-    r"|\@[\w]+"
-    r")(?=[\._\-\s]|$)",
+    r'\b(2160p?|4k|uhd|1080p?|720p?|480p?|360p?|1p|hdrip|bdrip|bluray|blu-ray|webrip|web-dl|web|hdtv|dvdrip|hq|'
+    r'x264|x265|hevc|avc|xvid|divx|10bit|8bit|'
+    r'aac|ac3|eac3|ddp?\d?|dts|atmos|mp3|'
+    r'esub|esubs|subrip|subs?|sub|'
+    r'multi|dual|hindi|tamil|telugu|kannada|malayalam|english|dubbed)\b',
     re.IGNORECASE,
 )
-_RES_RE = re.compile(r"(2160p?|4k|uhd|1080p?|720p?|480p?|360p?)", re.IGNORECASE)
 
 def auto_rename(raw: str) -> str:
-    """Cleans up messy Telegram filenames."""
+    """Cleans up messy Telegram filenames by scraping URLs, @handles, channel tags and noise."""
+    if not raw:
+        return ""
     name, ext = os.path.splitext(raw)
-    res_match = _RES_RE.search(name)
-    resolution = res_match.group(1).upper() if res_match else ""
-    cleaned = _NOISE_RE.sub(" ", name)
-    cleaned = re.sub(r"[._-]+", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    year_match = re.search(r"\b(19\d\d|20\d\d)\b", cleaned)
-    year = year_match.group(1) if year_match else ""
-    if year:
-        title_part = cleaned[: cleaned.find(year) + 4].strip()
-    else:
-        title_part = cleaned
-    parts = [title_part]
-    if resolution and resolution not in title_part.upper():
-        parts.append(f"[{resolution}]")
-    result = " ".join(p for p in parts if p).strip()
-    result = re.sub(r'[/\\:*?"<>|]', "", result)
-    return f"{result}{ext}" if result else raw
+
+    # 1. Strip URLs & site domains
+    name = re.sub(r'https?://\S+', ' ', name, flags=re.IGNORECASE)
+    name = re.sub(r'\b(?:t|telegram)\.me/[\w\+\-_/]+', ' ', name, flags=re.IGNORECASE)
+    name = re.sub(r'\b(?:www\.[a-z0-9\.\-_]+|[a-z0-9\.\-_]+\.(?:com|org|net|in|yt|vip|me|to|is|cx|ms|li|co|cc|ws|site|xyz|online|live|tv))\b', ' ', name, flags=re.IGNORECASE)
+
+    # 2. Convert underscores and dots to spaces
+    name = re.sub(r'[\._]+', ' ', name)
+
+    # 3. Strip @ handles (e.g. @channel or @user)
+    name = re.sub(r'@\S+', ' ', name)
+
+    # 4. Strip bracketed prefixes
+    name = re.sub(r'^[\[\{][^\]\}]+[\]\}]\s*', ' ', name)
+
+    # 5. Remove known site/channel watermark keywords
+    name = re.sub(r'\b(?:' + '|'.join(_WATERMARK_WORDS) + r')\b', ' ', name, flags=re.IGNORECASE)
+
+    # 6. Remove media codecs, qualities, audio types
+    name = _NOISE_RE.sub(' ', name)
+
+    # 7. Normalize punctuation and brackets
+    name = re.sub(r'[\/\\:*?\"<>|\[\]\(\)\{\}\-]', ' ', name)
+    name = re.sub(r'\s+', ' ', name).strip()
+
+    # 8. Re-format Year (e.g. 1999, 2024) cleanly into (YYYY)
+    year_match = re.search(r'\b(19\d\d|20\d\d)\b', name)
+    if year_match:
+        year = year_match.group(1)
+        idx = name.find(year)
+        title_part = name[:idx].strip()
+        rest_part = name[idx + len(year):].strip()
+        if title_part and rest_part:
+            name = f'{title_part} ({year}) {rest_part}'
+        elif title_part:
+            name = f'{title_part} ({year})'
+        elif rest_part:
+            name = f'{rest_part} ({year})'
+
+    name = re.sub(r'\s+', ' ', name).strip()
+    return f"{name}{ext}" if name else raw
 
 
 class SnifferService:

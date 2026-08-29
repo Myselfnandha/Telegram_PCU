@@ -145,6 +145,68 @@
     if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt"].includes(ext)) return "document";
     return "document";
   }
+  function cleanFileName(raw) {
+    if (!raw) return "";
+    const lastDot = raw.lastIndexOf(".");
+    const name = lastDot !== -1 ? raw.slice(0, lastDot) : raw;
+    const ext = lastDot !== -1 ? raw.slice(lastDot) : "";
+    let cleaned = name;
+    cleaned = cleaned.replace(/https?:\/\/\S+/gi, " ");
+    cleaned = cleaned.replace(/\b(?:t|telegram)\.me\/[\w\+\-_/]+/gi, " ");
+    cleaned = cleaned.replace(/\b(?:www\.[a-z0-9\.\-_]+|[a-z0-9\.\-_]+\.(?:com|org|net|in|yt|vip|me|to|is|cx|ms|li|co|cc|ws|site|xyz|online|live|tv))\b/gi, " ");
+    cleaned = cleaned.replace(/[\._]+/g, " ");
+    cleaned = cleaned.replace(/@\S+/g, " ");
+    cleaned = cleaned.replace(/^[\[\{][^\]\}]+[\]\}]\s*/g, " ");
+    const watermarks = [
+      "tamilmovoo",
+      "tamildbox",
+      "tamilblasters",
+      "tamilmv",
+      "1tamilmv",
+      "tamilyogi",
+      "moviesda",
+      "bollyflix",
+      "katmovie",
+      "vegamovies",
+      "rarbg",
+      "yify",
+      "psa",
+      "pahe",
+      "tn69",
+      "cinemavilla",
+      "isaimini",
+      "movies4u",
+      "cinemahub",
+      "tamilrockers",
+      "movierulz",
+      "cinevood",
+      "worldfree4u",
+      "khatrimaza",
+      "filmyzilla",
+      "9xmovies",
+      "extramovies"
+    ];
+    cleaned = cleaned.replace(new RegExp(`\\b(?:${watermarks.join("|")})\\b`, "gi"), " ");
+    cleaned = cleaned.replace(/\b(2160p?|4k|uhd|1080p?|720p?|480p?|360p?|1p|hdrip|bdrip|bluray|blu-ray|webrip|web-dl|web|hdtv|dvdrip|hq|x264|x265|hevc|avc|xvid|divx|10bit|8bit|aac|ac3|eac3|ddp?\d?|dts|atmos|mp3|esub|esubs|subrip|subs?|sub|multi|dual|hindi|tamil|telugu|kannada|malayalam|english|dubbed)\b/gi, " ");
+    cleaned = cleaned.replace(/[\/\\:*?"<>|\[\]\(\)\{\}\-]/g, " ");
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+    const yearMatch = cleaned.match(/\b(19\d\d|20\d\d)\b/);
+    if (yearMatch) {
+      const year = yearMatch[1];
+      const idx = cleaned.indexOf(year);
+      const titlePart = cleaned.slice(0, idx).trim();
+      const restPart = cleaned.slice(idx + year.length).trim();
+      if (titlePart && restPart) {
+        cleaned = `${titlePart} (${year}) ${restPart}`;
+      } else if (titlePart) {
+        cleaned = `${titlePart} (${year})`;
+      } else if (restPart) {
+        cleaned = `${restPart} (${year})`;
+      }
+    }
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+    return cleaned ? `${cleaned}${ext}` : raw;
+  }
 
   // frontend/js/chat-picker.js
   var ChatPicker = class {
@@ -1949,13 +2011,13 @@
       this._attachFeedCardListeners(card);
     }
     _renderFeedCardHtml(item) {
+      const cleanName = cleanFileName(item.filename) || item.filename;
       return `
       <div class="feed-card" data-chat="${item.chat_id}" data-msg="${item.message_id}" data-url="${item.download_url}">
         <div class="feed-card-left">
-          <div class="feed-filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</div>
+          <div class="feed-filename" title="${escapeHtml(cleanName)}">${escapeHtml(cleanName)}</div>
           <div class="feed-meta">
             <span style="color: var(--accent-secondary); font-weight: 600;">${escapeHtml(item.size_formatted)}</span>
-            <span style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;">${escapeHtml(item.quality)}</span>
             <span>Manager: <b>${escapeHtml(item.manager)}</b></span>
             <span class="${item.status === "dispatched" ? "badge-status-online" : "badge-status-offline"}">${escapeHtml(item.status.toUpperCase())}</span>
           </div>
@@ -2402,19 +2464,12 @@
       const card = document.createElement("div");
       card.className = "cinema-hub-card";
       card.id = `videoCard_${idx}`;
-      let resLabel = "";
-      if (v.width && v.height) {
-        if (v.width >= 3840 || v.height >= 2160) resLabel = "4K";
-        else if (v.width >= 1920 || v.height >= 1080) resLabel = "1080p";
-        else if (v.width >= 1280 || v.height >= 720) resLabel = "720p";
-        else if (v.height > 0) resLabel = `${v.height}p`;
-      }
+      const cleanTitle = cleanFileName(v.filename) || v.filename;
       const durationStr = v.duration ? _formatDuration(v.duration) : "";
       const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
       card.innerHTML = `
       <div class="cinema-hub-thumb" title="Click to stream in VLC Player">
-        ${v.has_thumb ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(v.filename)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
-        ${resLabel ? `<span class="video-res-pill">${resLabel}</span>` : ""}
+        ${v.has_thumb ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="${escapeHtml(cleanTitle)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
         ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ""}
         <div class="cinema-hub-play-overlay">
           <div class="cinema-hub-play-btn">
@@ -2423,7 +2478,7 @@
         </div>
       </div>
       <div class="cinema-hub-meta">
-        <span class="cinema-hub-title" title="${escapeHtml(v.filename)}">${escapeHtml(v.filename)}</span>
+        <span class="cinema-hub-title" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
         <div class="cinema-hub-sub">
           <span>${formatBytes(v.file_size)}</span>
           <span>\u2022</span>
