@@ -119,7 +119,7 @@ async def lifespan(app: FastAPI):
             # Preload user dialogs
             asyncio.create_task(preload_chats())
         else:
-            logger.warning("Telegram client is NOT authorized yet. Run 'python setup_auth.py' or enter credentials in Web Settings.")
+            logger.info("Telegram client is not authorized yet. Log in via setup_auth.py or Web Settings.")
     except Exception as e:
         logger.warning(f"Could not auto-start Telegram client: {e}")
 
