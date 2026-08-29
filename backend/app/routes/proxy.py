@@ -508,8 +508,13 @@ async def probe_media_streams(chat_id: str, message_id: int):
 _SUBTITLE_CACHE = {}
 
 @router.get("/api/media/subtitles/{chat_id}/{message_id}/{sub_index}.vtt")
-async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int):
-    """Extracts embedded subtitle track and converts to WebVTT."""
+@router.get("/api/media/subtitles/{chat_id}/{message_id}/{sub_index}.srt")
+async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int, request: Request):
+    """Extracts embedded SSA/ASS/SubRip subtitle track and converts to standard WebVTT or SRT."""
+    is_srt = request.url.path.endswith(".srt")
+    fmt = "srt" if is_srt else "webvtt"
+    media_type = "text/plain; charset=utf-8" if is_srt else "text/vtt; charset=utf-8"
+
     clean_chat_id: Union[int, str] = chat_id
     if chat_id != "me":
         try:
@@ -517,9 +522,9 @@ async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int):
         except ValueError:
             clean_chat_id = chat_id
 
-    cache_key = (clean_chat_id, message_id, sub_index)
+    cache_key = (clean_chat_id, message_id, sub_index, fmt)
     if cache_key in _SUBTITLE_CACHE:
-        return Response(content=_SUBTITLE_CACHE[cache_key], media_type="text/vtt")
+        return Response(content=_SUBTITLE_CACHE[cache_key], media_type=media_type)
 
     client = await TelegramClientManager.get_client()
     if not client or not client.is_connected():
@@ -536,7 +541,7 @@ async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int):
     try:
         async for chunk in client.iter_download(message.media, request_size=256*1024, chunk_size=256*1024):
             sub_buffer.extend(chunk)
-            if len(sub_buffer) >= 1500 * 1024:
+            if len(sub_buffer) >= 2000 * 1024:
                 break
     except Exception:
         pass
@@ -546,8 +551,9 @@ async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int):
         "-hide_banner",
         "-loglevel", "error",
         "-i", "pipe:0",
-        "-map", f"0:s:{sub_index}",
-        "-f", "webvtt",
+        "-map", f"0:s:{sub_index}?",
+        "-c:s", "subrip" if is_srt else "webvtt",
+        "-f", fmt,
         "pipe:1"
     ]
     try:
@@ -558,13 +564,14 @@ async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int):
             stderr=asyncio.subprocess.PIPE
         )
         stdout_data, _ = await proc.communicate(input=bytes(sub_buffer))
-        if not stdout_data or not stdout_data.startswith(b"WEBVTT"):
-            stdout_data = b"WEBVTT\n\n1\n00:00:01.000 --> 00:00:05.000\n[Subtitles Active]\n"
+        if not stdout_data:
+            stdout_data = b"1\n00:00:01,000 --> 00:00:05,000\n[Subtitles Active]\n" if is_srt else b"WEBVTT\n\n1\n00:00:01.000 --> 00:00:05.000\n[Subtitles Active]\n"
         _SUBTITLE_CACHE[cache_key] = stdout_data
-        return Response(content=stdout_data, media_type="text/vtt")
+        return Response(content=stdout_data, media_type=media_type)
     except Exception as e:
-        logger.warning(f"Subtitle extraction notice: {e}")
-        return Response(content=b"WEBVTT\n\n", media_type="text/vtt")
+        logger.warning(f"Subtitle conversion notice: {e}")
+        fallback = b"" if is_srt else b"WEBVTT\n\n"
+        return Response(content=fallback, media_type=media_type)
 
 
 @router.get("/dl/{chat_id}/{message_id}/thumb")
@@ -796,25 +803,42 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
     elif raw_url and raw_url.startswith("/"):
         raw_url = f"http://127.0.0.1:{PROXY_PORT}{raw_url}"
 
+    target_player = payload.get("player", "vlc")
     vlc_bin = shutil.which("vlc") or "/usr/bin/vlc"
-    if not os.path.exists(vlc_bin):
-        mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
-        if os.path.exists(mpv_bin):
-            vlc_bin = mpv_bin
+    mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
+
+    chosen_bin = None
+    if target_player == "mpv" and os.path.exists(mpv_bin):
+        chosen_bin = mpv_bin
+    elif os.path.exists(vlc_bin):
+        chosen_bin = vlc_bin
+    elif os.path.exists(mpv_bin):
+        chosen_bin = mpv_bin
 
     launched = False
-    if os.path.exists(vlc_bin):
+    player_name = "vlc"
+    if chosen_bin:
         try:
-            subprocess.Popen(
-                [vlc_bin, raw_url, "--network-caching=3000"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
+            if "mpv" in chosen_bin:
+                player_name = "mpv"
+                subprocess.Popen(
+                    [chosen_bin, raw_url, "--cache=yes", "--demuxer-max-bytes=64M"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+            else:
+                player_name = "vlc"
+                subprocess.Popen(
+                    [chosen_bin, raw_url, "--network-caching=3000", "--no-qt-error-dialogs", "--quiet"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
             launched = True
-            logger.info(f"Launched VLC player for stream: {raw_url}")
+            logger.info(f"Launched {player_name.upper()} player for stream: {raw_url}")
         except Exception as e:
-            logger.warning(f"Could not launch VLC subprocess: {e}")
+            logger.warning(f"Could not launch media player subprocess: {e}")
 
     import urllib.parse
     encoded_file = urllib.parse.quote(f"{filename}.m3u")

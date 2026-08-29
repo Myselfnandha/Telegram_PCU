@@ -285,8 +285,9 @@ function _filterCinemaGrid(query) {
   renderCinemaGrid(filtered);
 }
 
-export async function playInVlc(v) {
-  showToast(`🎬 Launching VLC for "${v.filename}"...`, 'info');
+export async function playInVlc(v, playerType = 'auto') {
+  const isMpv = playerType === 'mpv';
+  showToast(`🎬 Launching ${isMpv ? 'MPV' : 'VLC'} for "${v.filename}"...`, 'info');
   try {
     const resp = await fetch('/api/media/vlc/play', {
       method: 'POST',
@@ -295,12 +296,13 @@ export async function playInVlc(v) {
         chat_id: v.chat_id,
         message_id: v.message_id,
         filename: v.filename,
-        stream_url: v.stream_url
+        stream_url: v.stream_url,
+        player: playerType
       })
     });
     const data = await resp.json();
     if (data.launched) {
-      showToast(`🎬 VLC Media Player streaming "${v.filename}"!`, 'success');
+      showToast(`🎬 Media Player streaming "${v.filename}"!`, 'success');
     } else if (data.playlist_url) {
       const a = document.createElement('a');
       a.href = data.playlist_url;
@@ -308,10 +310,10 @@ export async function playInVlc(v) {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      showToast('🎬 Opening VLC via .m3u stream playlist...', 'success');
+      showToast('🎬 Opening stream via .m3u playlist...', 'success');
     }
   } catch (e) {
-    showToast(`VLC launch notice: ${e.message}`, 'warning');
+    showToast(`Player launch notice: ${e.message}`, 'warning');
   }
 }
 
