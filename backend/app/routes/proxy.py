@@ -16,8 +16,55 @@ logger = logging.getLogger("proxy_route")
 router = APIRouter(tags=["proxy"])
 
 _MESSAGE_CACHE = {}
+_ACTIVE_PREFETCH_TASKS: Dict[Tuple[str, int], asyncio.Task] = {}
 
-from app.services.stream_cache import stream_cache_service
+from app.services.stream_cache import stream_cache_service, BLOCK_SIZE
+
+
+async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id: int, file_size: int, filename: str, start_block: int = 0):
+    """
+    Background worker that continuously downloads all subsequent non-watched 10MB chunk blocks
+    into local discrete block parts until the entire video is cached on local disk.
+    """
+    total_blocks = (file_size + BLOCK_SIZE - 1) // BLOCK_SIZE
+    try:
+        sequence = list(range(start_block, total_blocks)) + list(range(0, start_block))
+
+        for block_idx in sequence:
+            block_start = block_idx * BLOCK_SIZE
+            block_end = min(file_size - 1, (block_idx + 1) * BLOCK_SIZE - 1)
+            block_len = block_end - block_start + 1
+
+            if stream_cache_service.has_block(chat_id, message_id, block_idx, block_len):
+                continue
+
+            chunks = []
+            async for raw in client.iter_download(
+                message.media,
+                offset=block_start,
+                limit=block_len,
+                request_size=min(512 * 1024, block_len),
+                chunk_size=min(512 * 1024, block_len),
+            ):
+                if raw:
+                    chunks.append(raw)
+
+            block_bytes = b"".join(chunks)
+            if len(block_bytes) == block_len:
+                stream_cache_service.save_block(chat_id, message_id, block_idx, block_bytes)
+                logger.debug(f"[Continuous Prefetcher] Cached block {block_idx}/{total_blocks-1} for {filename}")
+
+            await asyncio.sleep(0.04)  # Prioritize active playback stream
+
+        # Merge blocks if all are present
+        stream_cache_service.merge_blocks_if_complete(chat_id, message_id, file_size, filename)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.debug(f"Continuous prefetcher notice for {filename}: {e}")
+    finally:
+        _ACTIVE_PREFETCH_TASKS.pop((str(chat_id), message_id), None)
+
 
 def compute_dynamic_align_unit(file_size: int, start: int, length: int, user_agent: str = "") -> int:
     """
@@ -45,17 +92,27 @@ def compute_dynamic_align_unit(file_size: int, start: int, length: int, user_age
 
 @router.get("/dl/{chat_id}/{message_id}")
 @router.get("/dl/{chat_id}/{message_id}/{filename}")
-async def handle_proxy_download(chat_id: str, message_id: int, request: Request, filename: Optional[str] = None):
+async def handle_proxy_download(
+    chat_id: str,
+    message_id: int,
+    request: Request,
+    filename: Optional[str] = None
+):
     """
-    High-Speed HTTP Streaming Proxy with Zero-Lag Local Cache & Range Resumption.
-    If media is cached on local disk, serves instantly in <1ms (HTTP 206 Partial Content).
-    Otherwise streams from Telegram MTProto while caching in background.
+    Streaming proxy endpoint that fetches data dynamically from Telegram MTProto
+    and pipes it directly to the client (VLC, browser, or download manager).
+    Supports HTTP Range requests (seeking/resuming) and real-time caching.
     """
-    client = await TelegramClientManager.get_client()
-    if not client or not client.is_connected():
-        raise HTTPException(status_code=503, detail="Telegram client is not connected.")
+    try:
+        client = await TelegramClientManager.get_client()
+        if not client or not client.is_connected() or not await client.is_user_authorized():
+            raise HTTPException(status_code=401, detail="Telegram client not authorized.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Could not get Telegram client: {e}")
+        raise HTTPException(status_code=500, detail=f"Telegram client error: {str(e)}")
 
-    # Parse numeric or entity chat_id
     clean_chat_id: Union[int, str] = chat_id
     if chat_id != "me":
         try:
@@ -151,11 +208,61 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
             headers=headers
         )
 
-    # Stream directly from MTProto with high-throughput in-memory lookahead (zero disk cache footprint)
+    # 2. Launch Continuous Background Prefetcher for non-watched blocks
+    curr_block = start // BLOCK_SIZE
+    task_key = (str(chat_id), message_id)
+    if task_key not in _ACTIVE_PREFETCH_TASKS or _ACTIVE_PREFETCH_TASKS[task_key].done():
+        _ACTIVE_PREFETCH_TASKS[task_key] = asyncio.create_task(
+            _prefetch_non_watched_blocks(client, message, str(chat_id), message_id, file_size, clean_name, curr_block)
+        )
+
+    # 3. Check if the requested range can be served directly from discrete block parts on disk (<0.1ms)
+    start_block = start // BLOCK_SIZE
+    end_block = end // BLOCK_SIZE
+    all_blocks_present = True
+    for b_idx in range(start_block, end_block + 1):
+        b_len = min(BLOCK_SIZE, file_size - (b_idx * BLOCK_SIZE))
+        if not stream_cache_service.has_block(str(chat_id), message_id, b_idx, b_len):
+            all_blocks_present = False
+            break
+
+    if all_blocks_present:
+        async def block_streamer():
+            curr_pos = start
+            bytes_left = length
+            while bytes_left > 0:
+                b_idx = curr_pos // BLOCK_SIZE
+                offset_in_b = curr_pos % BLOCK_SIZE
+                b_len = min(BLOCK_SIZE, file_size - (b_idx * BLOCK_SIZE))
+                read_len = min(bytes_left, b_len - offset_in_b)
+                data = stream_cache_service.read_block_slice(str(chat_id), message_id, b_idx, offset_in_b, read_len)
+                if not data:
+                    break
+                yield data
+                bytes_left -= len(data)
+                curr_pos += len(data)
+                await asyncio.sleep(0)
+
+        return StreamingResponse(
+            block_streamer(),
+            status_code=status_code,
+            headers=headers
+        )
+
+    # 4. Otherwise stream from MTProto and buffer in background
+    cache_path = stream_cache_service.get_cache_path(str(chat_id), message_id, clean_name)
+    part_path = cache_path.with_suffix(".part")
+
     async def stream_generator():
         bytes_written = 0
+        cache_f = None
+        if start == 0 and not cache_path.exists():
+            try:
+                cache_f = open(part_path, "wb")
+            except Exception:
+                pass
 
-        # High-throughput asynchronous in-memory MTProto lookahead queue (16MB buffer)
+        # High-throughput asynchronous MTProto chunk lookahead queue (16MB buffer)
         chunk_queue = asyncio.Queue(maxsize=16)
         producer_done = asyncio.Event()
 
@@ -193,12 +300,24 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
                 if len(chunk) > remaining:
                     chunk = chunk[:remaining]
 
+                if cache_f:
+                    try:
+                        cache_f.write(chunk)
+                    except Exception:
+                        pass
+
                 yield chunk
                 bytes_written += len(chunk)
                 await asyncio.sleep(0)
                 if bytes_written >= length:
                     break
 
+            if cache_f:
+                cache_f.close()
+                cache_f = None
+                if bytes_written == file_size:
+                    part_path.rename(cache_path)
+                    stream_cache_service.evict_if_needed()
         except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError):
             logger.debug(f"Client disconnected during streaming of {clean_name}")
         except Exception as err:
@@ -206,6 +325,11 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
         finally:
             if not prod_task.done():
                 prod_task.cancel()
+            if cache_f:
+                try:
+                    cache_f.close()
+                except Exception:
+                    pass
 
     return StreamingResponse(
         stream_generator(),
