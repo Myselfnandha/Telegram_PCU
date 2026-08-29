@@ -595,9 +595,24 @@ async def get_stream_subtitles(chat_id: str, message_id: int, sub_index: int, re
         return Response(content=fallback, media_type=media_type)
 
 
+_THUMB_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/thumbs")
+_PREVIEW_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/previews")
+os.makedirs(_THUMB_CACHE_DIR, exist_ok=True)
+os.makedirs(_PREVIEW_CACHE_DIR, exist_ok=True)
+
+
 @router.get("/dl/{chat_id}/{message_id}/thumb")
 async def get_media_thumbnail(chat_id: str, message_id: int):
     """Fetches and caches the preview thumbnail for a Telegram video/document."""
+    cache_file = os.path.join(_THUMB_CACHE_DIR, f"{chat_id}_{message_id}.jpg")
+    if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
+        with open(cache_file, "rb") as f:
+            return Response(
+                content=f.read(),
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=86400, immutable"}
+            )
+
     client = await TelegramClientManager.get_client()
     if not client or not client.is_connected():
         raise HTTPException(status_code=503, detail="Telegram client is not connected.")
@@ -618,9 +633,29 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
             raise HTTPException(status_code=404, detail="Media not found.")
 
         # Download thumbnail into memory buffer
-        thumb_bytes = await client.download_media(message.media, thumb=-1, file=bytes)
+        thumb_bytes = None
+        doc = getattr(message.media, "document", None) or (message.media if hasattr(message.media, "thumbs") else None)
+        if doc and getattr(doc, "thumbs", None):
+            try:
+                thumb_bytes = await client.download_media(doc.thumbs[-1], file=bytes)
+            except Exception:
+                pass
+
+        if not thumb_bytes:
+            try:
+                thumb_bytes = await client.download_media(message.media, thumb=-1, file=bytes)
+            except Exception:
+                pass
+
         if not thumb_bytes:
             raise HTTPException(status_code=404, detail="No thumbnail available for this media.")
+
+        # Save to disk cache
+        try:
+            with open(cache_file, "wb") as f:
+                f.write(thumb_bytes)
+        except Exception:
+            pass
 
         return Response(
             content=thumb_bytes,
@@ -632,6 +667,59 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
     except Exception as e:
         logger.warning(f"Failed to fetch thumbnail for {chat_id}/{message_id}: {e}")
         raise HTTPException(status_code=404, detail="Failed to load thumbnail.")
+
+
+@router.get("/api/media/preview/{chat_id}/{message_id}/{frame_idx}")
+async def get_media_preview_frame(chat_id: str, message_id: int, frame_idx: int = 0):
+    """
+    Generates or serves a keyframe preview snapshot (0 to 4) for YouTube/Netflix-style hover scrubbing.
+    """
+    frame_idx = max(0, min(4, frame_idx))
+    cache_file = os.path.join(_PREVIEW_CACHE_DIR, f"{chat_id}_{message_id}_f{frame_idx}.jpg")
+    
+    if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
+        with open(cache_file, "rb") as f:
+            return Response(
+                content=f.read(),
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=86400, immutable"}
+            )
+
+    # If stream file is cached locally in stream_cache, extract directly
+    local_cached = stream_cache_service.get_cached_file(chat_id, message_id)
+    input_source = str(local_cached) if local_cached and local_cached.exists() else f"http://127.0.0.1:8088/dl/{chat_id}/{message_id}"
+    
+    # Calculate seek percentage: 0 -> 10%, 1 -> 30%, 2 -> 50%, 3 -> 70%, 4 -> 90%
+    ratios = [0.10, 0.30, 0.50, 0.70, 0.90]
+    ratio = ratios[frame_idx]
+
+    try:
+        # Seek estimated duration or fallback to 15s * frame_idx
+        seek_sec = max(5, int(ratio * 300))
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(seek_sec),
+            "-i", input_source,
+            "-vframes", "1",
+            "-q:v", "4",
+            "-vf", "scale=320:-1",
+            cache_file
+        ]
+        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        await asyncio.wait_for(proc.wait(), timeout=3.5)
+
+        if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
+            with open(cache_file, "rb") as f:
+                return Response(
+                    content=f.read(),
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=86400, immutable"}
+                )
+    except Exception as e:
+        logger.debug(f"Frame extraction skipped for {chat_id}/{message_id}: {e}")
+
+    # Fallback to standard thumbnail
+    return await get_media_thumbnail(chat_id, message_id)
 
 
 @router.get("/api/media/videos/{chat_id}")

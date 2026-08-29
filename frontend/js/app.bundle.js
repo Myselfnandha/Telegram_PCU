@@ -2438,7 +2438,6 @@
       const chipId = c.getAttribute("data-chat-id");
       c.classList.toggle("active", chipId == chat.id);
     });
-    showToast2(`\u{1F3AC} Loaded archive: "${chat.name}"`, "info");
     loadCinemaVideos(_currentChatId);
   }
   async function _loadCinemaWatchedChips() {
@@ -2511,6 +2510,48 @@
     }
   }
   window._reloadCinema = () => loadCinemaVideos(_currentChatId);
+  function _attachHoverScrubber(containerEl, videoItem) {
+    if (!containerEl || !videoItem) return;
+    let hoverTimer = null;
+    let currentFrame = 0;
+    const totalFrames = 5;
+    containerEl.addEventListener("mouseenter", () => {
+      let imgEl = containerEl.querySelector("img");
+      const originalSrc = imgEl ? imgEl.src : null;
+      currentFrame = 0;
+      hoverTimer = setInterval(() => {
+        currentFrame = (currentFrame + 1) % totalFrames;
+        const previewUrl = `/api/media/preview/${encodeURIComponent(videoItem.chat_id)}/${videoItem.message_id}/${currentFrame}`;
+        const nextImg = new Image();
+        nextImg.onload = () => {
+          if (hoverTimer) {
+            if (!imgEl) {
+              const fallback = containerEl.querySelector(".cinema-hub-thumb-fallback, .series-thumb-fallback");
+              if (fallback) fallback.style.display = "none";
+              imgEl = document.createElement("img");
+              imgEl.className = "video-thumb-img";
+              imgEl.alt = "";
+              containerEl.prepend(imgEl);
+            }
+            imgEl.src = previewUrl;
+            imgEl.style.display = "block";
+          }
+        };
+        nextImg.src = previewUrl;
+      }, 420);
+      const onLeave = () => {
+        if (hoverTimer) {
+          clearInterval(hoverTimer);
+          hoverTimer = null;
+        }
+        containerEl.removeEventListener("mouseleave", onLeave);
+        if (imgEl && originalSrc) {
+          imgEl.src = originalSrc;
+        }
+      };
+      containerEl.addEventListener("mouseleave", onLeave);
+    });
+  }
   function _extractSeriesInfo(filename) {
     const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
     const clean = cleanFileName(filename, channelContext) || filename;
@@ -2647,7 +2688,7 @@
           showCard.innerHTML = `
           <div class="series-showcase-hero">
             <div class="series-showcase-poster">
-              ${show.leadThumb ? `<img src="${show.leadThumb}" alt="" loading="lazy" onerror="this.remove()">` : `<div class="series-thumb-fallback">\u{1F3AC}</div>`}
+              ${show.leadThumb ? `<img src="${show.leadThumb}" class="series-poster-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'series-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="series-thumb-fallback">\u{1F3AC}</div>`}
             </div>
             <div class="series-showcase-info">
               <div class="series-showcase-tags">
@@ -2704,8 +2745,8 @@
                 const dur = ep.duration ? _formatDuration(ep.duration) : "";
                 return `
                 <div class="series-ep-card" data-ep-idx="${epIdx}">
-                  <div class="series-ep-thumb" title="Click to stream in VLC">
-                    ${ep.has_thumb ? `<img src="${ep.thumb_url}" alt="" loading="lazy" onerror="this.remove()">` : `<div class="series-thumb-fallback">\u{1F3AC}</div>`}
+                  <div class="series-ep-thumb" title="Hover to preview frames, Click to stream in VLC">
+                    ${ep.has_thumb ? `<img src="${ep.thumb_url}" class="ep-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'series-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="series-thumb-fallback">\u{1F3AC}</div>`}
                     <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
                     ${dur ? `<span class="video-duration-pill">${dur}</span>` : ""}
                   </div>
@@ -2727,8 +2768,9 @@
               track.querySelectorAll(".series-ep-card").forEach((epCard, idx) => {
                 const ep = episodes[idx];
                 const epThumb = epCard.querySelector(".series-ep-thumb");
+                const epImg = epCard.querySelector(".ep-thumb-img");
                 const epVlc = epCard.querySelector(".btn-ep-vlc");
-                const epFdm = epCard.querySelector(".btn-ep-fdm");
+                if (epThumb) _attachHoverScrubber(epThumb, ep);
                 if (epThumb) epThumb.addEventListener("click", () => playInVlc(ep, "auto", epCard));
                 if (epVlc) epVlc.addEventListener("click", () => playInVlc(ep, "auto", epCard));
                 if (epFdm) epFdm.addEventListener("click", () => triggerFdm(ep));
@@ -2827,8 +2869,8 @@
       const durationStr = v.duration ? _formatDuration(v.duration) : "";
       const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
       card.innerHTML = `
-      <div class="cinema-hub-thumb" title="Click to stream in VLC Player">
-        ${v.has_thumb ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="" loading="lazy" onerror="this.remove()">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
+      <div class="cinema-hub-thumb" title="Hover to preview frames, Click to stream in VLC">
+        ${v.has_thumb ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
         ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ""}
       </div>
       <div class="cinema-hub-meta">
@@ -2858,6 +2900,7 @@
     `;
       const thumbEl = card.querySelector(".cinema-hub-thumb");
       const vlcBtn = card.querySelector(".btn-card-vlc");
+      if (thumbEl) _attachHoverScrubber(thumbEl, v);
       if (thumbEl) thumbEl.addEventListener("click", () => playInVlc(v, "auto", card));
       if (vlcBtn) vlcBtn.addEventListener("click", () => playInVlc(v, "auto", card));
       const fdmBtn = card.querySelector(".btn-card-fdm");
