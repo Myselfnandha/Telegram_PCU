@@ -2056,16 +2056,10 @@ html, body {
   border: 1px solid var(--border-glass);
   overflow: hidden;
   position: relative;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6), 0 0 16px rgba(108, 92, 231, 0.15);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 20px rgba(108, 92, 231, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-glass);
-  overflow: hidden;
-  position: relative;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(108, 92, 231, 0.15);
 }
 
 .cinema-video-element {
@@ -2074,6 +2068,7 @@ html, body {
   object-fit: contain;
   background: #000000;
   outline: none;
+  display: block;
 }
 
 .video-standby-overlay {
@@ -2243,9 +2238,10 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  padding-top: 6px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  padding: 2px 2px 0 2px;
+  flex-shrink: 0;
 }
 
 .shortcut-hints {
