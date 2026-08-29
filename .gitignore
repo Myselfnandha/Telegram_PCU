@@ -44,6 +44,8 @@ backend/temp_uploads/*
 !backend/temp_uploads/.gitkeep
 backend/downloads/*
 !backend/downloads/.gitkeep
+backend/data/stream_cache/*
+!backend/data/stream_cache/.gitkeep
 
 # Operating System & IDE Files
 .DS_Store
