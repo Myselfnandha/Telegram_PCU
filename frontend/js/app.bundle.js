@@ -2568,7 +2568,6 @@
     document.querySelectorAll(".video-card").forEach((c) => c.classList.remove("active"));
     const activeCard = document.getElementById(`videoCard_${idx}`);
     if (activeCard) activeCard.classList.add("active");
-    _probeAndPopulateTracks(v.chat_id, v.message_id);
     const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
     const streamUrl = isMkv && v.stream_transmux_url ? v.stream_transmux_url : v.stream_url;
     videoPlayer.src = streamUrl;
@@ -2578,6 +2577,9 @@
         console.debug("Autoplay notice:", err);
       });
     }
+    setTimeout(() => {
+      _probeAndPopulateTracks(v.chat_id, v.message_id);
+    }, 800);
   }
   async function _probeAndPopulateTracks(chatId, messageId) {
     const audioGroup = document.getElementById("cinemaAudioGroup");

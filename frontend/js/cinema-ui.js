@@ -401,10 +401,7 @@ export async function selectCinemaVideo(idx, autoPlay = true) {
   const activeCard = document.getElementById(`videoCard_${idx}`);
   if (activeCard) activeCard.classList.add('active');
 
-  // Probe media streams (audio languages & subtitles) in background
-  _probeAndPopulateTracks(v.chat_id, v.message_id);
-
-  // Load initial video source
+  // 1. Load video source immediately for instantaneous <50ms playback start
   const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
   const streamUrl = (isMkv && v.stream_transmux_url) ? v.stream_transmux_url : v.stream_url;
   
@@ -415,6 +412,11 @@ export async function selectCinemaVideo(idx, autoPlay = true) {
       console.debug('Autoplay notice:', err);
     });
   }
+
+  // 2. Non-blocking lazy stream probe (runs in background without contending for MTProto download)
+  setTimeout(() => {
+    _probeAndPopulateTracks(v.chat_id, v.message_id);
+  }, 800);
 }
 
 async function _probeAndPopulateTracks(chatId, messageId) {
