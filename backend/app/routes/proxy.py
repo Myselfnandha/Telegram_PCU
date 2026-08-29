@@ -130,7 +130,6 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
 
     async def stream_generator():
         bytes_written = 0
-        first_chunk = True
         cache_f = None
         if start == 0 and not cache_path.exists():
             try:
@@ -138,35 +137,55 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
             except Exception:
                 pass
 
+        # High-throughput asynchronous MTProto chunk lookahead queue (8MB buffer)
+        chunk_queue = asyncio.Queue(maxsize=8)
+        producer_done = asyncio.Event()
+
+        async def _mtproto_producer():
+            try:
+                first_chunk = True
+                async for raw_chunk in client.iter_download(
+                    message.media,
+                    offset=aligned_start,
+                    limit=aligned_limit,
+                    request_size=align_unit,
+                    chunk_size=align_unit,
+                ):
+                    if first_chunk:
+                        first_chunk = False
+                        if discard_bytes > 0:
+                            raw_chunk = raw_chunk[discard_bytes:]
+                    if raw_chunk:
+                        await chunk_queue.put(raw_chunk)
+            except Exception as pe:
+                logger.debug(f"MTProto producer notice: {pe}")
+            finally:
+                producer_done.set()
+                await chunk_queue.put(None)
+
+        prod_task = asyncio.create_task(_mtproto_producer())
+
         try:
-            async for chunk in client.iter_download(
-                message.media,
-                offset=aligned_start,
-                limit=aligned_limit,
-                request_size=align_unit,
-                chunk_size=align_unit,
-            ):
-                if first_chunk:
-                    first_chunk = False
-                    if discard_bytes > 0:
-                        chunk = chunk[discard_bytes:]
+            while True:
+                chunk = await chunk_queue.get()
+                if chunk is None:
+                    break
 
-                if chunk:
-                    remaining = length - bytes_written
-                    if len(chunk) > remaining:
-                        chunk = chunk[:remaining]
-                    
-                    if cache_f:
-                        try:
-                            cache_f.write(chunk)
-                        except Exception:
-                            pass
+                remaining = length - bytes_written
+                if len(chunk) > remaining:
+                    chunk = chunk[:remaining]
 
-                    yield chunk
-                    bytes_written += len(chunk)
-                    await asyncio.sleep(0)
-                    if bytes_written >= length:
-                        break
+                if cache_f:
+                    try:
+                        cache_f.write(chunk)
+                    except Exception:
+                        pass
+
+                yield chunk
+                bytes_written += len(chunk)
+                await asyncio.sleep(0)
+                if bytes_written >= length:
+                    break
 
             if cache_f:
                 cache_f.close()
@@ -179,6 +198,8 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
         except Exception as err:
             logger.warning(f"Error during streaming download: {err}")
         finally:
+            if not prod_task.done():
+                prod_task.cancel()
             if cache_f:
                 try:
                     cache_f.close()
@@ -825,10 +846,14 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                     [
                         chosen_bin,
                         raw_url,
+                        "--hr-seek=yes",
+                        "--hr-seek-framedrop=yes",
                         "--cache=yes",
                         "--cache-pause=no",
-                        "--demuxer-max-bytes=128M",
-                        "--demuxer-readahead-secs=30"
+                        "--demuxer-max-bytes=256M",
+                        "--demuxer-readahead-secs=60",
+                        "--vd-lavc-threads=0",
+                        "--vd-lavc-fast=yes"
                     ],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -840,10 +865,13 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                     [
                         chosen_bin,
                         raw_url,
-                        "--network-caching=350",
-                        "--file-caching=300",
-                        "--live-caching=300",
+                        "--input-fast-seek",
+                        "--avcodec-threads=0",
+                        "--avcodec-skiploopfilter=4",
                         "--avcodec-fast",
+                        "--network-caching=300",
+                        "--file-caching=200",
+                        "--live-caching=200",
                         "--clock-synchro=0",
                         "--no-qt-error-dialogs",
                         "--quiet"
