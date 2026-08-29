@@ -2409,7 +2409,11 @@
     const videoSearch = document.getElementById("cinemaSearchInput");
     const btnRefresh = document.getElementById("btnCinemaRefresh");
     _initCinemaDestinationPicker();
-    await _loadCinemaWatchedChips();
+    try {
+      await _loadCinemaWatchedChips();
+    } catch (chipErr) {
+      console.debug("Watched chips load deferred:", chipErr);
+    }
     if (btnChooseChat) {
       btnChooseChat.addEventListener("click", () => {
         chatPicker.open((selectedChat) => {
@@ -2436,7 +2440,7 @@
       typeEl.textContent = "CLOUD";
       typeEl.className = "chat-type-tag";
     }
-    if (iconEl) iconEl.textContent = "\u2601\uFE0F";
+    if (iconEl) iconEl.innerHTML = '<span style="font-size: 1.15rem;">\u2601\uFE0F</span>';
   }
   function _onCinemaChatSelected(chat) {
     _currentChatId = chat.id;

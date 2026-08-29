@@ -13,7 +13,11 @@ export async function initCinema() {
 
   // 1. Destination Bar & Watched Channels Setup
   _initCinemaDestinationPicker();
-  await _loadCinemaWatchedChips();
+  try {
+    await _loadCinemaWatchedChips();
+  } catch (chipErr) {
+    console.debug('Watched chips load deferred:', chipErr);
+  }
 
   // Change Destination button -> Opens Telegram Chat Modal
   if (btnChooseChat) {
@@ -50,7 +54,7 @@ function _initCinemaDestinationPicker() {
     typeEl.textContent = 'CLOUD';
     typeEl.className = 'chat-type-tag';
   }
-  if (iconEl) iconEl.textContent = '☁️';
+  if (iconEl) iconEl.innerHTML = '<span style="font-size: 1.15rem;">☁️</span>';
 }
 
 function _onCinemaChatSelected(chat) {
