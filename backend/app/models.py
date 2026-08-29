@@ -27,6 +27,7 @@ class ChatItem(BaseModel):
     type: str  # "user", "group", "supergroup", "channel", "saved_messages"
     unread_count: int = 0
     pinned: bool = False
+    photo_url: Optional[str] = None
 
 class UploadHistoryItem(BaseModel):
     id: str

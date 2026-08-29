@@ -289,12 +289,28 @@
     updateTriggerUI(chat) {
       const nameEl = document.getElementById("currentChatName");
       const typeEl = document.getElementById("currentChatType");
+      const avatarWrapper = document.getElementById("currentChatAvatarWrapper");
       if (nameEl && chat) {
         nameEl.textContent = chat.name || "Saved Messages";
       }
       if (typeEl && chat) {
         const typeLabel = chat.type === "saved_messages" ? "CLOUD" : (chat.type || "CHAT").replace("_", " ").toUpperCase();
         typeEl.textContent = typeLabel;
+      }
+      if (avatarWrapper && chat) {
+        if (chat.type === "saved_messages") {
+          avatarWrapper.innerHTML = `
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        `;
+        } else {
+          const initial = (chat.name || "C").charAt(0).toUpperCase();
+          const avatarUrl = `/api/chats/${encodeURIComponent(chat.id)}/avatar`;
+          avatarWrapper.innerHTML = `
+          <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span style=\\'font-weight:700; font-size:1rem; color:var(--accent-secondary);\\'>${escapeHtml(initial)}</span>'">
+        `;
+        }
       }
     }
     async fetchChats(force = false) {
@@ -370,9 +386,12 @@
         const isSelected = this.selectedChat && this.selectedChat.id === c.id;
         const initial = (c.name || "C").charAt(0).toUpperCase();
         const typeLabel = c.type === "saved_messages" ? "Cloud" : c.type.toUpperCase();
+        const avatarContent = c.type === "saved_messages" ? `<span style="font-size: 1.15rem;">\u2601\uFE0F</span>` : `<img src="/api/chats/${encodeURIComponent(c.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span>${escapeHtml(initial)}</span>'">`;
         return `
         <div class="chat-option-item ${isSelected ? "selected" : ""}" data-id="${c.id}">
-          <div class="chat-avatar">${escapeHtml(initial)}</div>
+          <div class="chat-avatar" style="overflow: hidden; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+            ${avatarContent}
+          </div>
           <div class="chat-meta">
             <div class="chat-meta-name">${escapeHtml(c.name)}</div>
             <div class="chat-meta-sub">
@@ -1847,8 +1866,8 @@
         return `
         <div class="chat-option-item ${isWatched ? "selected" : ""}" data-identifier="${escapeHtml(identifier)}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;">
           <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
-            <div class="chat-avatar" style="background: ${avatarBg}; width: 38px; height: 38px; font-size: 1.1rem;">
-              ${icon}
+            <div class="chat-avatar" style="background: ${avatarBg}; width: 38px; height: 38px; font-size: 1.1rem; overflow: hidden; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <img src="/api/chats/${encodeURIComponent(ch.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.outerHTML='<span>${icon}</span>'">
             </div>
             <div class="chat-meta" style="min-width: 0;">
               <div class="chat-meta-name" title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</div>
@@ -2432,7 +2451,12 @@
     }
     if (iconEl) {
       const icons = { saved_messages: "\u2601\uFE0F", user: "\u{1F464}", channel: "\u{1F4E2}", supergroup: "\u{1F465}", group: "\u{1F465}", bot: "\u{1F916}" };
-      iconEl.textContent = icons[chat.type] || "\u{1F4AC}";
+      const defaultIcon = icons[chat.type] || "\u{1F4AC}";
+      if (chat.type === "saved_messages") {
+        iconEl.innerHTML = "\u2601\uFE0F";
+      } else {
+        iconEl.innerHTML = `<img src="/api/chats/${encodeURIComponent(chat.id)}/avatar" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${defaultIcon}</span>'">`;
+      }
     }
     document.querySelectorAll(".cinema-chip").forEach((c) => {
       const chipId = c.getAttribute("data-chat-id");
@@ -2463,7 +2487,10 @@
         chip.className = "cinema-chip";
         chip.setAttribute("data-chat-id", ch.id);
         const icon = ch.type === "channel" ? "\u{1F4E2}" : ch.type === "supergroup" || ch.type === "group" ? "\u{1F465}" : "\u{1F4AC}";
-        chip.innerHTML = `<span>${icon}</span><span>${escapeHtml(ch.name)}</span>`;
+        chip.innerHTML = `
+        <img src="/api/chats/${encodeURIComponent(ch.id)}/avatar" alt="" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${icon}</span>'">
+        <span>${escapeHtml(ch.name)}</span>
+      `;
         chip.addEventListener("click", () => {
           _onCinemaChatSelected({ id: ch.id, name: ch.name, type: ch.type });
         });

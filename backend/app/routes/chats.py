@@ -80,7 +80,8 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
             username=username,
             type=entity_type,
             unread_count=d.unread_count,
-            pinned=bool(d.pinned)
+            pinned=bool(d.pinned),
+            photo_url=f"/api/chats/{d.entity.id}/avatar"
         ))
 
     # 2. Fetch all Telegram Contacts from user address book
@@ -101,7 +102,8 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
                     username=u.username,
                     type="bot" if is_bot else "user",
                     unread_count=0,
-                    pinned=False
+                    pinned=False,
+                    photo_url=f"/api/chats/{u.id}/avatar"
                 ))
     except Exception as contact_err:
         logger.debug(f"Could not fetch contacts list: {contact_err}")
@@ -109,6 +111,62 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
     _chats_cache = result
     _cache_time = time.time()
     return result
+
+
+import os
+from fastapi import Response
+_AVATAR_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/avatars")
+os.makedirs(_AVATAR_CACHE_DIR, exist_ok=True)
+
+
+@router.get("/chats/{chat_id}/avatar")
+async def get_chat_avatar(chat_id: str):
+    """
+    Downloads and caches Telegram channel/group/user profile avatar photo.
+    """
+    cache_file = os.path.join(_AVATAR_CACHE_DIR, f"{chat_id}.jpg")
+    if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
+        with open(cache_file, "rb") as f:
+            return Response(
+                content=f.read(),
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=604800, immutable"}
+            )
+
+    client = await TelegramClientManager.get_client()
+    if not client or not client.is_connected():
+        raise HTTPException(status_code=503, detail="Telegram client not connected")
+
+    try:
+        clean_id: int | str = chat_id
+        if chat_id != "me":
+            try:
+                clean_id = int(chat_id)
+            except ValueError:
+                clean_id = chat_id
+
+        entity = await client.get_entity(clean_id)
+        photo_bytes = await client.download_profile_photo(entity, file=bytes)
+        if not photo_bytes:
+            raise HTTPException(status_code=404, detail="No avatar available for this entity")
+
+        try:
+            with open(cache_file, "wb") as f:
+                f.write(photo_bytes)
+        except Exception:
+            pass
+
+        return Response(
+            content=photo_bytes,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=604800, immutable"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.debug(f"Avatar fetch notice for {chat_id}: {e}")
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
 
 @router.get("/auth/status", response_model=AuthStatus)
 async def check_auth():

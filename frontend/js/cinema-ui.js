@@ -67,7 +67,12 @@ function _onCinemaChatSelected(chat) {
   }
   if (iconEl) {
     const icons = { saved_messages: '☁️', user: '👤', channel: '📢', supergroup: '👥', group: '👥', bot: '🤖' };
-    iconEl.textContent = icons[chat.type] || '💬';
+    const defaultIcon = icons[chat.type] || '💬';
+    if (chat.type === 'saved_messages') {
+      iconEl.innerHTML = '☁️';
+    } else {
+      iconEl.innerHTML = `<img src="/api/chats/${encodeURIComponent(chat.id)}/avatar" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${defaultIcon}</span>'">`;
+    }
   }
 
   // Update active chip highlight
@@ -108,7 +113,10 @@ async function _loadCinemaWatchedChips() {
       chip.className = 'cinema-chip';
       chip.setAttribute('data-chat-id', ch.id);
       const icon = ch.type === 'channel' ? '📢' : (ch.type === 'supergroup' || ch.type === 'group' ? '👥' : '💬');
-      chip.innerHTML = `<span>${icon}</span><span>${escapeHtml(ch.name)}</span>`;
+      chip.innerHTML = `
+        <img src="/api/chats/${encodeURIComponent(ch.id)}/avatar" alt="" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${icon}</span>'">
+        <span>${escapeHtml(ch.name)}</span>
+      `;
       chip.addEventListener('click', () => {
         _onCinemaChatSelected({ id: ch.id, name: ch.name, type: ch.type });
       });

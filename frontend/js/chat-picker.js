@@ -78,12 +78,29 @@ class ChatPicker {
   updateTriggerUI(chat) {
     const nameEl = document.getElementById('currentChatName');
     const typeEl = document.getElementById('currentChatType');
+    const avatarWrapper = document.getElementById('currentChatAvatarWrapper');
+
     if (nameEl && chat) {
       nameEl.textContent = chat.name || 'Saved Messages';
     }
     if (typeEl && chat) {
       const typeLabel = chat.type === 'saved_messages' ? 'CLOUD' : (chat.type || 'CHAT').replace('_', ' ').toUpperCase();
       typeEl.textContent = typeLabel;
+    }
+    if (avatarWrapper && chat) {
+      if (chat.type === 'saved_messages') {
+        avatarWrapper.innerHTML = `
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        `;
+      } else {
+        const initial = (chat.name || 'C').charAt(0).toUpperCase();
+        const avatarUrl = `/api/chats/${encodeURIComponent(chat.id)}/avatar`;
+        avatarWrapper.innerHTML = `
+          <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span style=\\'font-weight:700; font-size:1rem; color:var(--accent-secondary);\\'>${escapeHtml(initial)}</span>'">
+        `;
+      }
     }
   }
 
@@ -171,9 +188,15 @@ class ChatPicker {
       const initial = (c.name || 'C').charAt(0).toUpperCase();
       const typeLabel = c.type === 'saved_messages' ? 'Cloud' : c.type.toUpperCase();
 
+      const avatarContent = c.type === 'saved_messages'
+        ? `<span style="font-size: 1.15rem;">☁️</span>`
+        : `<img src="/api/chats/${encodeURIComponent(c.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span>${escapeHtml(initial)}</span>'">`;
+
       return `
         <div class="chat-option-item ${isSelected ? 'selected' : ''}" data-id="${c.id}">
-          <div class="chat-avatar">${escapeHtml(initial)}</div>
+          <div class="chat-avatar" style="overflow: hidden; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+            ${avatarContent}
+          </div>
           <div class="chat-meta">
             <div class="chat-meta-name">${escapeHtml(c.name)}</div>
             <div class="chat-meta-sub">
