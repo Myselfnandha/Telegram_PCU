@@ -4,7 +4,7 @@ import time
 import logging
 import asyncio
 import email.utils
-from typing import Optional
+from typing import Optional, Dict, Any, List, Union, cast
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from app.telegram_client import TelegramClientManager
@@ -323,6 +323,8 @@ async def handle_transmux_stream(
     feeder_task = asyncio.create_task(feed_stdin())
 
     async def stream_output():
+        if not proc.stdout:
+            return
         total_out = 0
         try:
             while True:
