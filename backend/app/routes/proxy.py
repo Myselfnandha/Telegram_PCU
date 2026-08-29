@@ -26,7 +26,9 @@ async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id
     """
     Background worker that continuously downloads all subsequent non-watched 10MB chunk blocks
     into local discrete block parts until the entire video is cached on local disk.
+    Waits for initial stream playback to start before beginning background downloads.
     """
+    await asyncio.sleep(2.0)  # Prioritize initial player buffer and instant startup
     total_blocks = (file_size + BLOCK_SIZE - 1) // BLOCK_SIZE
     try:
         sequence = list(range(start_block, total_blocks)) + list(range(0, start_block))
@@ -1152,9 +1154,9 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                         "--input-fast-seek",
                         "--avcodec-threads=0",
                         "--avcodec-fast",
-                        "--network-caching=800",
-                        "--file-caching=500",
-                        "--live-caching=500",
+                        "--network-caching=250",
+                        "--file-caching=150",
+                        "--live-caching=150",
                         "--clock-jitter=0",
                         "--no-qt-error-dialogs",
                         "--quiet"
