@@ -1,0 +1,87 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Run Pytest Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Run Test Suite
+        run: |
+          python -m pytest backend/tests -v
+
+  docker-build:
+    name: Build & Verify Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: myselfnandha/tg-power-suite:${{ github.ref_name }}
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [test, docker-build]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for Frontend Bundle Check
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Package Linux Standalone Tarball
+        run: |
+          RELEASE_NAME="tg-power-suite-${{ github.ref_name }}-linux"
+          mkdir -p dist/${RELEASE_NAME}
+          cp -r backend frontend assets linux Dockerfile docker-compose.yml README.md dist/${RELEASE_NAME}/
+          cd dist
+          tar -czvf ${RELEASE_NAME}.tar.gz ${RELEASE_NAME}
+          zip -r ${RELEASE_NAME}.zip ${RELEASE_NAME}
+          cd ..
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "TG Power Suite ${{ github.ref_name }}"
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
