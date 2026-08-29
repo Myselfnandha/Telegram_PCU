@@ -16,8 +16,8 @@
   <link rel="icon" type="image/png" href="/assets/icon-192.png">
 
   <!-- Local Instant Socket.IO Client (Zero CDN Latency) -->
-  <script src="/js/socket.io.min.js?v=2.6.0"></script>
-  <link rel="stylesheet" href="/css/style.css?v=2.6.0">
+  <script src="/js/socket.io.min.js?v=2.8.2"></script>
+  <link rel="stylesheet" href="/css/style.css?v=2.8.2">
   <script>
     // Early instantaneous auth status check & tab switching logic
     window._earlyCheckAuth = function() {
@@ -634,9 +634,33 @@
           </div>
 
           <div class="video-player-container">
-            <video id="cinemaVideoPlayer" controls preload="metadata" playsinline class="cinema-video-element">
+            <div class="video-standby-overlay" id="cinemaPlayerStandbyNotice">
+              <div class="video-standby-card">
+                <div class="standby-icon-glow">🎬</div>
+                <span class="standby-title">Cinema Theater Standby</span>
+                <p class="standby-subtitle">Select any video from the archive on the right to start real-time MTProto streaming</p>
+              </div>
+            </div>
+            <video id="cinemaVideoPlayer" controls preload="metadata" playsinline class="cinema-video-element" style="display: none;">
               Your browser does not support HTML5 video playback.
             </video>
+            <div class="video-error-overlay" id="cinemaPlayerErrorNotice" style="display: none;">
+              <div class="video-error-card glass-panel">
+                <span style="font-size: 2rem; margin-bottom: 4px;">🎬</span>
+                <span style="font-weight: 700; font-size: 1rem; color: #fff;">External Codec Video (.mkv / AC3)</span>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 6px 0 14px 0; max-width: 380px;">
+                  This video format cannot be decoded natively inside browser sandbox. Click below to stream in VLC or download to FDM:
+                </p>
+                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                  <button class="btn-primary" id="btnCinemaFdmFallback" type="button" style="padding: 8px 14px; font-size: 0.82rem;">
+                    🚀 Stream in FDM / VLC
+                  </button>
+                  <button class="btn-secondary" id="btnCinemaCopyFallback" type="button" style="padding: 8px 14px; font-size: 0.82rem;">
+                    📋 Copy Stream URL
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="theater-footer-info">

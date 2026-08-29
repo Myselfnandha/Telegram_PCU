@@ -44,6 +44,31 @@ export async function initCinema() {
     });
   }
 
+  // Video Error & Codec Handling
+  const errorNotice = document.getElementById('cinemaPlayerErrorNotice');
+  const btnFdmFallback = document.getElementById('btnCinemaFdmFallback');
+  const btnCopyFallback = document.getElementById('btnCinemaCopyFallback');
+
+  videoPlayer.addEventListener('error', () => {
+    if (errorNotice) errorNotice.style.display = 'flex';
+  });
+
+  videoPlayer.addEventListener('loadeddata', () => {
+    if (errorNotice) errorNotice.style.display = 'none';
+  });
+
+  videoPlayer.addEventListener('playing', () => {
+    if (errorNotice) errorNotice.style.display = 'none';
+  });
+
+  if (btnFdmFallback) {
+    btnFdmFallback.addEventListener('click', () => btnFdm?.click());
+  }
+
+  if (btnCopyFallback) {
+    btnCopyFallback.addEventListener('click', () => btnCopyStream?.click());
+  }
+
   // Next Track / Auto-Play Next
   if (btnNextTrack) {
     btnNextTrack.addEventListener('click', _playNextVideo);
@@ -178,11 +203,6 @@ export async function loadCinemaVideos(chatId) {
     }
 
     renderCinemaGrid(_cinemaVideos);
-
-    // Auto-select first video if player is idle
-    if (_cinemaVideos.length > 0 && _currentPlayingIndex < 0) {
-      selectCinemaVideo(0, false);
-    }
   } catch (err) {
     grid.innerHTML = `
       <div class="cinema-empty">
@@ -268,10 +288,16 @@ export function selectCinemaVideo(idx, autoPlay = true) {
   const v = _cinemaVideos[idx];
 
   const videoPlayer = document.getElementById('cinemaVideoPlayer');
+  const standbyNotice = document.getElementById('cinemaPlayerStandbyNotice');
+  const errorNotice = document.getElementById('cinemaPlayerErrorNotice');
   const titleElem = document.getElementById('cinemaNowPlayingTitle');
   const resElem = document.getElementById('cinemaNowPlayingRes');
   const sizeElem = document.getElementById('cinemaNowPlayingSize');
   const durElem = document.getElementById('cinemaNowPlayingDur');
+
+  if (standbyNotice) standbyNotice.style.display = 'none';
+  if (errorNotice) errorNotice.style.display = 'none';
+  if (videoPlayer) videoPlayer.style.display = 'block';
 
   if (titleElem) titleElem.textContent = v.filename;
   if (resElem) {

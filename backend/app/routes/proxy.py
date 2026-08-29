@@ -72,9 +72,22 @@ async def handle_proxy_download(chat_id: str, message_id: int, request: Request,
     discard_bytes = start - aligned_start
     aligned_limit = length + discard_bytes
 
+    ext = os.path.splitext(clean_name)[1].lower()
+    content_type = "application/octet-stream"
+    if ext in (".mp4", ".m4v", ".mov"):
+        content_type = "video/mp4"
+    elif ext == ".webm":
+        content_type = "video/webm"
+    elif ext in (".mkv", ".matroska"):
+        content_type = "video/x-matroska"
+    elif ext in (".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wav"):
+        content_type = f"audio/{ext.lstrip('.')}"
+    elif hasattr(message.file, "mime_type") and message.file.mime_type:
+        content_type = message.file.mime_type
+
     headers = {
-        "Content-Type": "application/octet-stream",
-        "Content-Disposition": f'attachment; filename="{clean_name}"',
+        "Content-Type": content_type,
+        "Content-Disposition": f'inline; filename="{clean_name}"',
         "Accept-Ranges": "bytes",
         "Content-Range": f"bytes {start}-{end}/{file_size}",
         "Content-Length": str(length),
