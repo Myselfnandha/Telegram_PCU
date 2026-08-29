@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, List, Union, cast
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from app.telegram_client import TelegramClientManager
+from app.services.account_shield import account_shield
 from app.services.sniffer_service import auto_rename, sniffer_service
 from app.services.manager_detector import trigger_manager, detect_managers
 
@@ -751,17 +752,21 @@ async def get_chat_videos(chat_id: str, limit: int = 50, offset_id: int = 0):
 
         # Fetch both native video messages AND videos sent as documents (MKV, MP4, etc.)
         fetch_limit = max(limit, 80)
-        v_task = client.get_messages(
+        v_task = account_shield.safe_call(
+            client.get_messages,
             clean_chat_id,
             limit=fetch_limit,
             offset_id=offset_id,
-            filter=InputMessagesFilterVideo
+            filter=InputMessagesFilterVideo,
+            context="Fetch Video Messages"
         )
-        d_task = client.get_messages(
+        d_task = account_shield.safe_call(
+            client.get_messages,
             clean_chat_id,
             limit=fetch_limit,
             offset_id=offset_id,
-            filter=InputMessagesFilterDocument
+            filter=InputMessagesFilterDocument,
+            context="Fetch Document Messages"
         )
 
         v_msgs, d_msgs = await asyncio.gather(v_task, d_task, return_exceptions=True)

@@ -40,6 +40,15 @@ class TelegramClientManager:
                         raise ValueError("TG_API_ID and TG_API_HASH must be configured in environment variables.")
 
                     logger.info(f"Initializing Telethon user client with session: {SESSION_FILE_PATH}")
+                    # Enforce strict Linux file permissions on session directory (0o700) and files (0o600)
+                    try:
+                        if SESSION_DIR.exists():
+                            SESSION_DIR.chmod(0o700)
+                        for sf in SESSION_DIR.glob("*.session*"):
+                            sf.chmod(0o600)
+                    except Exception as perm_err:
+                        logger.debug(f"Could not apply session chmod: {perm_err}")
+
                     cls._client = TelegramClient(
                         str(SESSION_FILE_PATH),
                         API_ID,
@@ -128,8 +137,8 @@ class TelegramClientManager:
 
     @classmethod
     async def get_me_info(cls) -> Optional[dict]:
-        """Fetch current authenticated Telegram user info (served from memory cache)."""
-        if cls._cached_me:
+        """Fetch current authenticated Telegram user info (served from memory cache with phone privacy masking)."""
+        if cls._cached_me and "phone" in cls._cached_me:
             return cls._cached_me
         try:
             client = await cls.get_client()
@@ -137,13 +146,19 @@ class TelegramClientManager:
                 return None
             me = await client.get_me()
             full_name = f"{getattr(me, 'first_name', '') or ''} {getattr(me, 'last_name', '') or ''}".strip()
+            raw_phone = getattr(me, "phone", None)
+            masked_phone = None
+            if raw_phone:
+                raw_str = str(raw_phone)
+                masked_phone = f"+{raw_str[:3]}******{raw_str[-4:]}" if len(raw_str) >= 7 else "***"
+
             cls._cached_me = {
                 "id": me.id,
                 "first_name": getattr(me, "first_name", ""),
                 "last_name": getattr(me, "last_name", ""),
                 "name": full_name or getattr(me, "username", "Telegram User"),
                 "username": getattr(me, "username", None),
-                "phone": getattr(me, "phone", None),
+                "phone": masked_phone,
                 "is_bot": getattr(me, "bot", False)
             }
             return cls._cached_me
