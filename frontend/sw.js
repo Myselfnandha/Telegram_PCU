@@ -3,7 +3,7 @@
  * Provides offline shell caching, instant PWA launches, and background update checks.
  */
 
-const CACHE_NAME = 'tg-power-suite-v2.5.0';
+const CACHE_NAME = 'tg-power-suite-v2.8.4';
 const STATIC_ASSETS = [
   '/',
   '/css/style.css',
@@ -37,12 +37,14 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Bypass service worker for dynamic backend APIs, streaming downloads, and Socket.IO
+  // Bypass service worker for dynamic backend APIs, streaming video/audio downloads, and Socket.IO
   if (
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/dl/') ||
+    url.pathname.startsWith('/stream/') ||
     url.pathname.startsWith('/socket.io/') ||
-    event.request.method !== 'GET'
+    event.request.method !== 'GET' ||
+    event.request.headers.has('range')
   ) {
     return;
   }

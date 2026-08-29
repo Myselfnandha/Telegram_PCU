@@ -1140,6 +1140,11 @@
         banner = document.createElement("div");
         banner.id = "networkWatchdogBanner";
         banner.className = "watchdog-banner hidden";
+        banner.title = "Click to test connection and resume immediately";
+        banner.style.cursor = "pointer";
+        banner.addEventListener("click", () => {
+          this._probeAndRecover();
+        });
         document.body.prepend(banner);
       }
       this.bannerElem = banner;
@@ -1154,9 +1159,24 @@
         this._handleOffline();
       });
     }
+    async _probeAndRecover() {
+      try {
+        const res = await fetch("/api/auth/status", { cache: "no-store" });
+        if (res.ok) {
+          this._handleOnline();
+          showToast2("Connection verified active!", "success");
+        }
+      } catch {
+        showToast2("Backend still reconnecting...", "info");
+      }
+    }
     _startHeartbeat() {
       if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = setInterval(async () => {
+        if (navigator.onLine === false) {
+          if (this.isOnline) this._handleOffline("Device Offline");
+          return;
+        }
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 6e3);
@@ -1173,17 +1193,17 @@
             this.consecutiveFailures = 0;
           } else {
             this.consecutiveFailures++;
-            if (this.consecutiveFailures >= 3 && this.isOnline) {
+            if (this.consecutiveFailures >= 4 && this.isOnline) {
               this._handleOffline("Backend Server Unreachable");
             }
           }
         } catch (e) {
           this.consecutiveFailures++;
-          if (this.consecutiveFailures >= 3 && this.isOnline) {
+          if (this.consecutiveFailures >= 4 && this.isOnline) {
             this._handleOffline("Connection Interrupted");
           }
         }
-      }, 5e3);
+      }, 6e3);
     }
     _handleOffline(reason = "Network Offline") {
       this.isOnline = false;
