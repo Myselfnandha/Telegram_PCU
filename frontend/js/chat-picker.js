@@ -111,7 +111,8 @@ class ChatPicker {
     }
   }
 
-  open() {
+  open(customCallback = null) {
+    this.customCallback = customCallback;
     if (!this.modal) return;
     this.modal.classList.add('open');
     if (this.searchInput) {
@@ -137,6 +138,7 @@ class ChatPicker {
   }
 
   close() {
+    this.customCallback = null;
     if (!this.modal) return;
     this.modal.classList.remove('open');
   }
@@ -187,7 +189,13 @@ class ChatPicker {
         const rawId = el.getAttribute('data-id');
         const chat = this.chats.find((c) => String(c.id) === String(rawId));
         if (chat) {
-          this.saveSelection(chat);
+          if (this.customCallback) {
+            const cb = this.customCallback;
+            this.customCallback = null;
+            cb(chat);
+          } else {
+            this.saveSelection(chat);
+          }
           this.close();
         }
       });

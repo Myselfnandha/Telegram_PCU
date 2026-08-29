@@ -1,12 +1,6 @@
-/**
- * Cinema & Real-Time Video Streaming Controller.
- * Powers the dedicated Cinema tab with Channel Media Archive browser,
- * instant HTTP Range streaming playback, multi-audio language switching,
- * WebVTT subtitle extraction, full-duration timeline seeking, and queue auto-advance.
- */
-
 import { showToast } from './ui.js';
-import { formatBytes } from './utils.js';
+import { formatBytes, escapeHtml } from './utils.js';
+import { chatPicker } from './chat-picker.js';
 
 let _cinemaVideos = [];
 let _currentPlayingIndex = -1;
@@ -18,7 +12,7 @@ let _seekBaseOffset = 0;
 let _isScrubbing = false;
 
 export async function initCinema() {
-  const channelSelect = document.getElementById('cinemaChannelSelect');
+  const btnChooseChat = document.getElementById('btnCinemaChooseChat');
   const videoSearch = document.getElementById('cinemaSearchInput');
   const btnRefresh = document.getElementById('btnCinemaRefresh');
   const videoPlayer = document.getElementById('cinemaVideoPlayer');
@@ -29,16 +23,20 @@ export async function initCinema() {
   const subSelect = document.getElementById('cinemaSubtitleSelect');
   const scrubber = document.getElementById('cinemaScrubber');
 
-  if (!channelSelect || !videoPlayer) return;
+  if (!videoPlayer) return;
 
-  // 1. Populate channel dropdown
-  await _loadCinemaChannels();
+  // 1. Destination Bar & Watched Channels Setup
+  _initCinemaDestinationPicker();
+  await _loadCinemaWatchedChips();
 
-  // Channel Change
-  channelSelect.addEventListener('change', (e) => {
-    _currentChatId = e.target.value;
-    loadCinemaVideos(_currentChatId);
-  });
+  // Change Destination button -> Opens Telegram Chat Modal
+  if (btnChooseChat) {
+    btnChooseChat.addEventListener('click', () => {
+      chatPicker.open((selectedChat) => {
+        _onCinemaChatSelected(selectedChat);
+      });
+    });
+  }
 
   // Refresh
   if (btnRefresh) {
@@ -216,31 +214,126 @@ export async function initCinema() {
   loadCinemaVideos('me');
 }
 
-async function _loadCinemaChannels() {
-  const select = document.getElementById('cinemaChannelSelect');
-  if (!select) return;
+function _initCinemaDestinationPicker() {
+  const nameEl = document.getElementById('cinemaCurrentChatName');
+  const typeEl = document.getElementById('cinemaCurrentChatType');
+  const iconEl = document.getElementById('cinemaCurrentChatIcon');
+  
+  if (nameEl) nameEl.textContent = 'Saved Messages (Personal Cloud)';
+  if (typeEl) typeEl.textContent = 'CLOUD';
+  if (iconEl) iconEl.textContent = '☁️';
+}
+
+function _onCinemaChatSelected(chat) {
+  if (!chat) return;
+  _currentChatId = chat.id;
+
+  const nameEl = document.getElementById('cinemaCurrentChatName');
+  const typeEl = document.getElementById('cinemaCurrentChatType');
+  const iconEl = document.getElementById('cinemaCurrentChatIcon');
+
+  let icon = '💬';
+  if (chat.type === 'saved_messages') icon = '☁️';
+  else if (chat.type === 'channel') icon = '📢';
+  else if (chat.type === 'supergroup' || chat.type === 'group') icon = '👥';
+  else if (chat.type === 'bot') icon = '🤖';
+
+  if (iconEl) iconEl.textContent = icon;
+  if (nameEl) nameEl.textContent = chat.name || 'Chat';
+  if (typeEl) {
+    const label = chat.type === 'saved_messages' ? 'CLOUD' : (chat.type || 'CHAT').replace('_', ' ').toUpperCase();
+    typeEl.textContent = label;
+  }
+
+  // Update active chip state
+  const chipContainer = document.getElementById('cinemaWatchedChips');
+  if (chipContainer) {
+    chipContainer.querySelectorAll('.cinema-chip').forEach((el) => {
+      if (el.getAttribute('data-chat-id') === String(chat.id)) {
+        el.classList.add('active');
+      } else {
+        el.classList.remove('active');
+      }
+    });
+  }
+
+  showToast(`🎬 Source Channel: "${chat.name}"`, 'info');
+  loadCinemaVideos(_currentChatId);
+}
+
+async function _loadCinemaWatchedChips() {
+  const chipContainer = document.getElementById('cinemaWatchedChips');
+  if (!chipContainer) return;
+
+  const watchedItems = [
+    { id: 'me', name: 'Saved Messages', type: 'saved_messages' }
+  ];
 
   try {
-    const resp = await fetch('/api/chats');
-    if (!resp.ok) return;
-    const chats = await resp.json();
+    const [chatsResp, snifferResp] = await Promise.allSettled([
+      fetch('/api/chats'),
+      fetch('/api/sniffer/status')
+    ]);
 
-    select.innerHTML = '';
-    chats.forEach((c) => {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      let icon = '💬';
-      if (c.type === 'saved_messages') icon = '☁️';
-      else if (c.type === 'channel') icon = '📢';
-      else if (c.type === 'supergroup' || c.type === 'group') icon = '👥';
-      else if (c.type === 'bot') icon = '🤖';
+    let allChats = [];
+    if (chatsResp.status === 'fulfilled' && chatsResp.value.ok) {
+      allChats = await chatsResp.value.json();
+    }
 
-      opt.textContent = `${icon} ${c.name}`;
-      select.appendChild(opt);
+    let watchedIds = [];
+    if (snifferResp.status === 'fulfilled' && snifferResp.value.ok) {
+      const snifferData = await snifferResp.value.json();
+      watchedIds = snifferData.watched_channels || [];
+    }
+
+    // Add watched channels
+    watchedIds.forEach((wId) => {
+      if (String(wId) === 'me') return;
+      const matched = allChats.find((c) => String(c.id) === String(wId));
+      if (matched) {
+        watchedItems.push(matched);
+      } else {
+        watchedItems.push({ id: wId, name: `Channel ${wId}`, type: 'channel' });
+      }
     });
+
+    // Also add top channels from dialogs
+    allChats.forEach((c) => {
+      if (watchedItems.some((w) => String(w.id) === String(c.id))) return;
+      if (watchedItems.length < 7 && (c.type === 'channel' || c.type === 'supergroup')) {
+        watchedItems.push(c);
+      }
+    });
+
   } catch (err) {
-    console.debug('Error loading cinema channels:', err);
+    console.debug('Error loading watched chips for Cinema:', err);
   }
+
+  chipContainer.innerHTML = watchedItems.map((c) => {
+    const isActive = String(_currentChatId) === String(c.id);
+    let icon = '💬';
+    if (c.type === 'saved_messages') icon = '☁️';
+    else if (c.type === 'channel') icon = '📢';
+    else if (c.type === 'supergroup' || c.type === 'group') icon = '👥';
+
+    return `
+      <button type="button" class="cinema-chip ${isActive ? 'active' : ''}" data-chat-id="${escapeHtml(String(c.id))}" style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: var(--radius-full); font-size: 0.76rem; font-weight: 600; cursor: pointer; white-space: nowrap; border: 1px solid var(--border-glass); background: var(--bg-card); color: var(--text-muted); transition: all 0.2s; flex-shrink: 0;">
+        <span>${icon}</span>
+        <span>${escapeHtml(c.name)}</span>
+      </button>
+    `;
+  }).join('');
+
+  // Attach chip click listeners
+  chipContainer.querySelectorAll('.cinema-chip').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const chatId = btn.getAttribute('data-chat-id');
+      const item = watchedItems.find((w) => String(w.id) === String(chatId));
+      if (item) {
+        _onCinemaChatSelected(item);
+      }
+    });
+  });
 }
 
 export async function loadCinemaVideos(chatId) {

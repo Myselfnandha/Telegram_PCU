@@ -710,19 +710,38 @@
               </button>
             </div>
 
-            <!-- Channel Selector & Live Search -->
-            <div class="archive-controls">
-              <div class="channel-select-wrap">
-                <label for="cinemaChannelSelect" class="archive-label">Source Channel / Chat</label>
-                <select id="cinemaChannelSelect" class="glass-input">
-                  <option value="me">☁️ Saved Messages (Personal Cloud)</option>
-                </select>
+            <!-- Destination Selector Bar (Source Telegram Channel/Chat) -->
+            <div class="destination-bar glass-panel" style="padding: 10px 14px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; width: 100%; box-sizing: border-box;">
+              <div class="dest-info" style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
+                <div class="dest-icon" style="background: rgba(108, 92, 231, 0.15); color: var(--accent-primary); width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                  <span id="cinemaCurrentChatIcon" style="font-size: 1.1rem;">☁️</span>
+                </div>
+                <div class="dest-text" style="min-width: 0; flex: 1;">
+                  <div class="label" style="font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Source Channel / Chat</div>
+                  <div class="target-name" style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px;">
+                    <span id="cinemaCurrentChatName">Saved Messages (Personal Cloud)</span>
+                    <span class="chat-type-tag" id="cinemaCurrentChatType" style="font-size: 0.65rem; padding: 1px 6px;">CLOUD</span>
+                  </div>
+                </div>
               </div>
 
-              <div class="search-input-wrap">
-                <label for="cinemaSearchInput" class="archive-label">Search Videos</label>
-                <input type="text" id="cinemaSearchInput" class="glass-input" placeholder="🔍 Filter video titles...">
-              </div>
+              <button class="btn-choose-chat" id="btnCinemaChooseChat" type="button" style="padding: 6px 12px; font-size: 0.8rem; white-space: nowrap; flex-shrink: 0;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                Change Destination
+              </button>
+            </div>
+
+            <!-- Watched / Recent Channels Quick-Switch Chips -->
+            <div class="cinema-channel-chips" id="cinemaWatchedChips" style="display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px 0; scrollbar-width: none;">
+              <!-- Dynamically populated with Saved Messages and Watched Channels -->
+            </div>
+
+            <!-- Live Search Bar -->
+            <div class="search-input-wrap" style="width: 100%;">
+              <input type="text" id="cinemaSearchInput" class="glass-input" placeholder="🔍 Search video titles in this channel..." style="width: 100%; font-size: 0.85rem; padding: 8px 12px;">
             </div>
           </div>
 
