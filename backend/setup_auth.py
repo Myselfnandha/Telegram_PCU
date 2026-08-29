@@ -58,18 +58,37 @@ async def main():
         print("[ERROR] TG_API_ID must be a valid integer.")
         sys.exit(1)
 
-    session_file = SESSION_DIR / session_name
-    print(f"\n[+] Using session path: {session_file}.session")
+    session_full_path = Path(f"{session_file}.session")
+    if session_full_path.exists():
+        try:
+            os.chmod(session_full_path, 0o600)
+            os.chmod(SESSION_DIR, 0o700)
+        except Exception:
+            pass
 
     client = TelegramClient(str(session_file), api_id, api_hash)
     await client.connect()
 
     if await client.is_user_authorized():
         me = await client.get_me()
-        print("\n[SUCCESS] Already authenticated!")
-        print(f"Logged in as: {me.first_name} {me.last_name or ''} (@{me.username or 'No username'}) [ID: {me.id}]")
-        await client.disconnect()
-        return
+        print("\n" + "=" * 65)
+        print(" [SUCCESS] Already Authenticated!")
+        print(f" User: {me.first_name} {me.last_name or ''}")
+        print(f" Username: @{me.username or 'N/A'}")
+        print(f" User ID: {me.id}")
+        print(f" Session Path: {session_file}.session")
+        print("=" * 65)
+
+        switch_choice = input("\nDo you want to switch account or re-authenticate? (y/N): ").strip().lower()
+        if switch_choice != 'y':
+            print("\n[+] Keeping active session. Start TG Power Suite with: python backend/run.py\n")
+            await client.disconnect()
+            return
+        else:
+            print("\n[!] Logging out of existing session...")
+            await client.log_out()
+            await client.disconnect()
+            await client.connect()
 
     if not phone:
         phone = input("\nEnter your Telegram phone number (with country code, e.g. +1234567890): ").strip()
@@ -123,17 +142,53 @@ async def main():
     print("=" * 65)
     print("\nYou can now start the application by running: python backend/run.py\n")
 
-    env_path = ROOT_DIR / ".env"
+    # Secure session permissions
+    if session_full_path.exists():
+        try:
+            os.chmod(session_full_path, 0o600)
+            os.chmod(SESSION_DIR, 0o700)
+        except Exception:
+            pass
+
+    # Sync .env
+    env_path = SCRIPT_DIR / ".env"
     if not env_path.exists():
-        env_path = SCRIPT_DIR / ".env"
-    if not env_path.exists():
-        with open(env_path, "w") as f:
-            f.write(f"TG_API_ID={api_id}\n")
-            f.write(f"TG_API_HASH={api_hash}\n")
-            f.write(f"TG_PHONE={phone}\n")
-            f.write(f"TG_SESSION_NAME={session_name}\n")
-            f.write("HOST=0.0.0.0\nPORT=8088\n")
-        print(f"[+] Created default .env file at {env_path}")
+        env_path = ROOT_DIR / ".env"
+
+    env_lines = []
+    if env_path.exists():
+        with open(env_path, "r") as f:
+            env_lines = f.readlines()
+
+    keys_to_set = {
+        "TG_API_ID": str(api_id),
+        "TG_API_HASH": api_hash,
+        "TG_PHONE": phone,
+        "TG_SESSION_NAME": session_name,
+        "HOST": "0.0.0.0",
+        "PORT": "8088"
+    }
+
+    new_lines = []
+    seen_keys = set()
+    for line in env_lines:
+        line_clean = line.strip()
+        if "=" in line_clean and not line_clean.startswith("#"):
+            k, _ = line_clean.split("=", 1)
+            k = k.strip()
+            if k in keys_to_set:
+                new_lines.append(f"{k}={keys_to_set[k]}\n")
+                seen_keys.add(k)
+                continue
+        new_lines.append(line)
+
+    for k, v in keys_to_set.items():
+        if k not in seen_keys:
+            new_lines.append(f"{k}={v}\n")
+
+    with open(env_path, "w") as f:
+        f.writelines(new_lines)
+    print(f"[+] Saved credentials and settings to {env_path}")
 
     await client.disconnect()
 
