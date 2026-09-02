@@ -40,8 +40,9 @@ async def main():
 
     api_id_str = os.getenv("TG_API_ID", os.getenv("API_ID", "")).strip()
     api_hash = os.getenv("TG_API_HASH", os.getenv("API_HASH", "")).strip()
-    session_name = os.getenv("TG_SESSION_NAME", "tg_suite_user_session").strip()
+    session_name = os.getenv("TG_SESSION_NAME", "tg_uploader").strip()
     phone = os.getenv("TG_PHONE", os.getenv("PHONE_NUMBER", "")).strip()
+    session_file = SESSION_DIR / session_name
 
     if not api_id_str or not api_hash:
         print("\n[!] Telegram API Credentials not found in environment.")

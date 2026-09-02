@@ -168,6 +168,58 @@ class TelegramClientManager:
             return None
 
     @classmethod
+    async def send_login_code(cls, phone: str) -> dict:
+        """Sends Telegram verification login code to the specified phone number."""
+        client = await cls.get_client()
+        sent_code = await client.send_code_request(phone)
+        return {
+            "phone": phone,
+            "phone_code_hash": sent_code.phone_code_hash,
+            "timeout": getattr(sent_code, "timeout", 60)
+        }
+
+    @classmethod
+    async def sign_in_with_code(cls, phone: str, code: str, phone_code_hash: str) -> dict:
+        """Completes sign-in with phone verification code. Handles 2FA if enabled."""
+        client = await cls.get_client()
+        try:
+            await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
+            cls._cached_me = None
+            me_info = await cls.get_me_info()
+            cls._is_ready = True
+            return {"status": "authorized", "user": me_info}
+        except SessionPasswordNeededError:
+            return {"status": "2fa_required", "message": "Two-Step Verification (2FA) is enabled on this Telegram account."}
+
+    @classmethod
+    async def sign_in_with_2fa(cls, password: str) -> dict:
+        """Completes sign-in with 2FA password."""
+        client = await cls.get_client()
+        await client.sign_in(password=password)
+        cls._cached_me = None
+        me_info = await cls.get_me_info()
+        cls._is_ready = True
+        return {"status": "authorized", "user": me_info}
+
+    @classmethod
+    async def logout(cls) -> dict:
+        """Logs out from Telegram and clears local session."""
+        async with cls._lock:
+            if cls._client and cls._client.is_connected():
+                try:
+                    await cls._client.log_out()
+                except Exception as e:
+                    logger.debug(f"Logout notice: {e}")
+                await cls._client.disconnect()
+            cls._client = None
+            cls._cached_me = None
+            cls._is_ready = False
+            session_file = SESSION_FILE_PATH.with_suffix(".session")
+            if session_file.exists():
+                session_file.unlink(missing_ok=True)
+            return {"status": "logged_out"}
+
+    @classmethod
     async def disconnect(cls):
         """Cleanly disconnect all clients on shutdown."""
         async with cls._lock:

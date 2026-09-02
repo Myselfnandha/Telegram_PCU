@@ -14,31 +14,10 @@ import { snifferUI } from './sniffer-ui.js';
 import { settingsUI } from './settings-ui.js';
 import { telemetryController } from './telemetry.js';
 import { initCinema } from './cinema-ui.js';
+import { authUI } from './auth-ui.js';
 
 async function checkAuthStatus() {
-  const badge = document.getElementById('authStatusBadge');
-  const userText = document.getElementById('authUserName');
-  if (!badge || !userText) return;
-
-  try {
-    const res = await fetch('/api/auth/status');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    if (data.authenticated) {
-      badge.classList.add('authorized');
-      const name = data.first_name || 'Authorized';
-      const handle = data.username ? ` (@${data.username})` : '';
-      userText.textContent = `${name}${handle}`;
-    } else {
-      badge.classList.remove('authorized');
-      userText.textContent = 'Not Authorized (Run setup_auth.py)';
-    }
-  } catch (e) {
-    console.debug('Auth check status notice:', e);
-    badge.classList.remove('authorized');
-    userText.textContent = 'Backend Offline';
-  }
+  return authUI.checkStatus();
 }
 
 function setupDragAndDrop() {
@@ -197,6 +176,13 @@ function initApp() {
     });
   } catch (e) {
     console.error('Chat picker error:', e);
+  }
+
+  // Initialize Web Interactive Auth UI
+  try {
+    authUI.init();
+  } catch (e) {
+    console.error('Auth UI error:', e);
   }
 
   // Initialize Sniffer UI

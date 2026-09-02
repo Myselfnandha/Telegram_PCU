@@ -168,6 +168,21 @@ async def get_chat_avatar(chat_id: str):
         raise HTTPException(status_code=404, detail="Avatar not found")
 
 
+from pydantic import BaseModel
+import asyncio
+
+class SendCodeRequest(BaseModel):
+    phone: str
+
+class SignInRequest(BaseModel):
+    phone: str
+    code: str
+    phone_code_hash: str
+
+class Password2FARequest(BaseModel):
+    password: str
+
+
 @router.get("/auth/status", response_model=AuthStatus)
 async def check_auth():
     """Returns the current Telegram MTProto authentication status."""
@@ -190,6 +205,71 @@ async def check_auth():
     except Exception as e:
         logger.error(f"Auth check failed: {e}")
         return AuthStatus(authenticated=False, error=str(e))
+
+
+@router.post("/auth/send-code")
+async def send_auth_code(payload: SendCodeRequest):
+    """Sends Telegram MTProto login code to the specified phone number."""
+    phone = payload.phone.strip()
+    if not phone.startswith("+"):
+        phone = f"+{phone}"
+    try:
+        res = await TelegramClientManager.send_login_code(phone)
+        return {"success": True, **res}
+    except Exception as e:
+        logger.error(f"Failed to send login code to {phone}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/auth/sign-in")
+async def sign_in_code(payload: SignInRequest):
+    """Verifies Telegram login code and signs into session."""
+    try:
+        res = await TelegramClientManager.sign_in_with_code(
+            phone=payload.phone.strip(),
+            code=payload.code.strip(),
+            phone_code_hash=payload.phone_code_hash.strip()
+        )
+        if res.get("status") == "authorized":
+            asyncio.create_task(preload_chats())
+            try:
+                from app.services.sniffer_service import sniffer_service
+                client = await TelegramClientManager.get_client()
+                sniffer_service.attach_to_client(client)
+            except Exception:
+                pass
+        return res
+    except Exception as e:
+        logger.error(f"Sign-in with code failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/auth/2fa")
+async def sign_in_2fa(payload: Password2FARequest):
+    """Verifies 2FA password and finalizes login."""
+    try:
+        res = await TelegramClientManager.sign_in_with_2fa(password=payload.password.strip())
+        if res.get("status") == "authorized":
+            asyncio.create_task(preload_chats())
+            try:
+                from app.services.sniffer_service import sniffer_service
+                client = await TelegramClientManager.get_client()
+                sniffer_service.attach_to_client(client)
+            except Exception:
+                pass
+        return res
+    except Exception as e:
+        logger.error(f"2FA sign-in failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/auth/logout")
+async def logout_telegram():
+    """Logs out of Telegram MTProto."""
+    global _chats_cache, _cache_time
+    _chats_cache = []
+    _cache_time = 0
+    return await TelegramClientManager.logout()
 
 
 @router.get("/chats", response_model=List[ChatItem])
