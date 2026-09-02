@@ -5,6 +5,7 @@ import logging
 import asyncio
 import email.utils
 from typing import Optional, Dict, Any, List, Union, cast
+from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from app.telegram_client import TelegramClientManager
@@ -19,6 +20,9 @@ _MESSAGE_CACHE = {}
 
 from app.services.stream_cache import stream_cache_service, BLOCK_SIZE
 from app.services.fast_stream_engine import fast_stream_engine
+from app.services.subtitle_service import subtitle_service
+from app.services.playback_tracker import playback_tracker
+from app.services.stream_saver import stream_saver_service
 from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_videos_db
 
 
@@ -1166,24 +1170,48 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
     launched = False
     player_name = "vlc"
     desktop_env = get_desktop_env()
+
+    # Query subtitle file and resume progress
+    sub_file = None
+    resume_sec = 0
+    try:
+        sub_file = await subtitle_service.get_or_download_subtitle(filename)
+    except Exception as se:
+        logger.debug(f"Subtitle fetch error: {se}")
+
+    if chat_id and message_id:
+        try:
+            prog = playback_tracker.get_playback_progress(str(chat_id), message_id)
+            if prog and prog.get("progress_percent", 0) < 95.0:
+                resume_sec = max(0, int(prog.get("last_position_seconds", 0)))
+        except Exception as pe:
+            logger.debug(f"Progress check notice: {pe}")
+
     if chosen_bin:
         try:
             if "mpv" in chosen_bin:
                 player_name = "mpv"
+                mpv_cmd = [
+                    chosen_bin,
+                    raw_url,
+                    "--hr-seek=yes",
+                    "--hr-seek-framedrop=yes",
+                    "--cache=yes",
+                    "--cache-pause=no",
+                    "--cache-secs=45",
+                    "--demuxer-max-bytes=256M",
+                    "--demuxer-readahead-secs=60",
+                    "--vd-lavc-threads=0",
+                    "--vd-lavc-fast=yes"
+                ]
+                if sub_file and sub_file.exists():
+                    mpv_cmd.append(f"--sub-file={str(sub_file)}")
+                if resume_sec > 10:
+                    mpv_cmd.append(f"--start={resume_sec}")
+                    logger.info(f"Resuming {filename} at {resume_sec}s in MPV")
+
                 subprocess.Popen(
-                    [
-                        chosen_bin,
-                        raw_url,
-                        "--hr-seek=yes",
-                        "--hr-seek-framedrop=yes",
-                        "--cache=yes",
-                        "--cache-pause=no",
-                        "--cache-secs=45",
-                        "--demuxer-max-bytes=256M",
-                        "--demuxer-readahead-secs=60",
-                        "--vd-lavc-threads=0",
-                        "--vd-lavc-fast=yes"
-                    ],
+                    mpv_cmd,
                     env=desktop_env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -1191,19 +1219,26 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                 )
             else:
                 player_name = "vlc"
+                vlc_cmd = [
+                    chosen_bin,
+                    raw_url,
+                    "--no-qt-privacy-ask",
+                    "--no-qt-error-dialogs",
+                    "--avcodec-threads=0",
+                    "--avcodec-fast",
+                    "--network-caching=300",
+                    "--file-caching=300",
+                    "--live-caching=300",
+                    "--clock-jitter=0"
+                ]
+                if sub_file and sub_file.exists():
+                    vlc_cmd.append(f"--sub-file={str(sub_file)}")
+                if resume_sec > 10:
+                    vlc_cmd.append(f"--start-time={resume_sec}")
+                    logger.info(f"Resuming {filename} at {resume_sec}s in VLC")
+
                 subprocess.Popen(
-                    [
-                        chosen_bin,
-                        raw_url,
-                        "--no-qt-privacy-ask",
-                        "--no-qt-error-dialogs",
-                        "--avcodec-threads=0",
-                        "--avcodec-fast",
-                        "--network-caching=300",
-                        "--file-caching=300",
-                        "--live-caching=300",
-                        "--clock-jitter=0"
-                    ],
+                    vlc_cmd,
                     env=desktop_env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -1220,6 +1255,8 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
         "success": True,
         "launched": launched,
         "stream_url": raw_url,
+        "has_subtitles": bool(sub_file and sub_file.exists()),
+        "resume_seconds": resume_sec,
         "playlist_url": f"/api/media/vlc/playlist/{chat_id}/{message_id}/{encoded_file}"
     }
 
@@ -1379,3 +1416,62 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
             "Content-Type": "audio/x-mpegurl; charset=utf-8"
         }
     )
+
+
+@router.get("/api/media/continue_watching")
+async def get_continue_watching():
+    """Returns list of recently watched media ready for 1-click resume."""
+    return playback_tracker.get_continue_watching(limit=12)
+
+
+@router.delete("/api/media/continue_watching/{chat_id}/{message_id}")
+async def dismiss_continue_watching(chat_id: str, message_id: int):
+    """Dismisses an item from continue watching."""
+    playback_tracker.remove_progress(chat_id, message_id)
+    return {"success": True, "dismissed": f"{chat_id}_{message_id}"}
+
+
+class PlaybackProgressPayload(BaseModel):
+    chat_id: str
+    message_id: int
+    filename: str
+    position_seconds: float
+    duration_seconds: float
+    thumbnail_url: Optional[str] = None
+
+
+@router.post("/api/media/playback_progress")
+async def update_playback_progress_api(payload: PlaybackProgressPayload):
+    """Updates watch progress for a video."""
+    playback_tracker.update_progress(
+        chat_id=payload.chat_id,
+        message_id=payload.message_id,
+        filename=payload.filename,
+        last_position_seconds=payload.position_seconds,
+        duration_seconds=payload.duration_seconds,
+        thumbnail_url=payload.thumbnail_url
+    )
+    return {"status": "ok"}
+
+
+class OfflineSaverPayload(BaseModel):
+    enabled: bool
+
+
+@router.get("/api/settings/offline_saver")
+async def get_offline_saver_settings():
+    return {
+        "enabled": stream_saver_service.is_enabled,
+        "library_dir": str(stream_saver_service._library_dir)
+    }
+
+
+@router.post("/api/settings/offline_saver")
+async def set_offline_saver_settings(payload: OfflineSaverPayload):
+    stream_saver_service.set_enabled(payload.enabled)
+    return {
+        "status": "ok",
+        "enabled": stream_saver_service.is_enabled,
+        "library_dir": str(stream_saver_service._library_dir)
+    }
+

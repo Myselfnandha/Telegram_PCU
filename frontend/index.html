@@ -682,8 +682,12 @@
                 style="width: 100%; font-size: 0.85rem; padding: 8px 14px;">
             </div>
 
-            <!-- Total count & Refresh -->
+            <!-- Total count, Offline Save Toggle & Refresh -->
             <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+              <button class="btn-secondary offline-saver-pill" id="btnToggleOfflineSaver" type="button"
+                style="padding: 6px 12px; font-size: 0.82rem;" title="Auto-save streamed videos into ~/Videos/Telegram_Cinema">
+                💾 Auto-Save: <span id="offlineSaverStateLabel">Off</span>
+              </button>
               <span class="count-badge" id="cinemaVideoCount" style="padding: 6px 12px; font-size: 0.82rem;">0
                 Videos</span>
               <button class="btn-secondary" id="btnCinemaRefresh" type="button"
@@ -697,6 +701,19 @@
           <div class="cinema-channel-chips" id="cinemaWatchedChips"
             style="display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; scrollbar-width: none;">
             <!-- Dynamically populated with Saved Messages and Watched Channels -->
+          </div>
+
+          <!-- Netflix-Style Continue Watching Section -->
+          <div class="continue-watching-section" id="continueWatchingSection" style="display: none; margin-top: 8px;">
+            <div class="continue-watching-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <span class="continue-watching-title" style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                <span>🍿</span> Continue Watching
+              </span>
+              <span class="count-badge" id="continueWatchingCount" style="background: rgba(253, 121, 168, 0.2); color: #fd79a8; font-size: 0.76rem;">0 In Progress</span>
+            </div>
+            <div class="continue-watching-carousel" id="continueWatchingCarousel">
+              <!-- Dynamically populated via cinema-ui.js -->
+            </div>
           </div>
         </div>
 

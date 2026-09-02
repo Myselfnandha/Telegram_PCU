@@ -10,6 +10,8 @@ export async function initCinema() {
   const btnChooseChat = document.getElementById('btnCinemaChooseChat');
   const videoSearch = document.getElementById('cinemaSearchInput');
   const btnRefresh = document.getElementById('btnCinemaRefresh');
+  const btnToggleOfflineSaver = document.getElementById('btnToggleOfflineSaver');
+  const offlineSaverStateLabel = document.getElementById('offlineSaverStateLabel');
 
   // 1. Destination Bar & Watched Channels Setup
   _initCinemaDestinationPicker();
@@ -18,6 +20,43 @@ export async function initCinema() {
   } catch (chipErr) {
     console.debug('Watched chips load deferred:', chipErr);
   }
+
+  // 2. Offline Library Saver Toggle Setup
+  if (btnToggleOfflineSaver) {
+    fetch('/api/settings/offline_saver')
+      .then((r) => r.json())
+      .then((data) => {
+        if (offlineSaverStateLabel) offlineSaverStateLabel.textContent = data.enabled ? 'On' : 'Off';
+        btnToggleOfflineSaver.classList.toggle('active', Boolean(data.enabled));
+      })
+      .catch(() => {});
+
+    btnToggleOfflineSaver.addEventListener('click', async () => {
+      const isCurrentlyActive = btnToggleOfflineSaver.classList.contains('active');
+      const nextState = !isCurrentlyActive;
+      try {
+        const resp = await fetch('/api/settings/offline_saver', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: nextState })
+        });
+        const data = await resp.json();
+        if (offlineSaverStateLabel) offlineSaverStateLabel.textContent = data.enabled ? 'On' : 'Off';
+        btnToggleOfflineSaver.classList.toggle('active', Boolean(data.enabled));
+        showToast(
+          data.enabled
+            ? '💾 Stream-to-Disk Auto-Saver Active: Full videos will save to ~/Videos/Telegram_Cinema'
+            : '💾 Stream-to-Disk Auto-Saver Disabled',
+          'info'
+        );
+      } catch (e) {
+        showToast('Could not toggle offline saver', 'warning');
+      }
+    });
+  }
+
+  // 3. Load Continue Watching Row
+  loadContinueWatching();
 
   // Change Destination button -> Opens Telegram Chat Modal
   if (btnChooseChat) {
@@ -30,7 +69,10 @@ export async function initCinema() {
 
   // Refresh
   if (btnRefresh) {
-    btnRefresh.addEventListener('click', () => loadCinemaVideos(_currentChatId, true));
+    btnRefresh.addEventListener('click', () => {
+      loadCinemaVideos(_currentChatId, true);
+      loadContinueWatching();
+    });
   }
 
   // Search Filter
@@ -789,7 +831,15 @@ export async function playInVlc(v, playerType = 'auto', element = null) {
     });
     const data = await resp.json();
     if (data.launched) {
-      showToast(`🎬 Streaming "${v.filename}" in VLC Player!`, 'success');
+      let msg = `🎬 Streaming "${v.filename}" in VLC!`;
+      if (data.resume_seconds > 0) {
+        msg += ` (Resumed at ${_formatDuration(data.resume_seconds)})`;
+      }
+      if (data.has_subtitles) {
+        msg += ` 📝 Subtitles auto-loaded!`;
+      }
+      showToast(msg, 'success');
+      setTimeout(() => loadContinueWatching(), 1500);
     } else if (data.playlist_url) {
       const a = document.createElement('a');
       a.href = data.playlist_url;
@@ -801,6 +851,100 @@ export async function playInVlc(v, playerType = 'auto', element = null) {
     }
   } catch (e) {
     showToast(`Player launch error: ${e.message}`, 'warning');
+  }
+}
+
+export async function loadContinueWatching() {
+  const section = document.getElementById('continueWatchingSection');
+  const countBadge = document.getElementById('continueWatchingCount');
+  const carousel = document.getElementById('continueWatchingCarousel');
+
+  if (!section || !carousel) return;
+
+  try {
+    const resp = await fetch('/api/media/continue_watching');
+    if (!resp.ok) return;
+    const items = await resp.json();
+
+    if (!Array.isArray(items) || items.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    if (countBadge) countBadge.textContent = `${items.length} In Progress`;
+    carousel.innerHTML = '';
+
+    items.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = 'continue-card glass-panel';
+
+      const progressPct = Math.min(100, Math.max(2, Math.round(item.progress_percent || 0)));
+      const remSec = Math.max(0, (item.duration_seconds || 0) - (item.last_position_seconds || 0));
+      const remMins = Math.max(1, Math.round(remSec / 60));
+      const remLabel = remMins > 60 ? `${Math.floor(remMins / 60)}h ${remMins % 60}m left` : `${remMins}m left`;
+      const resumePos = _formatDuration(item.last_position_seconds);
+
+      const thumbUrl = item.thumbnail_url || `/api/media/preview/${encodeURIComponent(item.chat_id)}/${item.message_id}/0`;
+
+      card.innerHTML = `
+        <div class="continue-thumb-wrap">
+          <img class="continue-thumb-img" src="${thumbUrl}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="continue-thumb-fallback" style="display: none;">🍿</div>
+          <div class="continue-rem-badge">${remLabel}</div>
+          <button class="continue-dismiss-btn" title="Remove from Continue Watching" type="button">✕</button>
+          <div class="continue-progress-track">
+            <div class="continue-progress-bar" style="width: ${progressPct}%;"></div>
+          </div>
+        </div>
+        <div class="continue-info">
+          <div class="continue-title" title="${escapeHtml(item.display_title || item.filename)}">
+            ${escapeHtml(item.display_title || item.filename)}
+          </div>
+          <div class="continue-actions">
+            <button class="btn-primary btn-continue-resume" type="button">
+              <span>▶</span><span>Resume at ${resumePos}</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Click Resume
+      const resumeBtn = card.querySelector('.btn-continue-resume');
+      const thumbWrap = card.querySelector('.continue-thumb-wrap');
+      const videoObj = {
+        chat_id: item.chat_id,
+        message_id: item.message_id,
+        filename: item.filename,
+        stream_url: `/dl/${item.chat_id}/${item.message_id}/${encodeURIComponent(item.filename)}`
+      };
+
+      if (resumeBtn) resumeBtn.addEventListener('click', () => playInVlc(videoObj, 'auto', card));
+      if (thumbWrap) thumbWrap.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('continue-dismiss-btn')) {
+          playInVlc(videoObj, 'auto', card);
+        }
+      });
+
+      // Click Dismiss
+      const dismissBtn = card.querySelector('.continue-dismiss-btn');
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.9)';
+          setTimeout(() => card.remove(), 250);
+          try {
+            await fetch(`/api/media/continue_watching/${encodeURIComponent(item.chat_id)}/${item.message_id}`, { method: 'DELETE' });
+            loadContinueWatching();
+          } catch (err) {}
+        });
+      }
+
+      carousel.appendChild(card);
+    });
+  } catch (e) {
+    console.debug('Continue watching load notice:', e);
   }
 }
 
@@ -829,3 +973,4 @@ function _formatDuration(seconds) {
   }
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
+
