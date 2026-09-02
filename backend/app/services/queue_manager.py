@@ -287,6 +287,7 @@ class QueueManager:
                 logger.debug(f"Error notifying progress: {e}")
 
     async def _worker_loop(self, worker_id: int):
+        from app.services.rate_governor import rate_governor
         logger.debug(f"Worker {worker_id} ready.")
         while self._is_running:
             try:
@@ -299,6 +300,9 @@ class QueueManager:
                 self.queue.task_done()
                 self._notify_update(item)
                 continue
+
+            # Check if Telegram FloodWait cooldown is active
+            await rate_governor.wait_if_cooling_down()
 
             # If Night Mode is enabled and we are outside the night window, wait gracefully
             while self._is_running and self.night_mode.enabled and not self.night_mode.is_in_night_window():
@@ -436,6 +440,14 @@ class QueueManager:
             item.uploaded_bytes = total_file_bytes
             item.completed_at = time.time()
             self._notify_update(item)
+
+            # Notify folder watcher if this was a watched sync file
+            try:
+                from app.services.folder_watcher import folder_watcher
+                first_msg_id = item.message_ids[0] if item.message_ids else 0
+                folder_watcher.on_file_uploaded(str(item.file_path), str(item.chat_id), first_msg_id)
+            except Exception as we:
+                logger.debug(f"Folder watcher notify notice: {we}")
 
         finally:
             # Guarantee safe cleanup of uploaded source temp file

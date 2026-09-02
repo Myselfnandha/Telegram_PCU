@@ -151,6 +151,18 @@
       </div>
     </header>
 
+    <!-- Floating FloodWait Adaptive Cooldown Banner -->
+    <div id="floodWaitBanner" class="floodwait-banner glass-panel" style="display: none;">
+      <div class="floodwait-content">
+        <span class="flood-pulse-dot"></span>
+        <span class="floodwait-icon">⏳</span>
+        <div class="floodwait-text">
+          <strong id="floodWaitTitle">Telegram MTProto Cooldown Active</strong>
+          <span id="floodWaitDesc" class="floodwait-sub">Paused transfers safely • Auto-resuming in <span id="floodWaitSeconds" class="flood-countdown">0s</span>...</span>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB 1: UPLOADER (Exact original layout & components preserved) -->
     <div class="tab-pane active" id="tabPaneUploader">
       <!-- Main 2-Column Responsive Workspace Layout -->
@@ -629,6 +641,65 @@
                     <option value="immediate">Immediate on Completion</option>
                   </select>
                   <span class="field-hint">Purge completed tasks from active queue</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Card 4: Auto-Directory Watcher & Background Backup Sync -->
+          <section class="glass-panel settings-card settings-card-wide">
+            <div class="settings-card-header" style="flex-wrap: wrap; gap: 10px;">
+              <span class="settings-card-icon">📁</span>
+              <div style="flex: 1; min-width: 200px;">
+                <h3 class="settings-card-title">Auto-Directory Watcher & Backup Sync</h3>
+                <p class="settings-card-desc">Monitors local folders and automatically turbo-uploads new files to Telegram in the background</p>
+              </div>
+              <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+                <span class="count-badge" id="watcherSyncedBadge" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); font-size: 0.78rem;">0 Files Synced</span>
+                <button id="btnWatcherScanNow" class="btn-secondary" type="button" style="padding: 5px 12px; font-size: 0.78rem;">
+                  🔄 Sync Now
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-card-body">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="setWatchDir">Watched Directory Path</label>
+                  <div style="display: flex; gap: 6px;">
+                    <input type="text" id="setWatchDir" class="glass-input" placeholder="~/Downloads/Telegram_Sync" style="flex: 1;">
+                    <button id="btnResetWatchDir" class="btn-secondary" type="button" style="padding: 0 10px; font-size: 0.75rem;" title="Reset to Default">Default</button>
+                  </div>
+                  <span class="field-hint">Any new files placed in this folder will be auto-uploaded</span>
+                </div>
+                <div class="form-group">
+                  <label for="setWatchChat">Target Telegram Destination</label>
+                  <input type="text" id="setWatchChat" class="glass-input" placeholder="me (Saved Messages)" value="me">
+                  <span class="field-hint">Target chat ID, @username, or 'me' for Personal Cloud</span>
+                </div>
+              </div>
+
+              <div class="form-row-2" style="margin-top: 10px; align-items: center;">
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                  <label class="switch" style="margin-bottom: 0;">
+                    <input type="checkbox" id="chkWatcherEnabled">
+                    <span class="slider"></span>
+                  </label>
+                  <div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">Enable Background Folder Watcher</div>
+                    <span class="field-hint">Autonomously runs in background daemon</span>
+                  </div>
+                </div>
+
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                  <label class="switch" style="margin-bottom: 0;">
+                    <input type="checkbox" id="chkDeleteAfterUpload">
+                    <span class="slider"></span>
+                  </label>
+                  <div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">Delete Local File After Upload</div>
+                    <span class="field-hint">Auto-cleans local disk space upon verified Telegram delivery</span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -2957,3 +2957,75 @@ html, body {
   filter: brightness(1.12);
   transform: scale(1.02);
 }
+
+/* ==========================================================================
+   FloodWait Adaptive Cooldown Floating Banner
+   ========================================================================== */
+
+.floodwait-banner {
+  margin: 10px 0 16px 0;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba(255, 121, 63, 0.15) 0%, rgba(225, 112, 85, 0.22) 100%);
+  border: 1px solid rgba(255, 121, 63, 0.45);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(225, 112, 85, 0.25);
+  animation: slideInDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.floodwait-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.flood-pulse-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff793f;
+  box-shadow: 0 0 12px #ff793f;
+  animation: pulse-ring 1.2s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+.floodwait-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.floodwait-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.floodwait-text strong {
+  font-size: 0.92rem;
+  color: #fab1a0;
+  font-weight: 700;
+}
+
+.floodwait-sub {
+  font-size: 0.8rem;
+  color: var(--text-main);
+}
+
+.flood-countdown {
+  font-weight: 800;
+  color: #ff7675;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

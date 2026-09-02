@@ -555,10 +555,142 @@ function initApp() {
     });
   }
 
+  // Initialize Auto-Directory Watcher Settings & FloodWait Monitor
+  _initWatcherControls();
+  _initFloodWaitMonitor();
+
   window.addEventListener('appinstalled', () => {
     if (btnPwaInstall) btnPwaInstall.style.display = 'none';
     showToast('Welcome to TG Power Suite Desktop App!', 'success');
   });
+}
+
+function _initWatcherControls() {
+  const chkEnabled = document.getElementById('chkWatcherEnabled');
+  const chkDelete = document.getElementById('chkDeleteAfterUpload');
+  const txtWatchDir = document.getElementById('setWatchDir');
+  const txtWatchChat = document.getElementById('setWatchChat');
+  const btnScanNow = document.getElementById('btnWatcherScanNow');
+  const btnResetDir = document.getElementById('btnResetWatchDir');
+  const badgeSynced = document.getElementById('watcherSyncedBadge');
+
+  const _loadWatcherStatus = () => {
+    fetch('/api/watcher/status')
+      .then((r) => r.json())
+      .then((data) => {
+        if (chkEnabled) chkEnabled.checked = Boolean(data.enabled);
+        if (chkDelete) chkDelete.checked = Boolean(data.delete_after_upload);
+        if (txtWatchDir && !txtWatchDir.value) txtWatchDir.value = data.watch_dir || '';
+        if (txtWatchChat && !txtWatchChat.value) txtWatchChat.value = data.target_chat || 'me';
+        if (badgeSynced) badgeSynced.textContent = `${data.synced_files_count || 0} Files Synced`;
+      })
+      .catch(() => {});
+  };
+
+  _loadWatcherStatus();
+
+  const _saveWatcherConfig = () => {
+    fetch('/api/watcher/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled: chkEnabled ? chkEnabled.checked : false,
+        delete_after_upload: chkDelete ? chkDelete.checked : false,
+        watch_dir: txtWatchDir ? txtWatchDir.value.trim() : null,
+        target_chat: txtWatchChat ? txtWatchChat.value.trim() : 'me'
+      })
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.config && badgeSynced) {
+          badgeSynced.textContent = `${data.config.synced_files_count || 0} Files Synced`;
+        }
+      })
+      .catch(() => {});
+  };
+
+  if (chkEnabled) {
+    chkEnabled.addEventListener('change', () => {
+      _saveWatcherConfig();
+      showToast(
+        chkEnabled.checked
+          ? '📁 Auto-Directory Watcher active: Monitoring local sync folder'
+          : '📁 Auto-Directory Watcher paused',
+        'info'
+      );
+    });
+  }
+
+  if (chkDelete) {
+    chkDelete.addEventListener('change', () => {
+      _saveWatcherConfig();
+      showToast(
+        chkDelete.checked
+          ? '🗑️ Auto-delete enabled: Files will be deleted after verified upload'
+          : '📁 Keeping local files intact after upload',
+        'info'
+      );
+    });
+  }
+
+  if (txtWatchDir) txtWatchDir.addEventListener('change', _saveWatcherConfig);
+  if (txtWatchChat) txtWatchChat.addEventListener('change', _saveWatcherConfig);
+
+  if (btnResetDir && txtWatchDir) {
+    btnResetDir.addEventListener('click', () => {
+      txtWatchDir.value = '~/Downloads/Telegram_Sync';
+      _saveWatcherConfig();
+      showToast('Reset watch directory to default', 'info');
+    });
+  }
+
+  if (btnScanNow) {
+    btnScanNow.addEventListener('click', async () => {
+      btnScanNow.disabled = true;
+      btnScanNow.textContent = '⏳ Scanning...';
+      try {
+        const resp = await fetch('/api/watcher/scan_now', { method: 'POST' });
+        const data = await resp.json();
+        if (data.enqueued_count > 0) {
+          showToast(`📁 Enqueued ${data.enqueued_count} new file(s) for upload!`, 'success');
+        } else {
+          showToast('📁 Folder scan complete: All files are up to date.', 'info');
+        }
+        _loadWatcherStatus();
+      } catch (e) {
+        showToast('Could not scan watch directory', 'warning');
+      } finally {
+        btnScanNow.disabled = false;
+        btnScanNow.textContent = '🔄 Sync Now';
+      }
+    });
+  }
+}
+
+function _initFloodWaitMonitor() {
+  const banner = document.getElementById('floodWaitBanner');
+  const secEl = document.getElementById('floodWaitSeconds');
+  const descEl = document.getElementById('floodWaitDesc');
+
+  if (!banner) return;
+
+  setInterval(async () => {
+    try {
+      const resp = await fetch('/api/governor/status');
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      if (data.is_cooling_down && data.cooldown_seconds_remaining > 0) {
+        banner.style.display = 'block';
+        if (secEl) secEl.textContent = `${data.cooldown_seconds_remaining}s`;
+        if (descEl) {
+          descEl.innerHTML = `Telegram FloodWait: Paused transfers safely • Auto-resuming in <span id="floodWaitSeconds" class="flood-countdown">${data.cooldown_seconds_remaining}s</span>...`;
+        }
+      } else {
+        banner.style.display = 'none';
+      }
+    } catch (e) {}
+  }, 2000);
 }
 
 // Bootstrap Application reliably

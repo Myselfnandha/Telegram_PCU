@@ -4,9 +4,10 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Optional, Callable
-from telethon import TelegramClient
+from telethon import TelegramClient, errors
 from telethon.tl import types, functions
 from app.services.speed_limiter import speed_limiter
+from app.services.rate_governor import rate_governor
 
 logger = logging.getLogger("turbo_uploader")
 
@@ -139,11 +140,15 @@ async def upload_file_turbo(
                     if pause_event:
                         await pause_event.wait()
 
+                    await rate_governor.acquire_chunk_slot(len(chunk))
                     await speed_limiter.acquire(len(chunk))
 
                     try:
                         await client(req)
                         break
+                    except errors.FloodWaitError as fwe:
+                        rate_governor.report_flood_wait(fwe.seconds, reason=f"Upload FloodWait on part {part_index}")
+                        await rate_governor.wait_if_cooling_down()
                     except Exception as err:
                         logger.warning(
                             f"[Turbo Worker {worker_id}] Part {part_index} network retry (attempt {attempt+1}/6): {err}"

@@ -367,3 +367,50 @@ async def batch_cancel_tasks():
 async def batch_clear_completed():
     count = queue_manager.clear_completed_tasks()
     return {"status": "success", "count": count, "action": "cleared_completed"}
+
+
+# ==========================================================================
+# Auto-Directory Watcher & FloodWait Rate Governor REST Endpoints
+# ==========================================================================
+
+from app.services.folder_watcher import folder_watcher
+from app.services.rate_governor import rate_governor
+
+
+class WatcherConfigRequest(BaseModel):
+    enabled: Optional[bool] = None
+    watch_dir: Optional[str] = None
+    target_chat: Optional[str] = None
+    delete_after_upload: Optional[bool] = None
+
+
+@router.get("/watcher/status")
+async def get_watcher_status():
+    """Returns directory watcher status, watch path, and sync count."""
+    return folder_watcher.get_status()
+
+
+@router.post("/watcher/config")
+async def update_watcher_config(payload: WatcherConfigRequest):
+    """Updates directory watcher configuration and toggle."""
+    res = folder_watcher.update_config(
+        enabled=payload.enabled,
+        watch_dir=payload.watch_dir,
+        target_chat=payload.target_chat,
+        delete_after_upload=payload.delete_after_upload
+    )
+    return {"status": "success", "config": res}
+
+
+@router.post("/watcher/scan_now")
+async def trigger_watcher_scan():
+    """Manually triggers an immediate scan of the watched directory."""
+    enqueued = await folder_watcher.scan_directory()
+    return {"status": "success", "enqueued_count": len(enqueued), "files": enqueued}
+
+
+@router.get("/governor/status")
+async def get_governor_status():
+    """Returns current FloodWait rate governor cooldown status and ticker."""
+    return rate_governor.get_status()
+
