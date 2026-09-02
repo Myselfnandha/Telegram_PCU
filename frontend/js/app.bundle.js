@@ -583,8 +583,10 @@
       const totalChunks = Math.ceil(totalSize / chunkSize);
       let lastTime = performance.now();
       let lastLoaded = 0;
-      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
-        if (nextTask.status === "cancelled") {
+      const startChunk = nextTask.uploadedChunkIndex || 0;
+      for (let chunkIdx = startChunk; chunkIdx < totalChunks; chunkIdx++) {
+        if (nextTask.status === "cancelled" || nextTask.status === "paused") {
+          nextTask.isTransferring = false;
           this.isProcessing = false;
           this.activeTask = null;
           return;
@@ -602,7 +604,8 @@
         formData.append("filename", nextTask.filename);
         let chunkSuccess = false;
         for (let attempt = 1; attempt <= 3; attempt++) {
-          if (nextTask.status === "cancelled") {
+          if (nextTask.status === "cancelled" || nextTask.status === "paused") {
+            nextTask.isTransferring = false;
             this.isProcessing = false;
             this.activeTask = null;
             return;
@@ -612,7 +615,7 @@
               const xhr = new XMLHttpRequest();
               this.activeXhrs.set(nextTask.id, xhr);
               xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable && nextTask.status !== "cancelled" && nextTask.status !== "failed") {
+                if (e.lengthComputable && nextTask.status !== "cancelled" && nextTask.status !== "failed" && nextTask.status !== "paused") {
                   const totalLoaded = start + e.loaded;
                   const now = performance.now();
                   const elapsed = (now - lastTime) / 1e3;
@@ -633,6 +636,7 @@
               xhr.onload = () => {
                 this.activeXhrs.delete(nextTask.id);
                 if (xhr.status >= 200 && xhr.status < 300) {
+                  nextTask.uploadedChunkIndex = chunkIdx + 1;
                   resolve();
                 } else {
                   reject(new Error(`Chunk ${chunkIdx} failed with status ${xhr.status}`));
@@ -652,7 +656,8 @@
             chunkSuccess = true;
             break;
           } catch (err) {
-            if (nextTask.status === "cancelled" || err.message === "aborted") {
+            if (nextTask.status === "cancelled" || nextTask.status === "paused" || err.message === "aborted") {
+              nextTask.isTransferring = false;
               this.isProcessing = false;
               this.activeTask = null;
               return;
@@ -793,17 +798,38 @@
       const task = this.queue.find((t) => t.id === id);
       if (task) {
         task.status = "paused";
+        task.isTransferring = false;
+        const xhr = this.activeXhrs.get(id);
+        if (xhr) {
+          xhr.abort();
+          this.activeXhrs.delete(id);
+        }
         socketManager.pauseTask(id);
+        fetch(`/api/tasks/${encodeURIComponent(id)}/pause`, { method: "POST" }).catch(() => {
+        });
+        if (this.activeTask && this.activeTask.id === id) {
+          this.isProcessing = false;
+          this.activeTask = null;
+        }
         this._notify();
       }
     }
     resume(id) {
       const task = this.queue.find((t) => t.id === id);
       if (task) {
-        task.status = "uploading";
-        socketManager.resumeTask(id);
+        if (task.transferredToServer) {
+          task.status = "uploading";
+          socketManager.resumeTask(id);
+          fetch(`/api/tasks/${encodeURIComponent(id)}/resume`, { method: "POST" }).catch(() => {
+          });
+        } else {
+          task.status = "queued";
+          task.isTransferring = false;
+          this.isProcessing = false;
+          this.activeTask = null;
+          setTimeout(() => this.processNext(), 50);
+        }
         this._notify();
-        this.processNext();
       }
     }
     cancel(id) {
@@ -815,7 +841,10 @@
           this.activeXhrs.delete(id);
         }
         socketManager.cancelTask(id);
+        fetch(`/api/tasks/${encodeURIComponent(id)}/cancel`, { method: "POST" }).catch(() => {
+        });
         task.status = "cancelled";
+        task.isTransferring = false;
         revokePreview(id);
         this._notify();
         if (this.activeTask && this.activeTask.id === id) {
@@ -834,8 +863,16 @@
       this.queue.forEach((task) => {
         if (["uploading", "streaming", "queued", "splitting"].includes(task.status)) {
           task.status = "paused";
+          task.isTransferring = false;
+          const xhr = this.activeXhrs.get(task.id);
+          if (xhr) {
+            xhr.abort();
+            this.activeXhrs.delete(task.id);
+          }
         }
       });
+      this.isProcessing = false;
+      this.activeTask = null;
       this._notify();
     }
     async resumeAll() {
@@ -847,10 +884,13 @@
       this.queue.forEach((task) => {
         if (task.status === "paused") {
           task.status = task.transferredToServer ? "uploading" : "queued";
+          task.isTransferring = false;
         }
       });
+      this.isProcessing = false;
+      this.activeTask = null;
       this._notify();
-      this.processQueue();
+      setTimeout(() => this.processNext(), 50);
     }
     async cancelAll() {
       try {

@@ -80,18 +80,15 @@ async def send_file_to_telegram(
         except Exception as e:
             logger.warning(f"Failed to generate thumbnail: {e}")
 
-    # Wrapped progress callback that also checks pause and cancellation
+    # Wrapped progress callback that checks cancellation
     def _safe_progress(current: int, total: int):
         if cancel_event and cancel_event.is_set():
             raise UploadCancelledError("Upload was cancelled by user.")
-        
-        if pause_event and not pause_event.is_set():
-            raise UploadPausedError("Upload paused by user.")
 
         if progress_callback:
             try:
                 progress_callback(current, total)
-            except (UploadCancelledError, UploadPausedError):
+            except UploadCancelledError:
                 raise
             except Exception as e:
                 logger.debug(f"Progress callback error: {e}")
