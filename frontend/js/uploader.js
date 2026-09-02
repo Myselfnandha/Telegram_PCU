@@ -15,6 +15,27 @@ class Uploader {
     this.isProcessing = false;
     this.activeXhrs = new Map();
     this.onQueueChangeCallbacks = new Set();
+    this.speedLimitMbS = 0;
+    this.nightMode = { enabled: false, start_time: '01:00', end_time: '06:00', in_window: true };
+
+    // Background 1-second ticker for scheduled tasks activation and countdown UI updates
+    setInterval(() => {
+      let shouldNotify = false;
+      const nowSec = Date.now() / 1000;
+      this.queue.forEach((t) => {
+        if (t.status === 'scheduled') {
+          shouldNotify = true;
+          if (t.scheduled_at && t.scheduled_at <= nowSec) {
+            t.status = 'queued';
+            t.scheduled_at = null;
+            setTimeout(() => this.processNext(), 50);
+          }
+        }
+      });
+      if (shouldNotify) {
+        this._notify();
+      }
+    }, 1000);
   }
 
   onQueueChange(cb) {
@@ -32,10 +53,11 @@ class Uploader {
     });
   }
 
-  addFiles(fileList) {
+  addFiles(fileList, scheduledAt = null) {
     const selectedChat = chatPicker.getSelectedChat();
     const chatId = selectedChat ? selectedChat.id : 'me';
     const chatName = selectedChat ? selectedChat.name : 'Saved Messages (Personal Cloud)';
+    const isScheduled = Boolean(scheduledAt && scheduledAt > Date.now() / 1000);
 
     Array.from(fileList).forEach((file) => {
       const id = 'task_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now();
@@ -51,7 +73,8 @@ class Uploader {
         chatName: chatName,
         caption: '',
         sendAs: 'auto', // auto | document | media
-        status: 'queued', // queued | streaming | uploading | splitting | paused | completed | failed | cancelled
+        status: isScheduled ? 'scheduled' : 'queued', // queued | scheduled | streaming | uploading | splitting | paused | completed | failed | cancelled
+        scheduled_at: isScheduled ? scheduledAt : null,
         progress: 0,
         uploadedBytes: 0,
         speed: 0,
@@ -73,7 +96,7 @@ class Uploader {
 
   updateTaskConfig(id, { customFilename, caption, sendAs }) {
     const task = this.queue.find((t) => t.id === id);
-    if (task && task.status === 'queued' && !task.transferredToServer) {
+    if (task && (task.status === 'queued' || task.status === 'scheduled') && !task.transferredToServer) {
       if (customFilename !== undefined) task.customFilename = customFilename;
       if (caption !== undefined) task.caption = caption;
       if (sendAs !== undefined) task.sendAs = sendAs;
@@ -84,9 +107,13 @@ class Uploader {
   async processNext() {
     if (this.isProcessing) return;
 
-    // Find first queued task that has not been transferred to server yet
+    const nowSec = Date.now() / 1000;
+    // Find first queued task that has not been transferred to server yet and is ready to stream
     const nextTask = this.queue.find(
-      (t) => (t.status === 'queued' || t.status === 'streaming') && !t.transferredToServer && !t.isTransferring
+      (t) => (t.status === 'queued' || t.status === 'streaming') &&
+             !t.transferredToServer &&
+             !t.isTransferring &&
+             (!t.scheduled_at || t.scheduled_at <= nowSec)
     );
 
     if (!nextTask || !nextTask.file) return;
@@ -235,7 +262,8 @@ class Uploader {
           caption: nextTask.caption || '',
           filename: nextTask.customFilename || nextTask.filename,
           send_as: nextTask.sendAs || 'auto',
-          total_size: totalSize
+          total_size: totalSize,
+          scheduled_at: nextTask.scheduled_at || null
         })
       });
 
@@ -393,6 +421,77 @@ class Uploader {
         setTimeout(() => this.processNext(), 50);
       }
       this._notify();
+    }
+  }
+
+  scheduleTask(id, timestamp) {
+    const task = this.queue.find((t) => t.id === id);
+    if (task) {
+      task.status = 'scheduled';
+      task.scheduled_at = timestamp;
+      task.isTransferring = false;
+      const xhr = this.activeXhrs.get(id);
+      if (xhr) {
+        xhr.abort();
+        this.activeXhrs.delete(id);
+      }
+      if (this.activeTask && this.activeTask.id === id) {
+        this.isProcessing = false;
+        this.activeTask = null;
+      }
+      this._notify();
+      fetch(`/api/tasks/${encodeURIComponent(id)}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduled_at: timestamp })
+      }).catch((e) => console.warn('Schedule task error:', e));
+      setTimeout(() => this.processNext(), 100);
+    }
+  }
+
+  startNow(id) {
+    const task = this.queue.find((t) => t.id === id);
+    if (task) {
+      task.status = task.transferredToServer ? 'uploading' : 'queued';
+      task.scheduled_at = null;
+      task.isTransferring = false;
+      this._notify();
+      fetch(`/api/tasks/${encodeURIComponent(id)}/start_now`, { method: 'POST' }).catch((e) =>
+        console.warn('Start now error:', e)
+      );
+      this.isProcessing = false;
+      this.activeTask = null;
+      setTimeout(() => this.processNext(), 50);
+    }
+  }
+
+  async setSpeedLimit(mb_s) {
+    this.speedLimitMbS = parseFloat(mb_s) || 0;
+    try {
+      await fetch('/api/settings/speed_limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit_mb_s: this.speedLimitMbS })
+      });
+    } catch (e) {
+      console.warn('Set speed limit error:', e);
+    }
+  }
+
+  async setNightMode({ enabled, start_time, end_time }) {
+    this.nightMode = { enabled, start_time, end_time };
+    try {
+      const res = await fetch('/api/settings/night_mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, start_time, end_time })
+      });
+      const data = await res.json();
+      if (data.night_mode) {
+        this.nightMode = data.night_mode;
+      }
+    } catch (e) {
+      console.warn('Set night mode error:', e);
     }
   }
 

@@ -25,6 +25,7 @@ class ChunkCompleteRequest(BaseModel):
     filename: Optional[str] = ""
     send_as: Optional[str] = "auto"
     total_size: Optional[int] = None
+    scheduled_at: Optional[float] = None
 
 
 @router.post("/upload/chunk")
@@ -123,18 +124,20 @@ async def handle_chunk_upload_complete(payload: ChunkCompleteRequest):
         chat_name=payload.chat_name or f"Chat {clean_chat_id}",
         caption=payload.caption or "",
         send_as=payload.send_as or "auto",
-        is_temp_file=True
+        is_temp_file=True,
+        scheduled_at=payload.scheduled_at
     )
 
-    await queue_manager.add_task(upload_item)
+    await queue_manager.add_task(upload_item, scheduled_at=payload.scheduled_at)
 
     return {
-        "status": "queued",
+        "status": "scheduled" if (payload.scheduled_at and payload.scheduled_at > time.time()) else "queued",
         "task_id": task_id,
         "filename": target_filename,
         "file_size": total_bytes,
         "chat_id": payload.chat_id,
-        "send_as": payload.send_as
+        "send_as": payload.send_as,
+        "scheduled_at": payload.scheduled_at
     }
 
 @router.post("/upload")
@@ -238,6 +241,18 @@ async def handle_upload(
         await file.close()
 
 
+class SpeedLimitPayload(BaseModel):
+    limit_mb_s: float
+
+class NightModePayload(BaseModel):
+    enabled: bool
+    start_time: Optional[str] = "01:00"
+    end_time: Optional[str] = "06:00"
+
+class ScheduleTaskPayload(BaseModel):
+    scheduled_at: float
+
+
 @router.get("/tasks")
 async def get_all_tasks():
     """Returns the list of all currently active or recent tasks."""
@@ -257,8 +272,53 @@ async def get_all_tasks():
         "current_part": t.current_part,
         "total_parts": t.total_parts,
         "error": t.error_message,
-        "created_at": t.created_at
+        "created_at": t.created_at,
+        "scheduled_at": t.scheduled_at
     } for t in tasks]
+
+
+@router.get("/settings/speed_limit")
+async def get_speed_limit():
+    from app.services.speed_limiter import speed_limiter
+    return {"limit_mb_s": speed_limiter.limit_mb_s, "is_unlimited": speed_limiter.limit_mb_s <= 0}
+
+
+@router.post("/settings/speed_limit")
+async def set_speed_limit(payload: SpeedLimitPayload):
+    from app.services.speed_limiter import speed_limiter
+    speed_limiter.set_limit(payload.limit_mb_s)
+    return {"status": "ok", "limit_mb_s": speed_limiter.limit_mb_s, "is_unlimited": speed_limiter.limit_mb_s <= 0}
+
+
+@router.get("/settings/night_mode")
+async def get_night_mode():
+    return queue_manager.get_night_mode()
+
+
+@router.post("/settings/night_mode")
+async def set_night_mode(payload: NightModePayload):
+    result = queue_manager.set_night_mode(
+        enabled=payload.enabled,
+        start_time=payload.start_time or "01:00",
+        end_time=payload.end_time or "06:00"
+    )
+    return {"status": "ok", "night_mode": result}
+
+
+@router.post("/tasks/{task_id}/schedule")
+async def schedule_task(task_id: str, payload: ScheduleTaskPayload):
+    success = queue_manager.schedule_task(task_id, payload.scheduled_at)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found or not in schedulable state")
+    return {"status": "success", "task_id": task_id, "scheduled_at": payload.scheduled_at}
+
+
+@router.post("/tasks/{task_id}/start_now")
+async def start_task_now(task_id: str):
+    success = await queue_manager.start_task_now(task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found or not in scheduled/paused state")
+    return {"status": "success", "task_id": task_id, "action": "started_now"}
 
 
 @router.post("/tasks/{task_id}/pause")

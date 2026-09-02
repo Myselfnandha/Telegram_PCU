@@ -496,6 +496,25 @@
       this.isProcessing = false;
       this.activeXhrs = /* @__PURE__ */ new Map();
       this.onQueueChangeCallbacks = /* @__PURE__ */ new Set();
+      this.speedLimitMbS = 0;
+      this.nightMode = { enabled: false, start_time: "01:00", end_time: "06:00", in_window: true };
+      setInterval(() => {
+        let shouldNotify = false;
+        const nowSec = Date.now() / 1e3;
+        this.queue.forEach((t) => {
+          if (t.status === "scheduled") {
+            shouldNotify = true;
+            if (t.scheduled_at && t.scheduled_at <= nowSec) {
+              t.status = "queued";
+              t.scheduled_at = null;
+              setTimeout(() => this.processNext(), 50);
+            }
+          }
+        });
+        if (shouldNotify) {
+          this._notify();
+        }
+      }, 1e3);
     }
     onQueueChange(cb) {
       this.onQueueChangeCallbacks.add(cb);
@@ -510,10 +529,11 @@
         }
       });
     }
-    addFiles(fileList) {
+    addFiles(fileList, scheduledAt = null) {
       const selectedChat = chatPicker.getSelectedChat();
       const chatId = selectedChat ? selectedChat.id : "me";
       const chatName = selectedChat ? selectedChat.name : "Saved Messages (Personal Cloud)";
+      const isScheduled = Boolean(scheduledAt && scheduledAt > Date.now() / 1e3);
       Array.from(fileList).forEach((file) => {
         const id = "task_" + Math.random().toString(36).substring(2, 10) + "_" + Date.now();
         const preview = createSafePreview(id, file);
@@ -528,8 +548,9 @@
           caption: "",
           sendAs: "auto",
           // auto | document | media
-          status: "queued",
-          // queued | streaming | uploading | splitting | paused | completed | failed | cancelled
+          status: isScheduled ? "scheduled" : "queued",
+          // queued | scheduled | streaming | uploading | splitting | paused | completed | failed | cancelled
+          scheduled_at: isScheduled ? scheduledAt : null,
           progress: 0,
           uploadedBytes: 0,
           speed: 0,
@@ -549,7 +570,7 @@
     }
     updateTaskConfig(id, { customFilename, caption, sendAs }) {
       const task = this.queue.find((t) => t.id === id);
-      if (task && task.status === "queued" && !task.transferredToServer) {
+      if (task && (task.status === "queued" || task.status === "scheduled") && !task.transferredToServer) {
         if (customFilename !== void 0) task.customFilename = customFilename;
         if (caption !== void 0) task.caption = caption;
         if (sendAs !== void 0) task.sendAs = sendAs;
@@ -558,8 +579,9 @@
     }
     async processNext() {
       if (this.isProcessing) return;
+      const nowSec = Date.now() / 1e3;
       const nextTask = this.queue.find(
-        (t) => (t.status === "queued" || t.status === "streaming") && !t.transferredToServer && !t.isTransferring
+        (t) => (t.status === "queued" || t.status === "streaming") && !t.transferredToServer && !t.isTransferring && (!t.scheduled_at || t.scheduled_at <= nowSec)
       );
       if (!nextTask || !nextTask.file) return;
       this.isProcessing = true;
@@ -688,7 +710,8 @@
             caption: nextTask.caption || "",
             filename: nextTask.customFilename || nextTask.filename,
             send_as: nextTask.sendAs || "auto",
-            total_size: totalSize
+            total_size: totalSize,
+            scheduled_at: nextTask.scheduled_at || null
           })
         });
         if (!completeResp.ok) {
@@ -830,6 +853,73 @@
           setTimeout(() => this.processNext(), 50);
         }
         this._notify();
+      }
+    }
+    scheduleTask(id, timestamp) {
+      const task = this.queue.find((t) => t.id === id);
+      if (task) {
+        task.status = "scheduled";
+        task.scheduled_at = timestamp;
+        task.isTransferring = false;
+        const xhr = this.activeXhrs.get(id);
+        if (xhr) {
+          xhr.abort();
+          this.activeXhrs.delete(id);
+        }
+        if (this.activeTask && this.activeTask.id === id) {
+          this.isProcessing = false;
+          this.activeTask = null;
+        }
+        this._notify();
+        fetch(`/api/tasks/${encodeURIComponent(id)}/schedule`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scheduled_at: timestamp })
+        }).catch((e) => console.warn("Schedule task error:", e));
+        setTimeout(() => this.processNext(), 100);
+      }
+    }
+    startNow(id) {
+      const task = this.queue.find((t) => t.id === id);
+      if (task) {
+        task.status = task.transferredToServer ? "uploading" : "queued";
+        task.scheduled_at = null;
+        task.isTransferring = false;
+        this._notify();
+        fetch(`/api/tasks/${encodeURIComponent(id)}/start_now`, { method: "POST" }).catch(
+          (e) => console.warn("Start now error:", e)
+        );
+        this.isProcessing = false;
+        this.activeTask = null;
+        setTimeout(() => this.processNext(), 50);
+      }
+    }
+    async setSpeedLimit(mb_s) {
+      this.speedLimitMbS = parseFloat(mb_s) || 0;
+      try {
+        await fetch("/api/settings/speed_limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit_mb_s: this.speedLimitMbS })
+        });
+      } catch (e) {
+        console.warn("Set speed limit error:", e);
+      }
+    }
+    async setNightMode({ enabled, start_time, end_time }) {
+      this.nightMode = { enabled, start_time, end_time };
+      try {
+        const res = await fetch("/api/settings/night_mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled, start_time, end_time })
+        });
+        const data = await res.json();
+        if (data.night_mode) {
+          this.nightMode = data.night_mode;
+        }
+      } catch (e) {
+        console.warn("Set night mode error:", e);
       }
     }
     cancel(id) {
@@ -1051,6 +1141,18 @@
     } else if (task.status === "uploading") {
       const partInfo = task.totalParts > 1 ? ` (${task.currentPart}/${task.totalParts})` : "";
       return `<span class="badge uploading" title="Uploading to Telegram MTProto">UPLOADING${partInfo}</span>`;
+    } else if (task.status === "scheduled") {
+      let countdownStr = "";
+      if (task.scheduled_at) {
+        const diff = Math.max(0, Math.round((task.scheduled_at * 1e3 - Date.now()) / 1e3));
+        const hrs = Math.floor(diff / 3600);
+        const mins = Math.floor(diff % 3600 / 60);
+        const secs = diff % 60;
+        if (hrs > 0) countdownStr = `${hrs}h ${mins}m`;
+        else if (mins > 0) countdownStr = `${mins}m ${secs}s`;
+        else countdownStr = `${secs}s`;
+      }
+      return `<span class="badge" style="background: rgba(162, 155, 254, 0.2); color: #a29bfe; border: 1px solid rgba(162,155,254,0.4);" title="Scheduled upload">\u23F0 SCHEDULED ${countdownStr ? "(" + countdownStr + ")" : ""}</span>`;
     } else if (isPaused) {
       return `<span class="badge" style="background: rgba(253, 203, 110, 0.2); color: var(--status-warning);">PAUSED</span>`;
     } else if (isCompleted) {
@@ -1072,6 +1174,13 @@
       return `<div class="card-stage-line streaming">\u26A1 <strong>Buffering Stream:</strong> Streaming file to local engine (${task.progress ? task.progress.toFixed(1) : 0}%)</div>`;
     } else if (task.status === "uploading") {
       return `<div class="card-stage-line uploading">\u{1F680} <strong>Turbo MTProto Upload:</strong> Streaming to Telegram (6 Workers)</div>`;
+    } else if (task.status === "scheduled") {
+      let timeStr = "later";
+      if (task.scheduled_at) {
+        const dt = new Date(task.scheduled_at * 1e3);
+        timeStr = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " (" + dt.toLocaleDateString([], { month: "short", day: "numeric" }) + ")";
+      }
+      return `<div class="card-stage-line" style="color: #a29bfe;">\u23F0 <strong>Scheduled:</strong> Will start streaming at ${timeStr}</div>`;
     } else if (task.status === "completed") {
       return `<div class="card-stage-line completed">\u2705 <strong>Upload Finished:</strong> Delivered to ${escapeHtml(task.chatName || "Telegram")}</div>`;
     } else if (task.status === "paused") {
@@ -1085,10 +1194,23 @@
     const isUploading = task.status === "uploading" || task.status === "streaming" || task.status === "preparing" || task.status === "splitting";
     const isPaused = task.status === "paused";
     const isQueued = task.status === "queued";
+    const isScheduled = task.status === "scheduled";
     if (isUploading) {
       return `
       <button class="icon-btn" title="Pause Upload" onclick="window._app.pause('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+      </button>
+      <button class="icon-btn danger" title="Cancel Upload" onclick="window._app.cancel('${task.id}')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    `;
+    } else if (isScheduled) {
+      return `
+      <button class="icon-btn" title="Start Upload Now" onclick="window._app.startNow('${task.id}')" style="color: var(--accent-secondary);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+      </button>
+      <button class="icon-btn" title="Reschedule Timer" onclick="window._openScheduleModal('${task.id}')">
+        <span style="font-size: 0.95rem;">\u23F0</span>
       </button>
       <button class="icon-btn danger" title="Cancel Upload" onclick="window._app.cancel('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -1099,12 +1221,18 @@
       <button class="icon-btn" title="Resume Upload" onclick="window._app.resume('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
+      <button class="icon-btn" title="Schedule Resume" onclick="window._openScheduleModal('${task.id}')">
+        <span style="font-size: 0.95rem;">\u23F0</span>
+      </button>
       <button class="icon-btn danger" title="Cancel" onclick="window._app.cancel('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     `;
     } else if (isQueued) {
       return `
+      <button class="icon-btn" title="Schedule Upload" onclick="window._openScheduleModal('${task.id}')">
+        <span style="font-size: 0.95rem;">\u23F0</span>
+      </button>
       <button class="icon-btn danger" title="Remove from Queue" onclick="window._app.remove('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
       </button>
@@ -3507,12 +3635,15 @@
       });
     }
   }
+  var _targetScheduleTaskId = null;
   function setupGlobalHooks() {
     window._app = {
       pause: (id) => uploader.pause(id),
       resume: (id) => uploader.resume(id),
       cancel: (id) => uploader.cancel(id),
       remove: (id) => uploader.remove(id),
+      startNow: (id) => uploader.startNow(id),
+      schedule: (id, ts) => uploader.scheduleTask(id, ts),
       updateFilename: (id, val) => uploader.updateTaskConfig(id, { customFilename: val }),
       updateCaption: (id, val) => uploader.updateTaskConfig(id, { caption: val }),
       updateSendAs: (id, val) => uploader.updateTaskConfig(id, { sendAs: val }),
@@ -3527,6 +3658,55 @@
         chatPicker.fetchChats(true);
         showToast2("Refreshing chat list...", "info");
       }
+    };
+    window._openScheduleModal = function(taskId) {
+      _targetScheduleTaskId = taskId;
+      const modal = document.getElementById("scheduleModal");
+      if (modal) {
+        modal.classList.add("open", "active");
+        const input = document.getElementById("scheduleCustomInput");
+        if (input) {
+          const defaultDate = new Date(Date.now() + 3600 * 1e3);
+          defaultDate.setMinutes(defaultDate.getMinutes() - defaultDate.getTimezoneOffset());
+          input.value = defaultDate.toISOString().slice(0, 16);
+        }
+      }
+    };
+    window._closeScheduleModal = function() {
+      _targetScheduleTaskId = null;
+      const modal = document.getElementById("scheduleModal");
+      if (modal) modal.classList.remove("open", "active");
+    };
+    window._openNightModal = function() {
+      const modal = document.getElementById("nightModeModal");
+      if (modal) {
+        modal.classList.add("open", "active");
+        fetch("/api/settings/night_mode").then((r) => r.json()).then((data) => {
+          const check = document.getElementById("nightModeToggleCheck");
+          const startIn = document.getElementById("nightStartTime");
+          const endIn = document.getElementById("nightEndTime");
+          if (check) check.checked = Boolean(data.enabled);
+          if (startIn && data.start_time) startIn.value = data.start_time;
+          if (endIn && data.end_time) endIn.value = data.end_time;
+        }).catch(() => {
+        });
+      }
+    };
+    window._closeNightModal = function() {
+      const modal = document.getElementById("nightModeModal");
+      if (modal) modal.classList.remove("open", "active");
+    };
+    window._openCustomSpeedModal = function() {
+      const modal = document.getElementById("customSpeedModal");
+      if (modal) {
+        modal.classList.add("open", "active");
+        const input = document.getElementById("customSpeedInput");
+        if (input) input.focus();
+      }
+    };
+    window._closeCustomSpeedModal = function() {
+      const modal = document.getElementById("customSpeedModal");
+      if (modal) modal.classList.remove("open", "active");
     };
   }
   function initApp() {
@@ -3597,6 +3777,144 @@
     const btnBatchResume = document.getElementById("btnBatchResume");
     const btnBatchClear = document.getElementById("btnBatchClear");
     const btnBatchCancel = document.getElementById("btnBatchCancel");
+    const speedLimitSelect = document.getElementById("speedLimitSelect");
+    const btnToggleNightQueue = document.getElementById("btnToggleNightQueue");
+    const nightModeStateLabel = document.getElementById("nightModeStateLabel");
+    if (speedLimitSelect) {
+      fetch("/api/settings/speed_limit").then((r) => r.json()).then((data) => {
+        if (data.limit_mb_s !== void 0) {
+          const valStr = String(data.limit_mb_s);
+          const matchOption = Array.from(speedLimitSelect.options).find((opt) => opt.value === valStr);
+          if (matchOption) {
+            speedLimitSelect.value = valStr;
+          } else if (data.limit_mb_s > 0) {
+            speedLimitSelect.value = "custom";
+            speedLimitSelect.options[speedLimitSelect.options.length - 1].text = `\u2699\uFE0F ${data.limit_mb_s} MB/s`;
+          }
+        }
+      }).catch(() => {
+      });
+      speedLimitSelect.addEventListener("change", () => {
+        const val = speedLimitSelect.value;
+        if (val === "custom") {
+          window._openCustomSpeedModal();
+        } else {
+          const mb = parseFloat(val) || 0;
+          uploader.setSpeedLimit(mb);
+          if (mb > 0) {
+            showToast2(`\u26A1 Upload speed capped at ${mb} MB/s`, "info");
+          } else {
+            showToast2("\u26A1 Upload speed set to Unlimited (Gigabit/Fiber)", "success");
+          }
+        }
+      });
+    }
+    const btnApplyCustomSpeed = document.getElementById("btnApplyCustomSpeed");
+    if (btnApplyCustomSpeed) {
+      btnApplyCustomSpeed.addEventListener("click", () => {
+        const input = document.getElementById("customSpeedInput");
+        const val = parseFloat(input?.value) || 0;
+        uploader.setSpeedLimit(val);
+        if (speedLimitSelect) {
+          if (val > 0) {
+            speedLimitSelect.value = "custom";
+            speedLimitSelect.options[speedLimitSelect.options.length - 1].text = `\u2699\uFE0F ${val} MB/s`;
+            showToast2(`\u26A1 Custom speed limit applied: ${val} MB/s`, "info");
+          } else {
+            speedLimitSelect.value = "0";
+            showToast2("\u26A1 Custom speed set to Unlimited", "success");
+          }
+        }
+        window._closeCustomSpeedModal();
+      });
+    }
+    function syncNightModeUi(data) {
+      if (nightModeStateLabel) {
+        nightModeStateLabel.textContent = data.enabled ? `${data.start_time}-${data.end_time}` : "Off";
+      }
+      if (btnToggleNightQueue) {
+        btnToggleNightQueue.classList.toggle("active", Boolean(data.enabled));
+      }
+    }
+    fetch("/api/settings/night_mode").then((r) => r.json()).then((data) => syncNightModeUi(data)).catch(() => {
+    });
+    if (btnToggleNightQueue) {
+      btnToggleNightQueue.addEventListener("click", () => {
+        window._openNightModal();
+      });
+    }
+    const btnSaveNightMode = document.getElementById("btnSaveNightMode");
+    if (btnSaveNightMode) {
+      btnSaveNightMode.addEventListener("click", async () => {
+        const check = document.getElementById("nightModeToggleCheck");
+        const startIn = document.getElementById("nightStartTime");
+        const endIn = document.getElementById("nightEndTime");
+        const enabled = check ? check.checked : false;
+        const start_time = startIn ? startIn.value : "01:00";
+        const end_time = endIn ? endIn.value : "06:00";
+        await uploader.setNightMode({ enabled, start_time, end_time });
+        syncNightModeUi({ enabled, start_time, end_time });
+        window._closeNightModal();
+        showToast2(enabled ? `\u{1F319} Night Mode Active (${start_time} - ${end_time})` : "\u2600\uFE0F Night Mode Disabled", "info");
+      });
+    }
+    let _selectedScheduleTimestamp = null;
+    const presetButtons = document.querySelectorAll("#scheduleModal .btn-time-preset");
+    presetButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        presetButtons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const preset = btn.getAttribute("data-preset");
+        const now = /* @__PURE__ */ new Date();
+        if (preset === "30m") {
+          _selectedScheduleTimestamp = (Date.now() + 30 * 60 * 1e3) / 1e3;
+        } else if (preset === "1h") {
+          _selectedScheduleTimestamp = (Date.now() + 60 * 60 * 1e3) / 1e3;
+        } else if (preset === "2h") {
+          _selectedScheduleTimestamp = (Date.now() + 2 * 3600 * 1e3) / 1e3;
+        } else if (preset === "4h") {
+          _selectedScheduleTimestamp = (Date.now() + 4 * 3600 * 1e3) / 1e3;
+        } else if (preset === "tonight") {
+          const target = /* @__PURE__ */ new Date();
+          if (target.getHours() >= 2) target.setDate(target.getDate() + 1);
+          target.setHours(2, 0, 0, 0);
+          _selectedScheduleTimestamp = target.getTime() / 1e3;
+        } else if (preset === "morning") {
+          const target = /* @__PURE__ */ new Date();
+          if (target.getHours() >= 8) target.setDate(target.getDate() + 1);
+          target.setHours(8, 0, 0, 0);
+          _selectedScheduleTimestamp = target.getTime() / 1e3;
+        }
+        const input = document.getElementById("scheduleCustomInput");
+        if (input && _selectedScheduleTimestamp) {
+          const d = new Date(_selectedScheduleTimestamp * 1e3);
+          d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+          input.value = d.toISOString().slice(0, 16);
+        }
+      });
+    });
+    const btnConfirmSchedule = document.getElementById("btnConfirmSchedule");
+    if (btnConfirmSchedule) {
+      btnConfirmSchedule.addEventListener("click", () => {
+        const input = document.getElementById("scheduleCustomInput");
+        if (input && input.value) {
+          const parsed = new Date(input.value).getTime() / 1e3;
+          if (parsed > Date.now() / 1e3) {
+            _selectedScheduleTimestamp = parsed;
+          }
+        }
+        if (!_selectedScheduleTimestamp || _selectedScheduleTimestamp <= Date.now() / 1e3) {
+          showToast2("Please select a valid future time", "warning");
+          return;
+        }
+        if (_targetScheduleTaskId) {
+          uploader.scheduleTask(_targetScheduleTaskId, _selectedScheduleTimestamp);
+          const dt = new Date(_selectedScheduleTimestamp * 1e3);
+          showToast2(`\u23F0 Upload scheduled for ${dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`, "success");
+        }
+        window._closeScheduleModal();
+      });
+    }
     if (btnBatchPause) {
       btnBatchPause.addEventListener("click", () => {
         uploader.pauseAll();
@@ -3628,10 +3946,6 @@
       const tabUploaderBadge = document.getElementById("tabUploaderBadge");
       if (tabUploaderBadge) {
         tabUploaderBadge.textContent = queue.length;
-      }
-      if (btnPauseResumeAllUploads) {
-        const hasActive = queue.some((t) => t.status === "uploading" || t.status === "streaming" || t.status === "queued");
-        btnPauseResumeAllUploads.textContent = hasActive ? "\u23F8\uFE0F Pause All" : "\u25B6\uFE0F Resume All";
       }
     });
     socketManager.onProgress((data) => {

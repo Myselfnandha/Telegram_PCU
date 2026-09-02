@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, Callable
 from telethon import TelegramClient
 from telethon.tl import types, functions
+from app.services.speed_limiter import speed_limiter
 
 logger = logging.getLogger("turbo_uploader")
 
@@ -137,6 +138,8 @@ async def upload_file_turbo(
                         break
                     if pause_event:
                         await pause_event.wait()
+
+                    await speed_limiter.acquire(len(chunk))
 
                     try:
                         await client(req)

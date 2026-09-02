@@ -102,12 +102,16 @@ function setupDragAndDrop() {
   }
 }
 
+let _targetScheduleTaskId = null;
+
 function setupGlobalHooks() {
   window._app = {
     pause: (id) => uploader.pause(id),
     resume: (id) => uploader.resume(id),
     cancel: (id) => uploader.cancel(id),
     remove: (id) => uploader.remove(id),
+    startNow: (id) => uploader.startNow(id),
+    schedule: (id, ts) => uploader.scheduleTask(id, ts),
     updateFilename: (id, val) => uploader.updateTaskConfig(id, { customFilename: val }),
     updateCaption: (id, val) => uploader.updateTaskConfig(id, { caption: val }),
     updateSendAs: (id, val) => uploader.updateTaskConfig(id, { sendAs: val }),
@@ -122,6 +126,67 @@ function setupGlobalHooks() {
       chatPicker.fetchChats(true);
       showToast('Refreshing chat list...', 'info');
     }
+  };
+
+  // Schedule Modal Hooks
+  window._openScheduleModal = function (taskId) {
+    _targetScheduleTaskId = taskId;
+    const modal = document.getElementById('scheduleModal');
+    if (modal) {
+      modal.classList.add('open', 'active');
+      const input = document.getElementById('scheduleCustomInput');
+      if (input) {
+        // Set default to 1 hour from now
+        const defaultDate = new Date(Date.now() + 3600 * 1000);
+        defaultDate.setMinutes(defaultDate.getMinutes() - defaultDate.getTimezoneOffset());
+        input.value = defaultDate.toISOString().slice(0, 16);
+      }
+    }
+  };
+
+  window._closeScheduleModal = function () {
+    _targetScheduleTaskId = null;
+    const modal = document.getElementById('scheduleModal');
+    if (modal) modal.classList.remove('open', 'active');
+  };
+
+  // Night Mode Modal Hooks
+  window._openNightModal = function () {
+    const modal = document.getElementById('nightModeModal');
+    if (modal) {
+      modal.classList.add('open', 'active');
+      fetch('/api/settings/night_mode')
+        .then((r) => r.json())
+        .then((data) => {
+          const check = document.getElementById('nightModeToggleCheck');
+          const startIn = document.getElementById('nightStartTime');
+          const endIn = document.getElementById('nightEndTime');
+          if (check) check.checked = Boolean(data.enabled);
+          if (startIn && data.start_time) startIn.value = data.start_time;
+          if (endIn && data.end_time) endIn.value = data.end_time;
+        })
+        .catch(() => {});
+    }
+  };
+
+  window._closeNightModal = function () {
+    const modal = document.getElementById('nightModeModal');
+    if (modal) modal.classList.remove('open', 'active');
+  };
+
+  // Custom Speed Modal Hooks
+  window._openCustomSpeedModal = function () {
+    const modal = document.getElementById('customSpeedModal');
+    if (modal) {
+      modal.classList.add('open', 'active');
+      const input = document.getElementById('customSpeedInput');
+      if (input) input.focus();
+    }
+  };
+
+  window._closeCustomSpeedModal = function () {
+    const modal = document.getElementById('customSpeedModal');
+    if (modal) modal.classList.remove('open', 'active');
   };
 }
 
@@ -217,6 +282,165 @@ function initApp() {
   const btnBatchResume = document.getElementById('btnBatchResume');
   const btnBatchClear = document.getElementById('btnBatchClear');
   const btnBatchCancel = document.getElementById('btnBatchCancel');
+  const speedLimitSelect = document.getElementById('speedLimitSelect');
+  const btnToggleNightQueue = document.getElementById('btnToggleNightQueue');
+  const nightModeStateLabel = document.getElementById('nightModeStateLabel');
+
+  // Real-time Speed Limiter Controller
+  if (speedLimitSelect) {
+    // Initial fetch of speed limit from server
+    fetch('/api/settings/speed_limit')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.limit_mb_s !== undefined) {
+          const valStr = String(data.limit_mb_s);
+          const matchOption = Array.from(speedLimitSelect.options).find((opt) => opt.value === valStr);
+          if (matchOption) {
+            speedLimitSelect.value = valStr;
+          } else if (data.limit_mb_s > 0) {
+            speedLimitSelect.value = 'custom';
+            speedLimitSelect.options[speedLimitSelect.options.length - 1].text = `⚙️ ${data.limit_mb_s} MB/s`;
+          }
+        }
+      })
+      .catch(() => {});
+
+    speedLimitSelect.addEventListener('change', () => {
+      const val = speedLimitSelect.value;
+      if (val === 'custom') {
+        window._openCustomSpeedModal();
+      } else {
+        const mb = parseFloat(val) || 0;
+        uploader.setSpeedLimit(mb);
+        if (mb > 0) {
+          showToast(`⚡ Upload speed capped at ${mb} MB/s`, 'info');
+        } else {
+          showToast('⚡ Upload speed set to Unlimited (Gigabit/Fiber)', 'success');
+        }
+      }
+    });
+  }
+
+  const btnApplyCustomSpeed = document.getElementById('btnApplyCustomSpeed');
+  if (btnApplyCustomSpeed) {
+    btnApplyCustomSpeed.addEventListener('click', () => {
+      const input = document.getElementById('customSpeedInput');
+      const val = parseFloat(input?.value) || 0;
+      uploader.setSpeedLimit(val);
+      if (speedLimitSelect) {
+        if (val > 0) {
+          speedLimitSelect.value = 'custom';
+          speedLimitSelect.options[speedLimitSelect.options.length - 1].text = `⚙️ ${val} MB/s`;
+          showToast(`⚡ Custom speed limit applied: ${val} MB/s`, 'info');
+        } else {
+          speedLimitSelect.value = '0';
+          showToast('⚡ Custom speed set to Unlimited', 'success');
+        }
+      }
+      window._closeCustomSpeedModal();
+    });
+  }
+
+  // Night Mode Controller
+  function syncNightModeUi(data) {
+    if (nightModeStateLabel) {
+      nightModeStateLabel.textContent = data.enabled ? `${data.start_time}-${data.end_time}` : 'Off';
+    }
+    if (btnToggleNightQueue) {
+      btnToggleNightQueue.classList.toggle('active', Boolean(data.enabled));
+    }
+  }
+
+  fetch('/api/settings/night_mode')
+    .then((r) => r.json())
+    .then((data) => syncNightModeUi(data))
+    .catch(() => {});
+
+  if (btnToggleNightQueue) {
+    btnToggleNightQueue.addEventListener('click', () => {
+      window._openNightModal();
+    });
+  }
+
+  const btnSaveNightMode = document.getElementById('btnSaveNightMode');
+  if (btnSaveNightMode) {
+    btnSaveNightMode.addEventListener('click', async () => {
+      const check = document.getElementById('nightModeToggleCheck');
+      const startIn = document.getElementById('nightStartTime');
+      const endIn = document.getElementById('nightEndTime');
+      const enabled = check ? check.checked : false;
+      const start_time = startIn ? startIn.value : '01:00';
+      const end_time = endIn ? endIn.value : '06:00';
+
+      await uploader.setNightMode({ enabled, start_time, end_time });
+      syncNightModeUi({ enabled, start_time, end_time });
+      window._closeNightModal();
+      showToast(enabled ? `🌙 Night Mode Active (${start_time} - ${end_time})` : '☀️ Night Mode Disabled', 'info');
+    });
+  }
+
+  // Schedule Modal Presets & Confirm Handler
+  let _selectedScheduleTimestamp = null;
+  const presetButtons = document.querySelectorAll('#scheduleModal .btn-time-preset');
+  presetButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      presetButtons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const preset = btn.getAttribute('data-preset');
+      const now = new Date();
+      if (preset === '30m') {
+        _selectedScheduleTimestamp = (Date.now() + 30 * 60 * 1000) / 1000;
+      } else if (preset === '1h') {
+        _selectedScheduleTimestamp = (Date.now() + 60 * 60 * 1000) / 1000;
+      } else if (preset === '2h') {
+        _selectedScheduleTimestamp = (Date.now() + 2 * 3600 * 1000) / 1000;
+      } else if (preset === '4h') {
+        _selectedScheduleTimestamp = (Date.now() + 4 * 3600 * 1000) / 1000;
+      } else if (preset === 'tonight') {
+        const target = new Date();
+        if (target.getHours() >= 2) target.setDate(target.getDate() + 1);
+        target.setHours(2, 0, 0, 0);
+        _selectedScheduleTimestamp = target.getTime() / 1000;
+      } else if (preset === 'morning') {
+        const target = new Date();
+        if (target.getHours() >= 8) target.setDate(target.getDate() + 1);
+        target.setHours(8, 0, 0, 0);
+        _selectedScheduleTimestamp = target.getTime() / 1000;
+      }
+
+      const input = document.getElementById('scheduleCustomInput');
+      if (input && _selectedScheduleTimestamp) {
+        const d = new Date(_selectedScheduleTimestamp * 1000);
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        input.value = d.toISOString().slice(0, 16);
+      }
+    });
+  });
+
+  const btnConfirmSchedule = document.getElementById('btnConfirmSchedule');
+  if (btnConfirmSchedule) {
+    btnConfirmSchedule.addEventListener('click', () => {
+      const input = document.getElementById('scheduleCustomInput');
+      if (input && input.value) {
+        const parsed = new Date(input.value).getTime() / 1000;
+        if (parsed > Date.now() / 1000) {
+          _selectedScheduleTimestamp = parsed;
+        }
+      }
+
+      if (!_selectedScheduleTimestamp || _selectedScheduleTimestamp <= Date.now() / 1000) {
+        showToast('Please select a valid future time', 'warning');
+        return;
+      }
+
+      if (_targetScheduleTaskId) {
+        uploader.scheduleTask(_targetScheduleTaskId, _selectedScheduleTimestamp);
+        const dt = new Date(_selectedScheduleTimestamp * 1000);
+        showToast(`⏰ Upload scheduled for ${dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, 'success');
+      }
+      window._closeScheduleModal();
+    });
+  }
 
   if (btnBatchPause) {
     btnBatchPause.addEventListener('click', () => {
@@ -256,11 +480,6 @@ function initApp() {
     const tabUploaderBadge = document.getElementById('tabUploaderBadge');
     if (tabUploaderBadge) {
       tabUploaderBadge.textContent = queue.length;
-    }
-
-    if (btnPauseResumeAllUploads) {
-      const hasActive = queue.some((t) => t.status === 'uploading' || t.status === 'streaming' || t.status === 'queued');
-      btnPauseResumeAllUploads.textContent = hasActive ? '⏸️ Pause All' : '▶️ Resume All';
     }
   });
 

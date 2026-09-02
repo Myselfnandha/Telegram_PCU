@@ -2679,4 +2679,108 @@ html, body {
   border-color: var(--accent-secondary) !important;
 }
 
+/* Speed Limiter & Bandwidth Controls */
+.speed-limiter-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.speed-select-pill {
+  background: rgba(0, 206, 201, 0.12);
+  border: 1px solid rgba(0, 206, 201, 0.4);
+  color: var(--accent-secondary);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: var(--transition-smooth);
+}
+
+.speed-select-pill:hover,
+.speed-select-pill:focus {
+  background: rgba(0, 206, 201, 0.22);
+  border-color: var(--accent-secondary);
+}
+
+.night-mode-pill {
+  border-radius: 20px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.night-mode-pill.active {
+  background: rgba(108, 92, 231, 0.25) !important;
+  border-color: var(--accent-primary) !important;
+  color: #a29bfe !important;
+}
+
+.queue-card.status-scheduled {
+  border-left-color: #a29bfe;
+  box-shadow: -2px 0 12px rgba(162, 155, 254, 0.2);
+}
+
+.time-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.btn-time-preset {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
+  color: var(--text-main);
+  padding: 8px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  text-align: center;
+}
+
+.btn-time-preset:hover {
+  background: rgba(108, 92, 231, 0.2);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.btn-time-preset.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+/* Switch Slider */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch .slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+.switch input:checked + .slider {
+  background-color: var(--accent-primary) !important;
+}
+
+.switch input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+
 

@@ -10,6 +10,7 @@ class SendMode(str, Enum):
 
 class UploadStatus(str, Enum):
     QUEUED = "queued"
+    SCHEDULED = "scheduled"
     PREPARING = "preparing"
     SPLITTING = "splitting"
     UPLOADING = "uploading"
@@ -58,6 +59,7 @@ class UploadTaskState(BaseModel):
     current_part: int = 1
     total_parts: int = 1
     error: Optional[str] = None
+    scheduled_at: Optional[float] = None
 
 class AuthStatus(BaseModel):
     authenticated: bool

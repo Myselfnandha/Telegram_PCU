@@ -45,6 +45,18 @@ function buildStatusBadgeHtml(task) {
   } else if (task.status === 'uploading') {
     const partInfo = task.totalParts > 1 ? ` (${task.currentPart}/${task.totalParts})` : '';
     return `<span class="badge uploading" title="Uploading to Telegram MTProto">UPLOADING${partInfo}</span>`;
+  } else if (task.status === 'scheduled') {
+    let countdownStr = '';
+    if (task.scheduled_at) {
+      const diff = Math.max(0, Math.round((task.scheduled_at * 1000 - Date.now()) / 1000));
+      const hrs = Math.floor(diff / 3600);
+      const mins = Math.floor((diff % 3600) / 60);
+      const secs = diff % 60;
+      if (hrs > 0) countdownStr = `${hrs}h ${mins}m`;
+      else if (mins > 0) countdownStr = `${mins}m ${secs}s`;
+      else countdownStr = `${secs}s`;
+    }
+    return `<span class="badge" style="background: rgba(162, 155, 254, 0.2); color: #a29bfe; border: 1px solid rgba(162,155,254,0.4);" title="Scheduled upload">⏰ SCHEDULED ${countdownStr ? '(' + countdownStr + ')' : ''}</span>`;
   } else if (isPaused) {
     return `<span class="badge" style="background: rgba(253, 203, 110, 0.2); color: var(--status-warning);">PAUSED</span>`;
   } else if (isCompleted) {
@@ -67,6 +79,13 @@ function buildStageLineHtml(task) {
     return `<div class="card-stage-line streaming">⚡ <strong>Buffering Stream:</strong> Streaming file to local engine (${task.progress ? task.progress.toFixed(1) : 0}%)</div>`;
   } else if (task.status === 'uploading') {
     return `<div class="card-stage-line uploading">🚀 <strong>Turbo MTProto Upload:</strong> Streaming to Telegram (6 Workers)</div>`;
+  } else if (task.status === 'scheduled') {
+    let timeStr = 'later';
+    if (task.scheduled_at) {
+      const dt = new Date(task.scheduled_at * 1000);
+      timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (' + dt.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ')';
+    }
+    return `<div class="card-stage-line" style="color: #a29bfe;">⏰ <strong>Scheduled:</strong> Will start streaming at ${timeStr}</div>`;
   } else if (task.status === 'completed') {
     return `<div class="card-stage-line completed">✅ <strong>Upload Finished:</strong> Delivered to ${escapeHtml(task.chatName || 'Telegram')}</div>`;
   } else if (task.status === 'paused') {
@@ -81,6 +100,7 @@ function buildActionButtonsHtml(task) {
   const isUploading = task.status === 'uploading' || task.status === 'streaming' || task.status === 'preparing' || task.status === 'splitting';
   const isPaused = task.status === 'paused';
   const isQueued = task.status === 'queued';
+  const isScheduled = task.status === 'scheduled';
 
   if (isUploading) {
     return `
@@ -91,10 +111,25 @@ function buildActionButtonsHtml(task) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     `;
+  } else if (isScheduled) {
+    return `
+      <button class="icon-btn" title="Start Upload Now" onclick="window._app.startNow('${task.id}')" style="color: var(--accent-secondary);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+      </button>
+      <button class="icon-btn" title="Reschedule Timer" onclick="window._openScheduleModal('${task.id}')">
+        <span style="font-size: 0.95rem;">⏰</span>
+      </button>
+      <button class="icon-btn danger" title="Cancel Upload" onclick="window._app.cancel('${task.id}')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    `;
   } else if (isPaused) {
     return `
       <button class="icon-btn" title="Resume Upload" onclick="window._app.resume('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+      </button>
+      <button class="icon-btn" title="Schedule Resume" onclick="window._openScheduleModal('${task.id}')">
+        <span style="font-size: 0.95rem;">⏰</span>
       </button>
       <button class="icon-btn danger" title="Cancel" onclick="window._app.cancel('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -102,6 +137,9 @@ function buildActionButtonsHtml(task) {
     `;
   } else if (isQueued) {
     return `
+      <button class="icon-btn" title="Schedule Upload" onclick="window._openScheduleModal('${task.id}')">
+        <span style="font-size: 0.95rem;">⏰</span>
+      </button>
       <button class="icon-btn danger" title="Remove from Queue" onclick="window._app.remove('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
       </button>

@@ -165,7 +165,23 @@
                 <span>Active Upload Queue</span>
                 <span class="count-badge" id="queueCountBadge">0</span>
               </div>
-              <div class="header-actions" style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <div class="header-actions" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                <div class="speed-limiter-wrapper" title="Real-time upload speed limit (Token Bucket)">
+                  <select id="speedLimitSelect" class="speed-select-pill">
+                    <option value="0" selected>⚡ Unlimited (Fiber)</option>
+                    <option value="50">🚀 50 MB/s</option>
+                    <option value="25">🏎️ 25 MB/s</option>
+                    <option value="10">🚗 10 MB/s</option>
+                    <option value="5">🛵 5 MB/s</option>
+                    <option value="2">🚲 2 MB/s</option>
+                    <option value="1">🐌 1 MB/s</option>
+                    <option value="custom">⚙️ Custom...</option>
+                  </select>
+                </div>
+                <button class="btn-secondary night-mode-pill" id="btnToggleNightQueue"
+                  style="padding: 5px 10px; font-size: 0.76rem;" type="button" title="Configure off-peak night mode queue">
+                  🌙 Night: <span id="nightModeStateLabel">Off</span>
+                </button>
                 <button class="btn-secondary" id="btnBatchPause" style="padding: 5px 10px; font-size: 0.76rem;"
                   type="button" title="Pause all active uploads">
                   ⏸️ Pause All
@@ -988,6 +1004,132 @@
               style="color: var(--accent-secondary); font-family: var(--font-mono); font-weight: 600;">16px</span>
           </div>
           <input type="range" class="glass-range-slider" id="glassIntensitySlider" min="0" max="32" value="16" step="2">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schedule Upload Timer Modal -->
+  <div class="modal-backdrop" id="scheduleModal">
+    <div class="modal-window" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+          <span>⏰</span>
+          <span>Schedule Upload</span>
+        </h3>
+        <button class="icon-btn" id="btnCloseScheduleModal" type="button" onclick="window._closeScheduleModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding: 22px;">
+        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 16px;">
+          Choose when this upload should automatically begin streaming to Telegram:
+        </p>
+
+        <!-- Quick Timer Presets -->
+        <label style="font-size: 0.76rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; display: block;">Quick Presets</label>
+        <div class="time-preset-grid">
+          <button type="button" class="btn-time-preset" data-preset="30m">+30 Mins</button>
+          <button type="button" class="btn-time-preset" data-preset="1h">+1 Hour</button>
+          <button type="button" class="btn-time-preset" data-preset="2h">+2 Hours</button>
+          <button type="button" class="btn-time-preset" data-preset="4h">+4 Hours</button>
+          <button type="button" class="btn-time-preset" data-preset="tonight">Tonight (02:00 AM)</button>
+          <button type="button" class="btn-time-preset" data-preset="morning">Tomorrow (08:00 AM)</button>
+        </div>
+
+        <!-- Custom Date & Time Picker -->
+        <div style="margin-top: 14px;">
+          <label for="scheduleCustomInput" style="font-size: 0.76rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; display: block;">Or Pick Custom Date & Time</label>
+          <input type="datetime-local" id="scheduleCustomInput" class="glass-input" style="width: 100%; font-family: var(--font-mono); font-size: 0.9rem;">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 22px;">
+          <button type="button" class="btn-secondary" style="flex: 1; padding: 10px;" onclick="window._closeScheduleModal()">Cancel</button>
+          <button type="button" class="btn-primary" id="btnConfirmSchedule" style="flex: 1.5; padding: 10px;">Confirm Schedule ⏰</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Night Mode Window Modal -->
+  <div class="modal-backdrop" id="nightModeModal">
+    <div class="modal-window" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+          <span>🌙</span>
+          <span>Night Queue Window</span>
+        </h3>
+        <button class="icon-btn" id="btnCloseNightModal" type="button" onclick="window._closeNightModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding: 22px;">
+        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 16px;">
+          Automatically pause active transfers during daytime hours and upload exclusively during your off-peak night window.
+        </p>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); border-radius: var(--radius-sm); margin-bottom: 16px;">
+          <div>
+            <div style="font-weight: 600; font-size: 0.92rem; color: var(--text-main);">Enable Night Mode Window</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">Hold uploads outside off-peak hours</div>
+          </div>
+          <label class="switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+            <input type="checkbox" id="nightModeToggleCheck">
+            <span class="slider round" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.15); transition: .3s; border-radius: 24px;"></span>
+          </label>
+        </div>
+
+        <div class="form-row-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <label for="nightStartTime" style="font-size: 0.76rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; display: block;">Start Time (Night)</label>
+            <input type="time" id="nightStartTime" class="glass-input" value="01:00" style="width: 100%; font-family: var(--font-mono);">
+          </div>
+          <div>
+            <label for="nightEndTime" style="font-size: 0.76rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; display: block;">End Time (Morning)</label>
+            <input type="time" id="nightEndTime" class="glass-input" value="06:00" style="width: 100%; font-family: var(--font-mono);">
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 22px;">
+          <button type="button" class="btn-secondary" style="flex: 1; padding: 10px;" onclick="window._closeNightModal()">Cancel</button>
+          <button type="button" class="btn-primary" id="btnSaveNightMode" style="flex: 1.5; padding: 10px;">Save Night Window 🌙</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Speed Limiter Modal -->
+  <div class="modal-backdrop" id="customSpeedModal">
+    <div class="modal-window" style="max-width: 380px;">
+      <div class="modal-header">
+        <h3 style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+          <span>⚙️</span>
+          <span>Custom Speed Limit</span>
+        </h3>
+        <button class="icon-btn" id="btnCloseCustomSpeedModal" type="button" onclick="window._closeCustomSpeedModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding: 22px;">
+        <label for="customSpeedInput" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; display: block;">Target Bandwidth Cap (MB/s)</label>
+        <input type="number" id="customSpeedInput" class="glass-input" min="0.1" step="0.5" placeholder="e.g. 15.5" style="width: 100%; font-size: 1.1rem; font-family: var(--font-mono); font-weight: 600;">
+        <span style="font-size: 0.75rem; color: var(--text-dim); display: block; margin-top: 6px;">Set to 0 for unlimited Gigabit speed.</span>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secondary" style="flex: 1; padding: 9px;" onclick="window._closeCustomSpeedModal()">Cancel</button>
+          <button type="button" class="btn-primary" id="btnApplyCustomSpeed" style="flex: 1.5; padding: 9px;">Apply Speed Cap ⚡</button>
         </div>
       </div>
     </div>

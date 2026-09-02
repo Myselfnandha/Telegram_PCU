@@ -3,6 +3,7 @@ import logging
 import math
 import time
 import uuid
+from datetime import datetime, time as dt_time
 from pathlib import Path
 from typing import Dict, Optional, Callable, List, Any, Union
 from app.models import UploadStatus, SendMode
@@ -13,6 +14,43 @@ from app.services.file_detector import detect_mime
 from app.telegram_client import TelegramClientManager
 
 logger = logging.getLogger("queue_manager")
+
+
+class NightModeManager:
+    """Manages off-peak night schedule window (e.g. 01:00 AM to 06:00 AM)."""
+    def __init__(self):
+        self.enabled: bool = False
+        self.start_time: str = "01:00"  # HH:MM 24hr format
+        self.end_time: str = "06:00"    # HH:MM 24hr format
+
+    def is_in_night_window(self) -> bool:
+        if not self.enabled:
+            return True  # If disabled, anytime is active
+
+        now = datetime.now().time()
+        try:
+            start_h, start_m = map(int, self.start_time.split(":"))
+            end_h, end_m = map(int, self.end_time.split(":"))
+            t_start = dt_time(start_h, start_m)
+            t_end = dt_time(end_h, end_m)
+
+            if t_start <= t_end:
+                # Same day window (e.g. 02:00 to 06:00)
+                return t_start <= now <= t_end
+            else:
+                # Overnight window across midnight (e.g. 23:00 to 06:00)
+                return now >= t_start or now <= t_end
+        except Exception:
+            return True
+
+    def to_dict(self) -> dict:
+        return {
+            "enabled": self.enabled,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "in_window": self.is_in_night_window()
+        }
+
 
 class UploadItem:
     def __init__(
@@ -26,7 +64,8 @@ class UploadItem:
         custom_filename: Optional[str] = None,
         send_as: str = "auto",
         client_sid: Optional[str] = None,
-        is_temp_file: bool = True
+        is_temp_file: bool = True,
+        scheduled_at: Optional[float] = None
     ):
         self.id = task_id
         self.file_path = file_path
@@ -40,8 +79,9 @@ class UploadItem:
         self.send_as = send_as
         self.client_sid = client_sid
         self.is_temp_file = is_temp_file
+        self.scheduled_at = scheduled_at
 
-        self.status = UploadStatus.QUEUED
+        self.status = UploadStatus.SCHEDULED if (scheduled_at and scheduled_at > time.time()) else UploadStatus.QUEUED
         self.progress = 0.0
         self.uploaded_bytes = 0
         self.speed = 0.0
@@ -66,7 +106,9 @@ class QueueManager:
         self.queue: asyncio.Queue[UploadItem] = asyncio.Queue()
         self.max_concurrent = max_concurrent
         self._workers: List[asyncio.Task] = []
+        self._scheduler_task: Optional[asyncio.Task] = None
         self._is_running = False
+        self.night_mode = NightModeManager()
         self.progress_emitter: Optional[Callable[[UploadItem], Any]] = None
         self.db_logger: Optional[Callable[[UploadItem], Any]] = None
 
@@ -75,25 +117,54 @@ class QueueManager:
         self.db_logger = db_logger
 
     def start_workers(self):
-        """Starts the background worker tasks."""
+        """Starts background worker tasks and scheduler monitor."""
         if not self._is_running:
             self._is_running = True
+            self._scheduler_task = asyncio.create_task(self._scheduler_loop())
             for i in range(self.max_concurrent):
                 worker = asyncio.create_task(self._worker_loop(i))
                 self._workers.append(worker)
-            logger.info(f"Started {self.max_concurrent} upload queue worker(s).")
+            logger.info(f"Started {self.max_concurrent} upload queue worker(s) & Scheduler loop.")
 
     async def stop_workers(self):
-        """Stops all background queue workers."""
+        """Stops all background queue workers and scheduler."""
         self._is_running = False
+        if self._scheduler_task:
+            self._scheduler_task.cancel()
+            self._scheduler_task = None
         for worker in self._workers:
             worker.cancel()
         self._workers.clear()
         logger.info("Upload queue workers stopped.")
 
-    async def add_task(self, item: UploadItem) -> str:
-        """Adds a new upload item to the processing queue."""
+    async def _scheduler_loop(self):
+        """Monitors scheduled items and activates them when their trigger time arrives."""
+        while self._is_running:
+            try:
+                now = time.time()
+                for task_id, item in list(self.tasks.items()):
+                    if item.status == UploadStatus.SCHEDULED and item.scheduled_at:
+                        if now >= item.scheduled_at:
+                            logger.info(f"Scheduled timer reached for task {task_id} ({item.display_filename}). Activating upload.")
+                            item.status = UploadStatus.QUEUED
+                            item.scheduled_at = None
+                            item.pause_event.set()
+                            await self.queue.put(item)
+                            self._notify_update(item)
+            except Exception as e:
+                logger.debug(f"Scheduler tick error: {e}")
+            await asyncio.sleep(1.0)
+
+    async def add_task(self, item: UploadItem, scheduled_at: Optional[float] = None) -> str:
+        """Adds a new upload item to the processing queue (or schedule)."""
         self.tasks[item.id] = item
+        if scheduled_at and scheduled_at > time.time():
+            item.scheduled_at = scheduled_at
+            item.status = UploadStatus.SCHEDULED
+            logger.info(f"Scheduled task: {item.id} ({item.display_filename}) for timestamp {scheduled_at} (in {int(scheduled_at - time.time())}s)")
+            self._notify_update(item)
+            return item.id
+
         await self.queue.put(item)
         logger.info(f"Enqueued upload task: {item.id} ({item.display_filename})")
         self._notify_update(item)
@@ -105,9 +176,41 @@ class QueueManager:
     def get_all_tasks(self) -> List[UploadItem]:
         return list(self.tasks.values())
 
+    def schedule_task(self, task_id: str, scheduled_at: float) -> bool:
+        item = self.tasks.get(task_id)
+        if item and item.status in (UploadStatus.QUEUED, UploadStatus.PAUSED, UploadStatus.SCHEDULED):
+            item.scheduled_at = scheduled_at
+            item.status = UploadStatus.SCHEDULED
+            logger.info(f"Task {task_id} scheduled for timestamp {scheduled_at}")
+            self._notify_update(item)
+            return True
+        return False
+
+    async def start_task_now(self, task_id: str) -> bool:
+        item = self.tasks.get(task_id)
+        if item and item.status in (UploadStatus.SCHEDULED, UploadStatus.PAUSED):
+            item.scheduled_at = None
+            item.status = UploadStatus.QUEUED
+            item.pause_event.set()
+            await self.queue.put(item)
+            logger.info(f"Task {task_id} manually started via 'Start Now'")
+            self._notify_update(item)
+            return True
+        return False
+
+    def set_night_mode(self, enabled: bool, start_time: str = "01:00", end_time: str = "06:00") -> dict:
+        self.night_mode.enabled = enabled
+        self.night_mode.start_time = start_time
+        self.night_mode.end_time = end_time
+        logger.info(f"Night Mode config updated: Enabled={enabled}, Window={start_time}-{end_time}")
+        return self.night_mode.to_dict()
+
+    def get_night_mode(self) -> dict:
+        return self.night_mode.to_dict()
+
     def pause_task(self, task_id: str) -> bool:
         item = self.tasks.get(task_id)
-        if item and item.status in (UploadStatus.UPLOADING, UploadStatus.SPLITTING, UploadStatus.QUEUED):
+        if item and item.status in (UploadStatus.UPLOADING, UploadStatus.SPLITTING, UploadStatus.QUEUED, UploadStatus.SCHEDULED):
             item.pause_event.clear()
             item.status = UploadStatus.PAUSED
             logger.info(f"Paused task: {task_id}")
@@ -196,6 +299,13 @@ class QueueManager:
                 self.queue.task_done()
                 self._notify_update(item)
                 continue
+
+            # If Night Mode is enabled and we are outside the night window, wait gracefully
+            while self._is_running and self.night_mode.enabled and not self.night_mode.is_in_night_window():
+                if item.cancel_event.is_set():
+                    break
+                logger.info(f"Night Mode active: Task {item.id} waiting for night window ({self.night_mode.start_time} - {self.night_mode.end_time})...")
+                await asyncio.sleep(15)
 
             try:
                 await self._process_upload(item)
