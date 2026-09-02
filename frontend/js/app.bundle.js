@@ -556,18 +556,157 @@
         this._notify();
       }
     }
-    processNext() {
+    async processNext() {
       if (this.isProcessing) return;
       const nextTask = this.queue.find(
         (t) => (t.status === "queued" || t.status === "streaming") && !t.transferredToServer && !t.isTransferring
       );
-      if (!nextTask) return;
+      if (!nextTask || !nextTask.file) return;
       this.isProcessing = true;
       this.activeTask = nextTask;
       nextTask.isTransferring = true;
       nextTask.status = "streaming";
       nextTask.progress = 0;
       this._notify();
+      const file = nextTask.file;
+      const totalSize = file.size;
+      const CHUNK_SIZE = 25 * 1024 * 1024;
+      if (totalSize > CHUNK_SIZE) {
+        await this._uploadFileInChunks(nextTask, CHUNK_SIZE);
+      } else {
+        await this._uploadFileDirect(nextTask);
+      }
+    }
+    async _uploadFileInChunks(nextTask, chunkSize) {
+      const file = nextTask.file;
+      const totalSize = file.size;
+      const totalChunks = Math.ceil(totalSize / chunkSize);
+      let lastTime = performance.now();
+      let lastLoaded = 0;
+      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+        if (nextTask.status === "cancelled") {
+          this.isProcessing = false;
+          this.activeTask = null;
+          return;
+        }
+        const start = chunkIdx * chunkSize;
+        const end = Math.min(totalSize, start + chunkSize);
+        const chunkBlob = file.slice(start, end);
+        const formData = new FormData();
+        formData.append("file", chunkBlob, nextTask.filename);
+        formData.append("upload_id", nextTask.id);
+        formData.append("chunk_index", chunkIdx);
+        formData.append("total_chunks", totalChunks);
+        formData.append("offset", start);
+        formData.append("total_size", totalSize);
+        formData.append("filename", nextTask.filename);
+        let chunkSuccess = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          if (nextTask.status === "cancelled") {
+            this.isProcessing = false;
+            this.activeTask = null;
+            return;
+          }
+          try {
+            await new Promise((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              this.activeXhrs.set(nextTask.id, xhr);
+              xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable && nextTask.status !== "cancelled" && nextTask.status !== "failed") {
+                  const totalLoaded = start + e.loaded;
+                  const now = performance.now();
+                  const elapsed = (now - lastTime) / 1e3;
+                  const percent = Math.min(99, totalLoaded / totalSize * 100);
+                  nextTask.progress = Math.round(percent * 10) / 10;
+                  nextTask.uploadedBytes = totalLoaded;
+                  if (elapsed >= 0.25) {
+                    const delta = totalLoaded - lastLoaded;
+                    nextTask.speed = Math.max(0, delta / elapsed);
+                    const remaining = totalSize - totalLoaded;
+                    nextTask.eta = nextTask.speed > 0 ? remaining / nextTask.speed : 0;
+                    lastTime = now;
+                    lastLoaded = totalLoaded;
+                  }
+                  this._notify();
+                }
+              };
+              xhr.onload = () => {
+                this.activeXhrs.delete(nextTask.id);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  resolve();
+                } else {
+                  reject(new Error(`Chunk ${chunkIdx} failed with status ${xhr.status}`));
+                }
+              };
+              xhr.onerror = () => {
+                this.activeXhrs.delete(nextTask.id);
+                reject(new Error(`Network connection error on chunk ${chunkIdx}`));
+              };
+              xhr.onabort = () => {
+                this.activeXhrs.delete(nextTask.id);
+                reject(new Error("aborted"));
+              };
+              xhr.open("POST", "/api/upload/chunk", true);
+              xhr.send(formData);
+            });
+            chunkSuccess = true;
+            break;
+          } catch (err) {
+            if (nextTask.status === "cancelled" || err.message === "aborted") {
+              this.isProcessing = false;
+              this.activeTask = null;
+              return;
+            }
+            console.warn(`[ChunkUpload] Attempt ${attempt}/3 failed for chunk ${chunkIdx}:`, err);
+            if (attempt === 3) {
+              nextTask.status = "failed";
+              nextTask.error = err.message || "Chunk transfer failed after 3 attempts";
+              this._notify();
+              this.isProcessing = false;
+              this.activeTask = null;
+              setTimeout(() => this.processNext(), 200);
+              return;
+            }
+            await new Promise((r) => setTimeout(r, 1e3));
+          }
+        }
+        if (!chunkSuccess) return;
+      }
+      try {
+        const completeResp = await fetch("/api/upload/chunk/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            upload_id: nextTask.id,
+            chat_id: String(nextTask.chatId),
+            chat_name: nextTask.chatName || "",
+            caption: nextTask.caption || "",
+            filename: nextTask.customFilename || nextTask.filename,
+            send_as: nextTask.sendAs || "auto",
+            total_size: totalSize
+          })
+        });
+        if (!completeResp.ok) {
+          const errJson = await completeResp.json().catch(() => ({}));
+          throw new Error(errJson.detail || `Complete error (${completeResp.status})`);
+        }
+        console.log(`[Upload] Chunked file transfer finalized for task ${nextTask.id}`);
+        nextTask.transferredToServer = true;
+        nextTask.isTransferring = false;
+        if (nextTask.status === "streaming") {
+          nextTask.status = "uploading";
+          this._notify();
+        }
+      } catch (err) {
+        nextTask.status = "failed";
+        nextTask.error = err.message || "Failed to finalize chunked upload";
+        this._notify();
+      }
+      this.isProcessing = false;
+      this.activeTask = null;
+      setTimeout(() => this.processNext(), 150);
+    }
+    async _uploadFileDirect(nextTask) {
       const formData = new FormData();
       formData.append("file", nextTask.file);
       formData.append("upload_id", nextTask.id);

@@ -10,11 +10,132 @@ from app.models import UploadStatus
 from app.services.queue_manager import queue_manager, UploadItem
 from app.telegram_client import TelegramClientManager
 
+from pydantic import BaseModel
+
 logger = logging.getLogger("upload_route")
 
 router = APIRouter(prefix="/api", tags=["upload"])
 
-from typing import Optional, Union, Any
+
+class ChunkCompleteRequest(BaseModel):
+    upload_id: str
+    chat_id: str
+    chat_name: Optional[str] = ""
+    caption: Optional[str] = ""
+    filename: Optional[str] = ""
+    send_as: Optional[str] = "auto"
+    total_size: Optional[int] = None
+
+
+@router.post("/upload/chunk")
+async def handle_upload_chunk(
+    file: UploadFile = File(...),
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    total_chunks: int = Form(...),
+    offset: int = Form(...),
+    total_size: int = Form(...),
+    filename: str = Form(...)
+):
+    """
+    Handles sliced chunk uploads from the browser.
+    Appends binary chunks directly to the target temporary file on NVMe disk,
+    bypassing /tmp memory limits completely for multi-gigabyte (10GB-100GB+) uploads.
+    """
+    clean_original_filename = filename or f"upload_{upload_id}"
+    clean_original_filename = "".join([c for c in clean_original_filename if (c.isalnum() or c in " .-_()")]).strip()
+    temp_file_path = TEMP_UPLOAD_DIR / f"{upload_id}_{clean_original_filename}"
+
+    try:
+        # Pre-allocate full file space on first chunk to prevent fragmentation
+        if chunk_index == 0 and not temp_file_path.exists():
+            try:
+                fd = os.open(str(temp_file_path), os.O_CREAT | os.O_WRONLY, 0o644)
+                try:
+                    if total_size > 10 * 1024 * 1024:
+                        os.posix_fallocate(fd, 0, total_size)
+                finally:
+                    os.close(fd)
+            except Exception as e:
+                logger.debug(f"fallocate for chunked upload skipped: {e}")
+
+        # Read chunk content and write to exact byte offset
+        chunk_data = await file.read()
+        chunk_len = len(chunk_data)
+
+        mode = "r+b" if temp_file_path.exists() else "wb"
+        with open(temp_file_path, mode) as f:
+            f.seek(offset)
+            f.write(chunk_data)
+
+        return {
+            "status": "ok",
+            "upload_id": upload_id,
+            "chunk_index": chunk_index,
+            "received_bytes": offset + chunk_len,
+            "total_size": total_size
+        }
+    except Exception as e:
+        logger.error(f"Error writing chunk {chunk_index} for task {upload_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to write chunk {chunk_index}: {str(e)}")
+    finally:
+        await file.close()
+
+
+@router.post("/upload/chunk/complete")
+async def handle_chunk_upload_complete(payload: ChunkCompleteRequest):
+    """
+    Finalizes chunked upload and enqueues the task into Telegram MTProto QueueManager.
+    """
+    if not await TelegramClientManager.is_authorized():
+        raise HTTPException(
+            status_code=401,
+            detail="Telegram MTProto is not authorized. Please complete authentication first."
+        )
+
+    task_id = payload.upload_id
+    clean_original_filename = payload.filename or f"upload_{task_id}"
+    clean_original_filename = "".join([c for c in clean_original_filename if (c.isalnum() or c in " .-_()")]).strip()
+    target_filename = payload.filename if payload.filename and payload.filename.strip() else clean_original_filename
+    temp_file_path = TEMP_UPLOAD_DIR / f"{task_id}_{clean_original_filename}"
+
+    if not temp_file_path.exists():
+        raise HTTPException(status_code=404, detail="Uploaded file segments not found on server.")
+
+    total_bytes = temp_file_path.stat().st_size
+    if total_bytes == 0:
+        temp_file_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Uploaded file is empty (0 bytes).")
+
+    clean_chat_id: Union[int, str] = payload.chat_id.strip()
+    if clean_chat_id != "me":
+        try:
+            clean_chat_id = int(clean_chat_id)
+        except ValueError:
+            pass
+
+    upload_item = UploadItem(
+        task_id=task_id,
+        file_path=temp_file_path,
+        original_filename=clean_original_filename,
+        custom_filename=target_filename,
+        chat_id=clean_chat_id,
+        chat_name=payload.chat_name or f"Chat {clean_chat_id}",
+        caption=payload.caption or "",
+        send_as=payload.send_as or "auto",
+        is_temp_file=True
+    )
+
+    await queue_manager.add_task(upload_item)
+
+    return {
+        "status": "queued",
+        "task_id": task_id,
+        "filename": target_filename,
+        "file_size": total_bytes,
+        "chat_id": payload.chat_id,
+        "send_as": payload.send_as
+    }
 
 @router.post("/upload")
 async def handle_upload(

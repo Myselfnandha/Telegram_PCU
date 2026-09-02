@@ -33,6 +33,10 @@ SESSION_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Point system temporary file directory to local workspace NVMe storage (prevents /tmp 7.5GB RAM exhaustion)
+import tempfile
+tempfile.tempdir = str(TEMP_UPLOAD_DIR)
+
 # Database
 DB_PATH = DATA_DIR / "history.db"
 
