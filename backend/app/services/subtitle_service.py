@@ -87,6 +87,13 @@ class SubtitleService:
         clean_base = re.sub(r"[^\w\-_.]", "_", os.path.splitext(filename)[0])
         return SUBTITLES_DIR / f"{clean_base}.{lang}.srt"
 
+    def get_cached_subtitle(self, filename: str, lang: str = "eng") -> Optional[Path]:
+        """Instant (<0.1ms) check if subtitle is already cached on disk."""
+        path = self.get_cached_subtitle_path(filename, lang)
+        if path.exists() and path.stat().st_size > 100:
+            return path
+        return None
+
     async def get_or_download_subtitle(self, filename: str, lang: str = "eng") -> Optional[Path]:
         """
         Returns path to matching .srt subtitle file.

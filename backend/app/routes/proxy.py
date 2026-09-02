@@ -329,18 +329,85 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 4. Stream via FastStreamEngine with 8-Worker Lookahead Pipeline and 0ms RAM Slicing
+    # 4. Direct High-Throughput Stream Pipeline with 16MB Lookahead Queue & Exact Byte Accounting
+    async def direct_stream_pipeline():
+        CHUNK_SIZE = 512 * 1024  # Standard Telegram MTProto chunk
+        bytes_left = length
+        curr_offset = start
+        retries = 0
+        max_retries = 3
+
+        while bytes_left > 0 and retries < max_retries:
+            aligned_offset = (curr_offset // CHUNK_SIZE) * CHUNK_SIZE
+            discard_front = curr_offset - aligned_offset
+            fetch_limit = bytes_left + discard_front
+
+            # 16MB in-memory lookahead queue (32 * 512KB)
+            queue: asyncio.Queue = asyncio.Queue(maxsize=32)
+            producer_done = asyncio.Event()
+
+            async def producer():
+                try:
+                    async for raw in client.iter_download(
+                        message.media,
+                        offset=aligned_offset,
+                        limit=fetch_limit,
+                        request_size=CHUNK_SIZE,
+                        chunk_size=CHUNK_SIZE,
+                    ):
+                        if raw:
+                            await queue.put(raw)
+                except Exception as pe:
+                    logger.debug(f"Direct stream producer notice for {clean_name}: {pe}")
+                finally:
+                    producer_done.set()
+
+            producer_task = asyncio.create_task(producer())
+            first_chunk = True
+
+            try:
+                while bytes_left > 0:
+                    if queue.empty() and producer_done.is_set():
+                        break
+
+                    try:
+                        raw = await asyncio.wait_for(queue.get(), timeout=12.0)
+                    except asyncio.TimeoutError:
+                        if producer_done.is_set():
+                            break
+                        continue
+
+                    if first_chunk:
+                        first_chunk = False
+                        if discard_front > 0:
+                            raw = raw[discard_front:]
+
+                    if not raw:
+                        continue
+
+                    if len(raw) > bytes_left:
+                        raw = raw[:bytes_left]
+
+                    # Push to in-memory sliding buffer for 0ms reverse seek
+                    _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_offset, raw)
+
+                    yield raw
+                    bytes_left -= len(raw)
+                    curr_offset += len(raw)
+
+            except Exception as ce:
+                logger.warning(f"Direct stream consumer notice for {clean_name}: {ce}")
+            finally:
+                if not producer_task.done():
+                    producer_task.cancel()
+
+            if bytes_left > 0:
+                retries += 1
+                logger.info(f"Direct stream resuming {clean_name}: {bytes_left} bytes remaining from {curr_offset} (retry {retries}/{max_retries})")
+                await asyncio.sleep(0.05)
+
     return StreamingResponse(
-        fast_stream_engine.stream_byte_range(
-            client=client,
-            message=message,
-            chat_id=str(chat_id),
-            message_id=message_id,
-            file_size=file_size,
-            filename=clean_name,
-            start_byte=start,
-            end_byte=end
-        ),
+        direct_stream_pipeline(),
         status_code=status_code,
         headers=headers
     )
@@ -1131,30 +1198,6 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
     elif raw_url and raw_url.startswith("/"):
         raw_url = f"http://127.0.0.1:{PROXY_PORT}{raw_url}"
 
-    # Trigger instant Head+Tail pre-buffering in background before player even finishes opening window
-    if chat_id and message_id:
-        async def _trigger_instant_prebuffer():
-            try:
-                cl = await TelegramClientManager.get_client()
-                if cl and cl.is_connected():
-                    clean_cid = int(chat_id) if (chat_id != "me" and str(chat_id).lstrip("-").isdigit()) else chat_id
-                    msg = sniffer_service._message_cache.get((clean_cid, message_id))
-                    if not msg:
-                        msg = await cl.get_messages(clean_cid, ids=message_id)
-                    if msg and msg.media and hasattr(msg, "file") and msg.file:
-                        await fast_stream_engine.prebuffer_media(
-                            client=cl,
-                            message=msg,
-                            chat_id=str(chat_id),
-                            message_id=message_id,
-                            file_size=int(msg.file.size),
-                            filename=filename
-                        )
-            except Exception as e:
-                logger.debug(f"Prebuffer trigger notice: {e}")
-
-        asyncio.create_task(_trigger_instant_prebuffer())
-
     target_player = payload.get("player", "vlc")
     vlc_bin = shutil.which("vlc") or "/usr/bin/vlc"
     mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
@@ -1171,14 +1214,13 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
     player_name = "vlc"
     desktop_env = get_desktop_env()
 
-    # Query subtitle file and resume progress
-    sub_file = None
-    resume_sec = 0
-    try:
-        sub_file = await subtitle_service.get_or_download_subtitle(filename)
-    except Exception as se:
-        logger.debug(f"Subtitle fetch error: {se}")
+    # Instant check for locally cached subtitle (<0.1ms)
+    sub_file = subtitle_service.get_cached_subtitle(filename)
+    if not sub_file:
+        # Fetch matching subtitles asynchronously in background without blocking player launch
+        asyncio.create_task(subtitle_service.get_or_download_subtitle(filename))
 
+    resume_sec = 0
     if chat_id and message_id:
         try:
             prog = playback_tracker.get_playback_progress(str(chat_id), message_id)
@@ -1226,10 +1268,10 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                     "--no-qt-error-dialogs",
                     "--avcodec-threads=0",
                     "--avcodec-fast",
-                    "--network-caching=300",
-                    "--file-caching=300",
-                    "--live-caching=300",
-                    "--clock-jitter=0"
+                    "--network-caching=1000",
+                    "--file-caching=1000",
+                    "--live-caching=1000",
+                    "--no-drop-late-frames"
                 ]
                 if sub_file and sub_file.exists():
                     vlc_cmd.append(f"--sub-file={str(sub_file)}")
@@ -1245,7 +1287,7 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                     start_new_session=True
                 )
             launched = True
-            logger.info(f"Launched {player_name.upper()} player (Ultra Fast-Start Stream) for: {raw_url}")
+            logger.info(f"Launched {player_name.upper()} player (Direct Stream Pipeline) for: {raw_url}")
         except Exception as e:
             logger.warning(f"Could not launch media player subprocess: {e}")
 
@@ -1312,34 +1354,6 @@ async def launch_vlc_batch(payload: Dict[str, Any]):
         if raw_url:
             stream_urls.append(raw_url)
 
-    # Prebuffer first 2 episodes in background
-    async def _prebuffer_batch():
-        try:
-            cl = await TelegramClientManager.get_client()
-            if cl and cl.is_connected():
-                for item in items[:2]:
-                    cid = item.get("chat_id")
-                    mid = item.get("message_id")
-                    fn = item.get("filename", "video.mp4")
-                    if cid and mid:
-                        clean_cid = int(cid) if (cid != "me" and str(cid).lstrip("-").isdigit()) else cid
-                        msg = await cl.get_messages(clean_cid, ids=mid)
-                        if msg and msg.media and hasattr(msg, "file") and msg.file:
-                            await fast_stream_engine.prebuffer_media(
-                                client=cl,
-                                message=msg,
-                                chat_id=str(cid),
-                                message_id=mid,
-                                file_size=int(msg.file.size),
-                                filename=fn
-                            )
-        except Exception as e:
-            logger.debug(f"Batch prebuffer notice: {e}")
-
-    asyncio.create_task(_prebuffer_batch())
-
-    launched = False
-    player_name = "vlc"
     chosen_bin = vlc_bin if os.path.exists(vlc_bin) else (mpv_bin if os.path.exists(mpv_bin) else None)
     desktop_env = get_desktop_env()
 
@@ -1364,9 +1378,10 @@ async def launch_vlc_batch(payload: Dict[str, Any]):
                     "--no-qt-error-dialogs",
                     "--avcodec-threads=0",
                     "--avcodec-fast",
-                    "--network-caching=300",
-                    "--file-caching=300",
-                    "--live-caching=300"
+                    "--network-caching=1000",
+                    "--file-caching=1000",
+                    "--live-caching=1000",
+                    "--no-drop-late-frames"
                 ]
             subprocess.Popen(
                 cmd,
