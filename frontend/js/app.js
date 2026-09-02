@@ -12,7 +12,6 @@ import { themeManager } from './theme.js';
 import { tabController } from './tabs.js';
 import { snifferUI } from './sniffer-ui.js';
 import { settingsUI } from './settings-ui.js';
-import { telemetryController } from './telemetry.js';
 import { initCinema } from './cinema-ui.js';
 import { authUI } from './auth-ui.js';
 
@@ -197,13 +196,6 @@ function initApp() {
     settingsUI.init(tabController);
   } catch (e) {
     console.error('Settings UI error:', e);
-  }
-
-  // Initialize Real-Time Telemetry & Throughput Sparkline
-  try {
-    telemetryController.init(socketManager.socket);
-  } catch (e) {
-    console.error('Telemetry Controller error:', e);
   }
 
   // Initialize History Search, Filter & CSV/JSON Export Controls

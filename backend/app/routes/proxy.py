@@ -1170,6 +1170,23 @@ async def clear_stream_cache():
     return {"success": True, "cleared_files": cleared}
 
 
+def get_desktop_env() -> dict:
+    """Constructs complete graphical desktop environment so VLC/MPV opens reliably in user session."""
+    env = os.environ.copy()
+    if not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
+        env["DISPLAY"] = ":0"
+    if "DBUS_SESSION_BUS_ADDRESS" not in env:
+        env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/run/user/1001/bus"
+    if "XAUTHORITY" not in env:
+        import glob
+        auth_files = glob.glob("/tmp/xauth_*") + [str(Path.home() / ".Xauthority")]
+        for af in auth_files:
+            if os.path.exists(af):
+                env["XAUTHORITY"] = af
+                break
+    return env
+
+
 @router.post("/api/media/vlc/play")
 async def launch_vlc_stream(payload: Dict[str, Any]):
     """Launch VLC Player directly on host machine with high-speed MTProto stream."""
@@ -1203,6 +1220,7 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
 
     launched = False
     player_name = "vlc"
+    desktop_env = get_desktop_env()
     if chosen_bin:
         try:
             if "mpv" in chosen_bin:
@@ -1221,6 +1239,7 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                         "--vd-lavc-threads=0",
                         "--vd-lavc-fast=yes"
                     ],
+                    env=desktop_env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True
@@ -1231,15 +1250,16 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                     [
                         chosen_bin,
                         raw_url,
+                        "--no-qt-privacy-ask",
+                        "--no-qt-error-dialogs",
                         "--avcodec-threads=0",
                         "--avcodec-fast",
                         "--network-caching=800",
                         "--file-caching=600",
                         "--live-caching=600",
-                        "--clock-jitter=0",
-                        "--no-qt-error-dialogs",
-                        "--quiet"
+                        "--clock-jitter=0"
                     ],
+                    env=desktop_env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True
@@ -1313,6 +1333,7 @@ async def launch_vlc_batch(payload: Dict[str, Any]):
     launched = False
     player_name = "vlc"
     chosen_bin = vlc_bin if os.path.exists(vlc_bin) else (mpv_bin if os.path.exists(mpv_bin) else None)
+    desktop_env = get_desktop_env()
 
     if chosen_bin and stream_urls:
         try:
@@ -1330,15 +1351,15 @@ async def launch_vlc_batch(payload: Dict[str, Any]):
                 cmd = [
                     chosen_bin,
                     *stream_urls,
-                    "--input-fast-seek",
+                    "--no-qt-privacy-ask",
+                    "--no-qt-error-dialogs",
                     "--avcodec-threads=0",
                     "--avcodec-fast",
-                    "--network-caching=300",
-                    "--no-qt-error-dialogs",
-                    "--quiet"
+                    "--network-caching=800"
                 ]
             subprocess.Popen(
                 cmd,
+                env=desktop_env,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True
