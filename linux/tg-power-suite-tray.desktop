@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=TG Power Suite Tray
+Comment=Linux System Tray Companion for TG Power Suite
+Exec=/home/nandha/Desktop/TG_TOOL/venv/bin/python /home/nandha/Desktop/TG_TOOL/scripts/tray_app.py
+Icon=/home/nandha/Desktop/TG_TOOL/frontend/assets/icon-192.png
+Terminal=false
+Type=Application
+Categories=Network;Utility;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-after=panel

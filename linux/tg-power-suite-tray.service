@@ -1,0 +1,16 @@
+[Unit]
+Description=TG Power Suite Linux System Tray Companion
+After=graphical-session.target tg-power-suite.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Desktop/TG_TOOL
+ExecStart=%h/Desktop/TG_TOOL/venv/bin/python %h/Desktop/TG_TOOL/scripts/tray_app.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+Environment=DISPLAY=:0.0
+
+[Install]
+WantedBy=graphical-session.target
