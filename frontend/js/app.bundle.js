@@ -3259,6 +3259,7 @@
       this.stepCode = null;
       this.step2FA = null;
       this.stepSuccess = null;
+      window._authUI = this;
     }
     init() {
       this.modal = document.getElementById("authModal");
@@ -3268,17 +3269,24 @@
       this.stepSuccess = document.getElementById("authStepSuccess");
       const authStatusBadge = document.getElementById("authStatusBadge");
       if (authStatusBadge) {
-        authStatusBadge.style.cursor = "pointer";
-        authStatusBadge.addEventListener("click", () => this.openAuthModal());
+        authStatusBadge.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.openAuthModal();
+        });
       }
       const authUserName = document.getElementById("authUserName");
       if (authUserName) {
-        authUserName.style.cursor = "pointer";
-        authUserName.addEventListener("click", () => this.openAuthModal());
+        authUserName.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.openAuthModal();
+        });
       }
       const btnClose = document.getElementById("btnCloseAuthModal");
       if (btnClose) {
-        btnClose.addEventListener("click", () => this.closeAuthModal());
+        btnClose.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.closeAuthModal();
+        });
       }
       if (this.modal) {
         this.modal.addEventListener("click", (e) => {
@@ -3334,22 +3342,26 @@
     updateHeaderBadge(data) {
       const badge = document.getElementById("authStatusBadge");
       const userText = document.getElementById("authUserName");
-      if (!badge || !userText) return;
+      if (!badge) return;
       if (data && data.authenticated) {
-        badge.textContent = "\u25CF Connected";
-        badge.className = "status-indicator connected";
+        badge.classList.add("authorized");
         const name = data.first_name || data.username || "Authorized";
-        userText.textContent = name;
-        userText.title = `@${data.username || ""} (${data.phone || ""})`;
+        if (userText) userText.textContent = name;
+        badge.title = `@${data.username || ""} (${data.phone || ""}) - Connected`;
       } else {
-        badge.textContent = "\u25CF Connect Telegram";
-        badge.className = "status-indicator disconnected";
-        userText.textContent = "Login to Telegram";
-        userText.title = "Click to log in to Telegram MTProto";
+        badge.classList.remove("authorized");
+        if (userText) userText.textContent = "Connect Telegram";
+        badge.title = "Click to log in to Telegram MTProto";
       }
     }
     async openAuthModal() {
+      this.modal = document.getElementById("authModal");
+      this.stepPhone = document.getElementById("authStepPhone");
+      this.stepCode = document.getElementById("authStepCode");
+      this.step2FA = document.getElementById("authStep2FA");
+      this.stepSuccess = document.getElementById("authStepSuccess");
       if (!this.modal) return;
+      this.modal.classList.add("open");
       this.modal.classList.add("active");
       const status = await this.checkStatus();
       if (status && status.authenticated) {
@@ -3363,7 +3375,11 @@
       }
     }
     closeAuthModal() {
-      if (this.modal) this.modal.classList.remove("active");
+      this.modal = document.getElementById("authModal");
+      if (this.modal) {
+        this.modal.classList.remove("open");
+        this.modal.classList.remove("active");
+      }
     }
     showStep(stepName) {
       if (this.stepPhone) this.stepPhone.style.display = stepName === "phone" ? "block" : "none";

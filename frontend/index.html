@@ -18,10 +18,30 @@
   <link rel="icon" type="image/png" href="/assets/icon-192.png">
 
   <!-- Local Instant Socket.IO Client (Zero CDN Latency) -->
-  <script src="/js/socket.io.min.js?v=3.3.1"></script>
-  <link rel="stylesheet" href="/css/style.css?v=3.3.1">
+  <script src="/js/socket.io.min.js?v=3.3.2"></script>
+  <link rel="stylesheet" href="/css/style.css?v=3.3.2">
   <script>
     // Early instantaneous auth status check & tab switching logic
+    window._openAuthModal = function () {
+      var modal = document.getElementById('authModal');
+      if (modal) {
+        modal.classList.add('open');
+        modal.classList.add('active');
+      }
+      if (window._authUI && typeof window._authUI.openAuthModal === 'function') {
+        window._authUI.openAuthModal();
+      }
+    };
+    window._closeAuthModal = function () {
+      var modal = document.getElementById('authModal');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.classList.remove('active');
+      }
+      if (window._authUI && typeof window._authUI.closeAuthModal === 'function') {
+        window._authUI.closeAuthModal();
+      }
+    };
     window._earlyCheckAuth = function () {
       fetch('/api/auth/status')
         .then(function (res) { return res.json(); })
@@ -36,7 +56,7 @@
               userText.textContent = name + handle;
             } else {
               badge.classList.remove('authorized');
-              userText.textContent = 'Not Authorized';
+              userText.textContent = 'Connect Telegram';
             }
           }
         })
@@ -123,10 +143,10 @@
           <span id="themeIcon">🎨</span>
           <span style="font-size: 0.8rem; font-weight: 500;">Theme</span>
         </button>
-        <div class="auth-badge" id="authStatusBadge">
+        <button class="auth-badge" id="authStatusBadge" type="button" onclick="window._openAuthModal()" title="Click to log in to Telegram MTProto">
           <span class="auth-status-dot"></span>
-          <span id="authUserName">Checking...</span>
-        </div>
+          <span id="authUserName">Connect Telegram</span>
+        </button>
       </div>
     </header>
 
@@ -827,7 +847,7 @@
           <span>✈️</span>
           <span>Telegram Login</span>
         </h3>
-        <button class="icon-btn" id="btnCloseAuthModal" type="button">
+        <button class="icon-btn" id="btnCloseAuthModal" type="button" onclick="window._closeAuthModal()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -916,7 +936,7 @@
           </div>
 
           <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button type="button" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 0.84rem;" onclick="document.getElementById('authModal').classList.remove('active')">
+            <button type="button" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 0.84rem;" onclick="window._closeAuthModal()">
               Done
             </button>
             <button type="button" id="btnLogoutTelegram" class="btn-secondary danger-hover" style="padding: 8px 14px; font-size: 0.84rem;">
@@ -981,7 +1001,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=3.3.1"></script>
+  <script src="/js/app.bundle.js?v=3.3.2"></script>
 </body>
 
 </html>

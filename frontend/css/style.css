@@ -254,7 +254,15 @@ html, body {
   border: 1px solid var(--border-glass);
   font-size: 0.85rem;
   font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
   transition: var(--transition-smooth);
+}
+
+.auth-badge:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
 }
 
 .auth-status-dot {
@@ -1134,9 +1142,11 @@ html, body {
   transition: var(--transition-smooth);
 }
 
-.modal-backdrop.open {
+.modal-backdrop.open,
+.modal-backdrop.active {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 
 .modal-window {
@@ -1154,7 +1164,8 @@ html, body {
   overflow: hidden;
 }
 
-.modal-backdrop.open .modal-window {
+.modal-backdrop.open .modal-window,
+.modal-backdrop.active .modal-window {
   transform: scale(1);
 }
 
