@@ -2109,8 +2109,10 @@
       window._snifferUI = this;
     }
     openModal() {
+      if (!this.watchChannelModal) this.watchChannelModal = document.getElementById("watchChannelModal");
       if (!this.watchChannelModal) return;
-      this.watchChannelModal.classList.add("open");
+      this.watchChannelModal.classList.add("open", "active");
+      if (!this.watchChannelSearchInput) this.watchChannelSearchInput = document.getElementById("watchChannelSearchInput");
       if (this.watchChannelSearchInput) {
         this.watchChannelSearchInput.value = "";
         setTimeout(() => this.watchChannelSearchInput.focus(), 150);
@@ -2118,8 +2120,9 @@
       this.renderModalList("");
     }
     closeModal() {
+      if (!this.watchChannelModal) this.watchChannelModal = document.getElementById("watchChannelModal");
       if (!this.watchChannelModal) return;
-      this.watchChannelModal.classList.remove("open");
+      this.watchChannelModal.classList.remove("open", "active");
     }
     async fetchAccountChannels(force = false) {
       try {
