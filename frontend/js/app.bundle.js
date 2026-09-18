@@ -3194,7 +3194,7 @@
         });
       }
     }
-    if (standaloneList.length === 0 && validSeriesGroups.length > 0) {
+    if (standaloneList.length === 0 && validShows.length > 0) {
       moviesGrid.innerHTML = `
       <div class="cinema-empty" style="padding: 32px 12px;">
         <span style="font-size: 1.8rem; margin-bottom: 6px;">\u{1F4FA}</span>
