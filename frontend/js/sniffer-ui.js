@@ -284,12 +284,16 @@ export class SnifferUI {
       }
 
       const handle = ch.username ? `@${ch.username}` : `ID: ${ch.id}`;
+      const hasPhoto = Boolean(ch.has_avatar || ch.photo_url);
+      const avatarInner = hasPhoto
+        ? `<img src="/api/chats/${encodeURIComponent(ch.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.outerHTML='<span>${icon}</span>'">`
+        : `<span>${icon}</span>`;
 
       return `
         <div class="chat-option-item ${isWatched ? 'selected' : ''}" data-identifier="${escapeHtml(identifier)}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;">
           <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
             <div class="chat-avatar" style="background: ${avatarBg}; width: 38px; height: 38px; font-size: 1.1rem; overflow: hidden; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-              <img src="/api/chats/${encodeURIComponent(ch.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.outerHTML='<span>${icon}</span>'">
+              ${avatarInner}
             </div>
             <div class="chat-meta" style="min-width: 0;">
               <div class="chat-meta-name" title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</div>

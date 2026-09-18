@@ -29,6 +29,7 @@ class ChatItem(BaseModel):
     unread_count: int = 0
     pinned: bool = False
     photo_url: Optional[str] = None
+    has_avatar: bool = False
 
 class UploadHistoryItem(BaseModel):
     id: str

@@ -74,6 +74,7 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
             entity_type = "bot" if is_bot else "user"
 
         name = d.name or "Unknown Chat"
+        has_photo = bool(getattr(d.entity, "photo", None))
         result.append(ChatItem(
             id=d.entity.id,
             name=name,
@@ -81,7 +82,8 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
             type=entity_type,
             unread_count=d.unread_count,
             pinned=bool(d.pinned),
-            photo_url=f"/api/chats/{d.entity.id}/avatar"
+            photo_url=f"/api/chats/{d.entity.id}/avatar" if has_photo else None,
+            has_avatar=has_photo
         ))
 
     # 2. Fetch all Telegram Contacts from user address book
@@ -96,6 +98,7 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
                 if not full_name:
                     full_name = u.username or f"Contact {u.id}"
                 is_bot = bool(getattr(u, "bot", False)) or (u.username and u.username.lower().endswith("bot"))
+                has_u_photo = bool(getattr(u, "photo", None))
                 result.append(ChatItem(
                     id=u.id,
                     name=full_name,
@@ -103,7 +106,8 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
                     type="bot" if is_bot else "user",
                     unread_count=0,
                     pinned=False,
-                    photo_url=f"/api/chats/{u.id}/avatar"
+                    photo_url=f"/api/chats/{u.id}/avatar" if has_u_photo else None,
+                    has_avatar=has_u_photo
                 ))
     except Exception as contact_err:
         logger.debug(f"Could not fetch contacts list: {contact_err}")
@@ -117,14 +121,17 @@ import os
 from fastapi import Response
 _AVATAR_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/avatars")
 os.makedirs(_AVATAR_CACHE_DIR, exist_ok=True)
+_EMPTY_PIXEL = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
 
 
 @router.get("/chats/{chat_id}/avatar")
 async def get_chat_avatar(chat_id: str):
     """
     Downloads and caches Telegram channel/group/user profile avatar photo.
+    Returns 1x1 transparent PNG if no photo exists, preventing 404 console noise.
     """
     cache_file = os.path.join(_AVATAR_CACHE_DIR, f"{chat_id}.jpg")
+    cache_none = os.path.join(_AVATAR_CACHE_DIR, f"{chat_id}.none")
     if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
         with open(cache_file, "rb") as f:
             return Response(
@@ -132,10 +139,16 @@ async def get_chat_avatar(chat_id: str):
                 media_type="image/jpeg",
                 headers={"Cache-Control": "public, max-age=604800, immutable"}
             )
+    if os.path.exists(cache_none):
+        return Response(
+            content=_EMPTY_PIXEL,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
 
     client = await TelegramClientManager.get_client()
     if not client or not client.is_connected():
-        raise HTTPException(status_code=503, detail="Telegram client not connected")
+        return Response(content=_EMPTY_PIXEL, media_type="image/png")
 
     try:
         clean_id: int | str = chat_id
@@ -146,9 +159,22 @@ async def get_chat_avatar(chat_id: str):
                 clean_id = chat_id
 
         entity = await client.get_entity(clean_id)
+        if not getattr(entity, "photo", None):
+            try:
+                with open(cache_none, "w") as f:
+                    f.write("none")
+            except Exception:
+                pass
+            return Response(content=_EMPTY_PIXEL, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
         photo_bytes = await client.download_profile_photo(entity, file=bytes)
         if not photo_bytes:
-            raise HTTPException(status_code=404, detail="No avatar available for this entity")
+            try:
+                with open(cache_none, "w") as f:
+                    f.write("none")
+            except Exception:
+                pass
+            return Response(content=_EMPTY_PIXEL, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
         try:
             with open(cache_file, "wb") as f:
@@ -161,11 +187,14 @@ async def get_chat_avatar(chat_id: str):
             media_type="image/jpeg",
             headers={"Cache-Control": "public, max-age=604800, immutable"}
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.debug(f"Avatar fetch notice for {chat_id}: {e}")
-        raise HTTPException(status_code=404, detail="Avatar not found")
+        try:
+            with open(cache_none, "w") as f:
+                f.write("none")
+        except Exception:
+            pass
+        return Response(content=_EMPTY_PIXEL, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 from pydantic import BaseModel

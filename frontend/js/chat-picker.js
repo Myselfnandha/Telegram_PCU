@@ -109,10 +109,15 @@ class ChatPicker {
         `;
       } else {
         const initial = (chat.name || 'C').charAt(0).toUpperCase();
-        const avatarUrl = `/api/chats/${encodeURIComponent(chat.id)}/avatar`;
-        avatarWrapper.innerHTML = `
-          <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span style=\\'font-weight:700; font-size:1rem; color:var(--accent-secondary);\\'>${escapeHtml(initial)}</span>'">
-        `;
+        const hasPhoto = Boolean(chat.has_avatar || chat.photo_url);
+        if (hasPhoto) {
+          const avatarUrl = `/api/chats/${encodeURIComponent(chat.id)}/avatar`;
+          avatarWrapper.innerHTML = `
+            <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span style=\\'font-weight:700; font-size:1rem; color:var(--accent-secondary);\\'>${escapeHtml(initial)}</span>'">
+          `;
+        } else {
+          avatarWrapper.innerHTML = `<span style="font-weight:700; font-size:1rem; color:var(--accent-secondary);">${escapeHtml(initial)}</span>`;
+        }
       }
     }
   }
@@ -149,7 +154,7 @@ class ChatPicker {
         this.renderList(this.searchInput ? this.searchInput.value : '');
       }
     } catch (e) {
-      console.error('Error loading chats:', e);
+      console.error('Error fetching chats:', e);
     } finally {
       this.isLoading = false;
     }
@@ -168,7 +173,6 @@ class ChatPicker {
       this.searchInput.value = '';
       setTimeout(() => {
         this.searchInput.focus();
-        this.searchInput.select();
       }, 50);
     }
     if (this.chats.length === 0) {
@@ -184,8 +188,8 @@ class ChatPicker {
     if (!this.listContainer) return;
     this.listContainer.innerHTML = `
       <div style="padding: 32px; text-align: center; color: var(--text-muted);">
-        <div style="display: inline-block; width: 24px; height: 24px; border: 2px solid var(--accent-primary); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px;"></div>
-        <p>Loading Telegram chats...</p>
+        <div class="spinner" style="margin: 0 auto 12px;"></div>
+        <div>Loading your chats and channels...</div>
       </div>
     `;
   }
@@ -199,10 +203,9 @@ class ChatPicker {
 
   renderList(filter = '') {
     if (!this.listContainer) return;
-    const q = filter.trim().toLowerCase();
+    const term = filter.toLowerCase().trim();
 
-    const filtered = this.chats.filter((c) => {
-      // Category filter check
+    const filtered = this.chats.filter(c => {
       if (this.activeFilter && this.activeFilter !== 'all') {
         const cType = (c.type || '').toLowerCase();
         if (this.activeFilter === 'channel' && cType !== 'channel') return false;
@@ -210,30 +213,32 @@ class ChatPicker {
         if (this.activeFilter === 'bot' && cType !== 'bot') return false;
         if (this.activeFilter === 'user' && cType !== 'user' && cType !== 'saved_messages') return false;
       }
-
-      if (!q) return true;
-      const nameMatch = (c.name || '').toLowerCase().includes(q);
-      const userMatch = c.username ? c.username.toLowerCase().includes(q) : false;
-      return nameMatch || userMatch;
+      if (!term) return true;
+      const name = (c.name || '').toLowerCase();
+      const username = (c.username || '').toLowerCase();
+      return name.includes(term) || username.includes(term);
     });
 
     if (filtered.length === 0) {
       this.listContainer.innerHTML = `
-        <div style="padding: 24px; text-align: center; color: var(--text-muted);">
-          No ${this.activeFilter !== 'all' ? this.activeFilter + 's' : 'chats'} found matching "${escapeHtml(filter)}"
+        <div style="padding: 32px; text-align: center; color: var(--text-muted);">
+          No chats or channels found matching "${escapeHtml(filter)}"
         </div>
       `;
       return;
     }
 
-    this.listContainer.innerHTML = filtered.map((c) => {
+    this.listContainer.innerHTML = filtered.map(c => {
       const isSelected = this.selectedChat && this.selectedChat.id === c.id;
       const initial = (c.name || 'C').charAt(0).toUpperCase();
       const typeLabel = c.type === 'saved_messages' ? 'Cloud' : c.type.toUpperCase();
 
+      const hasPhoto = Boolean(c.has_avatar || c.photo_url);
       const avatarContent = c.type === 'saved_messages'
         ? `<span style="font-size: 1.15rem;">☁️</span>`
-        : `<img src="/api/chats/${encodeURIComponent(c.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span>${escapeHtml(initial)}</span>'">`;
+        : (hasPhoto
+            ? `<img src="/api/chats/${encodeURIComponent(c.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span>${escapeHtml(initial)}</span>'">`
+            : `<span>${escapeHtml(initial)}</span>`);
 
       return `
         <div class="chat-option-item ${isSelected ? 'selected' : ''}" data-id="${c.id}">
