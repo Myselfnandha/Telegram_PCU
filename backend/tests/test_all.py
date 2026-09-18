@@ -285,12 +285,12 @@ async def test_zero_copy_chunk_config():
 
     p_size, workers, is_big = get_optimal_chunk_config(100 * 1024 * 1024)
     assert p_size == PART_SIZE
-    assert workers == 6
+    assert workers == 8
     assert is_big is True
 
     p_size, workers, is_big = get_optimal_chunk_config(1900 * 1024 * 1024)
     assert p_size == PART_SIZE
-    assert workers == 8
+    assert workers == 12
     assert is_big is True
 
 
