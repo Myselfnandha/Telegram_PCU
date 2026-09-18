@@ -21,6 +21,22 @@
   <script src="/js/socket.io.min.js?v=3.3.5"></script>
   <link rel="stylesheet" href="/css/style.css?v=3.3.5">
   <script>
+    // Nuke any stale Service Worker & PWA cache immediately on localhost
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        for (var i = 0; i < registrations.length; i++) {
+          registrations[i].unregister();
+        }
+      });
+      if (window.caches) {
+        caches.keys().then(function (names) {
+          for (var j = 0; j < names.length; j++) {
+            caches.delete(names[j]);
+          }
+        });
+      }
+    }
+
     // Early instantaneous auth status check & tab switching logic
     window._openAuthModal = function () {
       var modal = document.getElementById('authModal');
@@ -42,6 +58,51 @@
         window._authUI.closeAuthModal();
       }
     };
+
+    // Global Chat Picker Modal Openers (Bulletproof direct onclick hooks)
+    window._openChatModal = function (cb) {
+      var modal = document.getElementById('chatModal');
+      if (modal) {
+        modal.classList.add('open');
+        modal.classList.add('active');
+      }
+      if (window._chatPicker && typeof window._chatPicker.open === 'function') {
+        window._chatPicker.open(cb);
+      }
+    };
+    window._closeChatModal = function () {
+      var modal = document.getElementById('chatModal');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.classList.remove('active');
+      }
+      if (window._chatPicker && typeof window._chatPicker.close === 'function') {
+        window._chatPicker.close();
+      }
+    };
+    window._openCinemaChatModal = function () {
+      window._openChatModal(function (selectedChat) {
+        if (window._cinemaOnChatSelected) {
+          window._cinemaOnChatSelected(selectedChat);
+        }
+      });
+    };
+    window._refreshChats = function () {
+      if (window._chatPicker && typeof window._chatPicker.fetchChats === 'function') {
+        window._chatPicker.fetchChats(true);
+      } else {
+        fetch('/api/chats?force_refresh=true')
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (window._chatPicker) {
+              window._chatPicker.chats = data;
+              window._chatPicker.renderList();
+            }
+          })
+          .catch(function (e) { console.warn('Could not refresh dialogs:', e); });
+      }
+    };
+
     window._earlyCheckAuth = function () {
       fetch('/api/auth/status')
         .then(function (res) { return res.json(); })
@@ -246,7 +307,7 @@
               </div>
             </div>
 
-            <button class="btn-choose-chat" id="btnChooseChat" type="button">
+            <button class="btn-choose-chat" id="btnChooseChat" type="button" onclick="window._openChatModal()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -736,7 +797,7 @@
                 </div>
               </div>
 
-              <button class="btn-choose-chat" id="btnCinemaChooseChat" type="button"
+              <button class="btn-choose-chat" id="btnCinemaChooseChat" type="button" onclick="window._openCinemaChatModal()"
                 style="padding: 5px 10px; font-size: 0.78rem; white-space: nowrap; flex-shrink: 0;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"></circle>
@@ -825,11 +886,11 @@
   </div>
 
   <!-- Chat Selection Modal -->
-  <div class="modal-backdrop" id="chatModal">
+  <div class="modal-backdrop" id="chatModal" onclick="if(event.target===this)window._closeChatModal()">
     <div class="modal-window">
       <div class="modal-header">
         <h3 style="font-size: 1.1rem; font-weight: 600;">Select Destination Chat</h3>
-        <button class="icon-btn" id="btnCloseChatModal" type="button">
+        <button class="icon-btn" id="btnCloseChatModal" type="button" onclick="window._closeChatModal()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -854,7 +915,7 @@
       <div
         style="padding: 12px 24px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
         <span style="font-size: 0.75rem; color: var(--text-muted);">Saved Messages is always available</span>
-        <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._app.refreshChats()"
+        <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="if(window._app&&window._app.refreshChats){window._app.refreshChats();}else{window._refreshChats();}"
           type="button">
           🔄 Refresh Dialogs
         </button>
@@ -1227,7 +1288,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- App Standalone Script Bundle (Zero Sub-Module Dependencies) -->
-  <script src="/js/app.bundle.js?v=3.3.5"></script>
+  <script src="/js/app.bundle.js?v=4.0.2"></script>
 </body>
 
 </html>

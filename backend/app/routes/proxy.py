@@ -4,7 +4,7 @@ import time
 import logging
 import asyncio
 import email.utils
-from typing import Optional, Dict, Any, List, Union, cast
+from typing import Optional, Dict, Any, List, Union, cast, Tuple
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -69,6 +69,7 @@ class StreamSlidingBuffer:
         return None
 
 _SLIDING_STREAM_BUFFER = StreamSlidingBuffer()
+_ACTIVE_STREAM_CLIENTS = 0
 
 
 async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id: int, file_size: int, filename: str, start_block: int = 0):
@@ -91,17 +92,18 @@ async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id
                 continue
 
             chunks = []
+            block_chunks = (block_len + 512 * 1024 - 1) // (512 * 1024)
             async for raw in client.iter_download(
                 message.media,
                 offset=block_start,
-                limit=block_len,
-                request_size=min(512 * 1024, block_len),
-                chunk_size=min(512 * 1024, block_len),
+                limit=block_chunks,
+                request_size=512 * 1024,
+                chunk_size=512 * 1024,
             ):
                 if raw:
                     chunks.append(raw)
 
-            block_bytes = b"".join(chunks)
+            block_bytes = b"".join(chunks)[:block_len]
             if len(block_bytes) == block_len:
                 stream_cache_service.save_block(chat_id, message_id, block_idx, block_bytes)
                 logger.debug(f"[Continuous Prefetcher] Cached block {block_idx}/{total_blocks-1} for {filename}")
@@ -225,12 +227,14 @@ async def handle_proxy_download(
         "Content-Type": content_type,
         "Content-Disposition": f'inline; filename="{clean_name}"',
         "Accept-Ranges": "bytes",
-        "Content-Range": f"bytes {start}-{end}/{file_size}",
         "Content-Length": str(length),
         "ETag": f'"{chat_id}_{message_id}_{file_size}"',
         "X-Accel-Buffering": "no",
         "Cache-Control": "public, max-age=3600",
     }
+
+    if status_code == 206:
+        headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
 
     if hasattr(message, "date") and message.date:
         headers["Last-Modified"] = email.utils.formatdate(timeval=message.date.timestamp(), usegmt=True)
@@ -268,27 +272,34 @@ async def handle_proxy_download(
             rem_bytes = length - len(buf_slice)
             if rem_bytes > 0:
                 next_start = start + len(buf_slice)
-                next_aligned = next_start - (next_start % (512 * 1024))
+                next_aligned = (next_start // 4096) * 4096
                 next_discard = next_start - next_aligned
-                next_limit = rem_bytes + next_discard
+                chunk_unit = 512 * 1024
+                needed_bytes = rem_bytes + next_discard
+                chunk_count = (needed_bytes + chunk_unit - 1) // chunk_unit
                 first = True
                 curr_offset = next_start
+                c_cnt = 0
                 async for raw in client.iter_download(
                     message.media,
                     offset=next_aligned,
-                    limit=next_limit,
-                    request_size=512 * 1024,
-                    chunk_size=512 * 1024,
+                    request_size=chunk_unit,
+                    chunk_size=chunk_unit,
                 ):
                     if first:
                         first = False
                         if next_discard > 0:
                             raw = raw[next_discard:]
                     if raw:
+                        if len(raw) > (end - curr_offset + 1):
+                            raw = raw[:end - curr_offset + 1]
                         _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_offset, raw)
                         curr_offset += len(raw)
                         yield raw
-                        await asyncio.sleep(0)
+                    c_cnt += 1
+                    if c_cnt >= chunk_count or curr_offset > end:
+                        break
+                    await asyncio.sleep(0)
 
         return StreamingResponse(
             buffered_streamer(),
@@ -329,111 +340,131 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 4. 4-Worker Parallel Strided Stream Pipeline with 16MB Lookahead Queue & Exact Byte Accounting
+    # 4. Adaptive Parallel Strided Stream Pipeline with 16MB Lookahead Queue & Exact Byte Accounting
     async def direct_stream_pipeline():
+        global _ACTIVE_STREAM_CLIENTS
+        _ACTIVE_STREAM_CLIENTS += 1
         CHUNK_SIZE = 512 * 1024  # Standard Telegram MTProto chunk (512 KB)
         bytes_left = length
         curr_offset = start
         retries = 0
         max_retries = 3
 
-        while bytes_left > 0 and retries < max_retries:
-            aligned_offset = (curr_offset // CHUNK_SIZE) * CHUNK_SIZE
-            discard_front = curr_offset - aligned_offset
-            fetch_limit = bytes_left + discard_front
-            total_chunks = (fetch_limit + CHUNK_SIZE - 1) // CHUNK_SIZE
+        try:
+            while bytes_left > 0 and retries < max_retries:
+                aligned_offset = (curr_offset // CHUNK_SIZE) * CHUNK_SIZE
+                discard_front = curr_offset - aligned_offset
+                fetch_limit = bytes_left + discard_front
+                total_chunks = (fetch_limit + CHUNK_SIZE - 1) // CHUNK_SIZE
 
-            NUM_WORKERS = min(4, total_chunks) if total_chunks > 1 else 1
+                # Dynamic concurrency:
+                # When 1-2 clients stream (e.g. VLC / Cinema playback), allocate up to 3 workers for fast startup and seek.
+                # When multi-part download managers (e.g. FDM with 16 parallel Range requests) connect, allocate 1 worker
+                # per connection to keep MTProto edge server in-flight requests safely within connection limits.
+                if _ACTIVE_STREAM_CLIENTS <= 2:
+                    NUM_WORKERS = min(3, total_chunks) if total_chunks > 1 else 1
+                else:
+                    NUM_WORKERS = 1
 
-            # Ordered buffer mapping chunk_index -> bytes
-            chunks_buffer: Dict[int, bytes] = {}
-            chunk_available_event = asyncio.Event()
-            workers_done = [False] * NUM_WORKERS
-            current_yielding_chunk = [0]
+                # Ordered buffer mapping chunk_index -> bytes
+                chunks_buffer: Dict[int, bytes] = {}
+                chunk_available_event = asyncio.Event()
+                workers_done = [False] * NUM_WORKERS
+                current_yielding_chunk = [0]
 
-            async def worker(w_idx: int):
-                try:
-                    w_offset = aligned_offset + (w_idx * CHUNK_SIZE)
-                    if w_offset >= file_size or (w_offset - aligned_offset) >= fetch_limit:
-                        return
-                    w_stride = NUM_WORKERS * CHUNK_SIZE
-                    c_idx = w_idx
+                async def worker(w_idx: int):
+                    try:
+                        w_offset = aligned_offset + (w_idx * CHUNK_SIZE)
+                        if w_offset >= file_size or (w_offset - aligned_offset) >= fetch_limit:
+                            return
+                        w_stride = NUM_WORKERS * CHUNK_SIZE
+                        c_idx = w_idx
+                        chunks_for_this_worker = (total_chunks - w_idx + NUM_WORKERS - 1) // NUM_WORKERS
 
-                    async for raw in client.iter_download(
-                        message.media,
-                        offset=w_offset,
-                        stride=w_stride if NUM_WORKERS > 1 else None,
-                        request_size=CHUNK_SIZE,
-                        chunk_size=CHUNK_SIZE,
-                    ):
-                        if not raw:
-                            break
-                        chunks_buffer[c_idx] = raw
+                        async for raw in client.iter_download(
+                            message.media,
+                            offset=w_offset,
+                            stride=w_stride if NUM_WORKERS > 1 else None,
+                            limit=chunks_for_this_worker,
+                            request_size=CHUNK_SIZE,
+                            chunk_size=CHUNK_SIZE,
+                        ):
+                            if not raw:
+                                break
+                            chunks_buffer[c_idx] = raw
+                            chunk_available_event.set()
+                            c_idx += NUM_WORKERS
+                            if c_idx >= total_chunks:
+                                break
+                            # Flow control: don't buffer more than 32 chunks (16MB) ahead of player consumption
+                            while (c_idx - current_yielding_chunk[0]) > 32:
+                                await asyncio.sleep(0.04)
+                    except (asyncio.CancelledError, GeneratorExit):
+                        pass
+                    except Exception as we:
+                        logger.debug(f"Parallel stream worker {w_idx} notice for {clean_name}: {we}")
+                    finally:
+                        workers_done[w_idx] = True
                         chunk_available_event.set()
-                        c_idx += NUM_WORKERS
-                        if c_idx >= total_chunks:
-                            break
-                        # Flow control: don't buffer more than 32 chunks (16MB) ahead of player consumption
-                        while (c_idx - current_yielding_chunk[0]) > 32:
-                            await asyncio.sleep(0.04)
-                except Exception as we:
-                    logger.debug(f"Parallel stream worker {w_idx} notice for {clean_name}: {we}")
-                finally:
-                    workers_done[w_idx] = True
-                    chunk_available_event.set()
 
-            worker_tasks = [asyncio.create_task(worker(i)) for i in range(NUM_WORKERS)]
-            first_chunk = True
+                worker_tasks = [asyncio.create_task(worker(i)) for i in range(NUM_WORKERS)]
+                first_chunk = True
 
-            try:
-                while bytes_left > 0 and current_yielding_chunk[0] < total_chunks:
-                    c_idx = current_yielding_chunk[0]
-                    # Wait for next in-order chunk to arrive
-                    while c_idx not in chunks_buffer:
-                        if all(workers_done):
-                            break
-                        chunk_available_event.clear()
-                        try:
-                            await asyncio.wait_for(chunk_available_event.wait(), timeout=10.0)
-                        except asyncio.TimeoutError:
+                try:
+                    while bytes_left > 0 and current_yielding_chunk[0] < total_chunks:
+                        c_idx = current_yielding_chunk[0]
+                        # Wait for next in-order chunk to arrive
+                        while c_idx not in chunks_buffer:
                             if all(workers_done):
                                 break
+                            chunk_available_event.clear()
+                            try:
+                                await asyncio.wait_for(chunk_available_event.wait(), timeout=10.0)
+                            except asyncio.TimeoutError:
+                                if all(workers_done):
+                                    break
 
-                    raw = chunks_buffer.pop(c_idx, None)
-                    if not raw:
-                        break
+                        raw = chunks_buffer.pop(c_idx, None)
+                        if not raw:
+                            break
 
-                    current_yielding_chunk[0] += 1
+                        current_yielding_chunk[0] += 1
 
-                    if first_chunk:
-                        first_chunk = False
-                        if discard_front > 0:
-                            raw = raw[discard_front:]
+                        if first_chunk:
+                            first_chunk = False
+                            if discard_front > 0:
+                                raw = raw[discard_front:]
 
-                    if not raw:
-                        continue
+                        if not raw:
+                            continue
 
-                    if len(raw) > bytes_left:
-                        raw = raw[:bytes_left]
+                        if len(raw) > bytes_left:
+                            raw = raw[:bytes_left]
 
-                    # Push to in-memory sliding buffer for 0ms instant reverse seek
-                    _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_offset, raw)
+                        # Push to in-memory sliding buffer for 0ms instant reverse seek
+                        _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_offset, raw)
 
-                    yield raw
-                    bytes_left -= len(raw)
-                    curr_offset += len(raw)
+                        yield raw
+                        bytes_left -= len(raw)
+                        curr_offset += len(raw)
 
-            except Exception as ce:
-                logger.warning(f"Parallel stream consumer notice for {clean_name}: {ce}")
-            finally:
-                for t in worker_tasks:
-                    if not t.done():
-                        t.cancel()
+                except (asyncio.CancelledError, GeneratorExit):
+                    break
+                except Exception as ce:
+                    logger.warning(f"Parallel stream consumer notice for {clean_name}: {ce}")
+                finally:
+                    for t in worker_tasks:
+                        if not t.done():
+                            t.cancel()
+                    if worker_tasks:
+                        await asyncio.gather(*worker_tasks, return_exceptions=True)
 
-            if bytes_left > 0:
-                retries += 1
-                logger.info(f"Stream auto-resuming {clean_name}: {bytes_left} bytes remaining from {curr_offset} (retry {retries}/{max_retries})")
-                await asyncio.sleep(0.05)
+                if bytes_left > 0:
+                    retries += 1
+                    logger.info(f"Stream auto-resuming {clean_name}: {bytes_left} bytes remaining from {curr_offset} (retry {retries}/{max_retries})")
+                    await asyncio.sleep(0.05)
+        finally:
+            _ACTIVE_STREAM_CLIENTS = max(0, _ACTIVE_STREAM_CLIENTS - 1)
 
     return StreamingResponse(
         direct_stream_pipeline(),
@@ -479,6 +510,7 @@ async def handle_transmux_stream(
         raise HTTPException(status_code=404, detail="Message not found or contains no media.")
 
     raw_name = message.file.name if message.file.name else f"stream_{message_id}.mp4"
+    file_size = int(message.file.size) if hasattr(message.file, "size") else 0
     import urllib.parse
     clean_name = urllib.parse.unquote(filename) if filename else auto_rename(raw_name)
     base_name = os.path.splitext(clean_name)[0] + ".mp4"
@@ -546,11 +578,16 @@ async def handle_transmux_stream(
             return
         try:
             total_fed = 0
-            async for chunk in client.iter_download(
-                message.media,
-                offset=0,
-                request_size=chunk_unit,
-                chunk_size=chunk_unit
+            from app.services.fast_stream_engine import fast_stream_engine
+            async for chunk in fast_stream_engine.stream_byte_range(
+                client=client,
+                message=message,
+                chat_id=str(chat_id),
+                message_id=message_id,
+                file_size=file_size if file_size else 0,
+                filename=clean_name,
+                start_byte=0,
+                end_byte=(file_size - 1) if file_size else 0
             ):
                 if not chunk or proc.returncode is not None:
                     break
@@ -985,7 +1022,7 @@ async def _fetch_and_cache_videos(chat_id: str, limit: int = 50, offset_id: int 
     try:
         from telethon.tl.types import InputMessagesFilterVideo, InputMessagesFilterDocument, DocumentAttributeVideo, DocumentAttributeFilename
 
-        # Fetch recent messages + native video filter concurrently at ultra-fast wire speed (<200ms)
+        # Fetch recent messages, video filter, and document filter concurrently
         fetch_limit = min(limit, 50)
         recent_task = client.get_messages(
             clean_chat_id,
@@ -998,16 +1035,24 @@ async def _fetch_and_cache_videos(chat_id: str, limit: int = 50, offset_id: int 
             offset_id=offset_id,
             filter=InputMessagesFilterVideo
         )
+        d_task = client.get_messages(
+            clean_chat_id,
+            limit=fetch_limit,
+            offset_id=offset_id,
+            filter=InputMessagesFilterDocument
+        )
 
-        recent_msgs, v_msgs = await asyncio.gather(recent_task, v_task, return_exceptions=True)
+        recent_msgs, v_msgs, d_msgs = await asyncio.gather(recent_task, v_task, d_task, return_exceptions=True)
         if isinstance(recent_msgs, Exception):
             recent_msgs = []
         if isinstance(v_msgs, Exception):
             v_msgs = []
+        if isinstance(d_msgs, Exception):
+            d_msgs = []
 
         seen_ids = set()
         combined_msgs = []
-        for msg in list(v_msgs) + list(recent_msgs):
+        for msg in list(v_msgs) + list(d_msgs) + list(recent_msgs):
             if not msg or msg.id in seen_ids or not hasattr(msg, "file") or not msg.file:
                 continue
             seen_ids.add(msg.id)
@@ -1200,6 +1245,7 @@ def get_desktop_env() -> dict:
         env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/run/user/1001/bus"
     if "XAUTHORITY" not in env:
         import glob
+        from pathlib import Path
         auth_files = glob.glob("/tmp/xauth_*") + [str(Path.home() / ".Xauthority")]
         for af in auth_files:
             if os.path.exists(af):

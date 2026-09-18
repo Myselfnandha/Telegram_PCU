@@ -93,6 +93,25 @@ class FastStreamEngine:
     def __init__(self):
         self._sessions: Dict[Tuple[str, int], MediaStreamSession] = {}
         self._lock = asyncio.Lock()
+        
+        # Start memory cleanup task
+        async def cleanup_loop():
+            while True:
+                await asyncio.sleep(60)
+                now = time.time()
+                stale_keys = []
+                for key, session in self._sessions.items():
+                    if now - session.last_active_time > 300:  # 5 minutes idle
+                        stale_keys.append(key)
+                for key in stale_keys:
+                    self._sessions.pop(key, None)
+        
+        # Fire and forget the cleanup loop
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(cleanup_loop())
+        except RuntimeError:
+            pass
 
     def get_or_create_session(
         self, chat_id: str, message_id: int, file_size: int, filename: str
@@ -103,6 +122,40 @@ class FastStreamEngine:
         session = self._sessions[key]
         session.last_active_time = time.time()
         return session
+
+    async def _download_range_bytes(
+        self, client, message, offset: int, length: int
+    ) -> bytes:
+        """
+        Safely downloads a byte range from Telegram MTProto using strict 512KB power-of-two chunks.
+        Never violates GetFileRequest limit or offset alignments.
+        """
+        if length <= 0:
+            return b""
+        chunk_unit = 512 * 1024
+        aligned_offset = (offset // 4096) * 4096
+        discard_front = offset - aligned_offset
+        total_needed = length + discard_front
+        chunk_count = (total_needed + chunk_unit - 1) // chunk_unit
+
+        chunks = []
+        c_downloaded = 0
+        async for raw in client.iter_download(
+            message.media,
+            offset=aligned_offset,
+            request_size=chunk_unit,
+            chunk_size=chunk_unit,
+        ):
+            if raw:
+                chunks.append(raw)
+                c_downloaded += 1
+                if c_downloaded >= chunk_count:
+                    break
+
+        full_data = b"".join(chunks)
+        if discard_front > 0:
+            full_data = full_data[discard_front:]
+        return full_data[:length]
 
     async def prebuffer_media(
         self, client, message, chat_id: str, message_id: int, file_size: int, filename: str
@@ -130,18 +183,8 @@ class FastStreamEngine:
 
             start, end = session.get_slice_range(s_idx)
             length = end - start + 1
-            chunks = []
             try:
-                async for raw in client.iter_download(
-                    message.media,
-                    offset=start,
-                    limit=length,
-                    request_size=min(512 * 1024, length),
-                    chunk_size=min(512 * 1024, length),
-                ):
-                    if raw:
-                        chunks.append(raw)
-                data = b"".join(chunks)
+                data = await self._download_range_bytes(client, message, start, length)
                 if len(data) == length:
                     session.store_slice(s_idx, data)
             except Exception as e:
@@ -191,18 +234,8 @@ class FastStreamEngine:
         # Otherwise fetch directly now
         start, end = session.get_slice_range(slice_idx)
         length = end - start + 1
-        chunks = []
         try:
-            async for raw in client.iter_download(
-                message.media,
-                offset=start,
-                limit=length,
-                request_size=min(512 * 1024, length),
-                chunk_size=min(512 * 1024, length),
-            ):
-                if raw:
-                    chunks.append(raw)
-            data = b"".join(chunks)
+            data = await self._download_range_bytes(client, message, start, length)
             if len(data) == length:
                 session.store_slice(slice_idx, data)
                 return data
@@ -213,7 +246,7 @@ class FastStreamEngine:
     def _trigger_lookahead(
         self, client, message, session: MediaStreamSession, current_slice: int
     ):
-        """Spawns 8 parallel lookahead workers streaming ahead of playback position."""
+        """Spawns parallel lookahead workers streaming ahead of playback position."""
         lookahead_end = min(session.total_slices, current_slice + LOOKAHEAD_SLICES)
         missing_slices = [
             i
@@ -235,17 +268,7 @@ class FastStreamEngine:
                     try:
                         start, end = session.get_slice_range(s_idx)
                         length = end - start + 1
-                        chunks = []
-                        async for raw in client.iter_download(
-                            message.media,
-                            offset=start,
-                            limit=length,
-                            request_size=min(512 * 1024, length),
-                            chunk_size=min(512 * 1024, length),
-                        ):
-                            if raw:
-                                chunks.append(raw)
-                        data = b"".join(chunks)
+                        data = await self._download_range_bytes(client, message, start, length)
                         if len(data) == length:
                             session.store_slice(s_idx, data)
                     except Exception as e:
@@ -286,21 +309,19 @@ class FastStreamEngine:
         for s_idx in range(start_slice, end_slice + 1):
             slice_data = await self.ensure_slice(client, message, session, s_idx)
             if not slice_data:
-                # If slice could not be retrieved from engine, fallback to direct iter_download
+                # If slice could not be retrieved from engine, fallback to safe direct download
                 s_start, s_end = session.get_slice_range(s_idx)
                 fetch_start = max(current_offset, s_start)
                 fetch_len = min(end_byte, s_end) - fetch_start + 1
                 if fetch_len > 0:
-                    async for raw in client.iter_download(
-                        message.media,
-                        offset=fetch_start,
-                        limit=fetch_len,
-                        request_size=min(512 * 1024, fetch_len),
-                        chunk_size=min(512 * 1024, fetch_len),
-                    ):
+                    try:
+                        raw = await self._download_range_bytes(client, message, fetch_start, fetch_len)
                         if raw:
                             yield raw
                             current_offset += len(raw)
+                    except Exception as e:
+                        logger.warning(f"Fallback download error for {filename}: {e}")
+                        break
                 continue
 
             s_start, s_end = session.get_slice_range(s_idx)

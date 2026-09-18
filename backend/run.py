@@ -14,7 +14,13 @@ import logging.handlers
 import uvicorn
 import argparse
 import subprocess
+import faulthandler
 from pathlib import Path
+
+try:
+    faulthandler.register(signal.SIGUSR1, all_threads=True)
+except Exception:
+    pass
 
 # Ensure backend directory is on sys.path
 BASE_DIR = Path(__file__).resolve().parent

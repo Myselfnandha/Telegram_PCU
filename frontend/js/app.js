@@ -516,14 +516,12 @@ function initApp() {
     loadHistory();
   }, 30000);
 
-  // Register PWA Service Worker (Instant Load & Desktop App Support)
+  // Unregister any active service worker to prevent stale caching
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').then((reg) => {
-        console.log('TG Power Suite PWA Service Worker active:', reg.scope);
-      }).catch((err) => {
-        console.debug('Service Worker notice:', err);
-      });
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const reg of registrations) {
+        reg.unregister();
+      }
     });
   }
 

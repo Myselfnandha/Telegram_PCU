@@ -141,17 +141,29 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Cache Control Middleware for No-Stale Assets
-class NoCacheStaticMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        if request.url.path.endswith((".js", ".css", ".html", "/")):
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            response.headers["Pragma"] = "no-cache"
-            response.headers["Expires"] = "0"
-        return response
+# Pure ASGI Cache Control Middleware for Static Assets (Safe, zero-overhead, never deadlocks streaming)
+class NoCacheStaticASGIMiddleware:
+    def __init__(self, app):
+        self.app = app
 
-app.add_middleware(NoCacheStaticMiddleware)
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path.endswith((".js", ".css", ".html")) or path == "/":
+                async def send_wrapper(message):
+                    if message["type"] == "http.response.start":
+                        headers = list(message.get("headers", []))
+                        headers.append((b"cache-control", b"no-cache, no-store, must-revalidate"))
+                        headers.append((b"pragma", b"no-cache"))
+                        headers.append((b"expires", b"0"))
+                        message["headers"] = headers
+                    await send(message)
+                await self.app(scope, receive, send_wrapper)
+                return
+
+        await self.app(scope, receive, send)
+
+app.add_middleware(NoCacheStaticASGIMiddleware)
 
 # Add CORS Middleware
 app.add_middleware(

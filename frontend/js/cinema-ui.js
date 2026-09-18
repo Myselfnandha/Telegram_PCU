@@ -15,6 +15,11 @@ export async function initCinema() {
 
   // 1. Destination Bar & Watched Channels Setup
   _initCinemaDestinationPicker();
+  if (btnChooseChat) {
+    btnChooseChat.addEventListener('click', () => {
+      chatPicker.open((chat) => _onCinemaChatSelected(chat));
+    });
+  }
   try {
     await _loadCinemaWatchedChips();
   } catch (chipErr) {
@@ -129,6 +134,7 @@ function _onCinemaChatSelected(chat) {
 
   loadCinemaVideos(_currentChatId);
 }
+window._cinemaOnChatSelected = _onCinemaChatSelected;
 
 async function _loadCinemaWatchedChips() {
   const chipsContainer = document.getElementById('cinemaWatchedChips');

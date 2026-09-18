@@ -1,216 +1,2454 @@
-(()=>{var Z=class{constructor(){this.socket=null,this.progressListeners=new Set,this.queueListeners=new Set,this.connectionListeners=new Set,this.isConnected=!1}init(){if(typeof io>"u"){console.error("Socket.IO client library is not loaded!");return}this.socket=io({path:"/socket.io",transports:["websocket","polling"],reconnectionAttempts:20,reconnectionDelay:1e3,reconnectionDelayMax:5e3,timeout:2e4}),this.socket.on("connect",()=>{console.log("[WS] Connected to backend Socket.IO. ID:",this.socket.id),this.isConnected=!0,this._notifyConnection(!0),this.socket.emit("queue:get")}),this.socket.on("disconnect",e=>{console.warn("[WS] Disconnected from backend Socket.IO. Reason:",e),this.isConnected=!1,this._notifyConnection(!1)}),this.socket.on("upload:progress",e=>{this.progressListeners.forEach(t=>{try{t(e)}catch(n){console.error("Error in progress listener:",n)}})}),this.socket.on("queue:snapshot",e=>{this.queueListeners.forEach(t=>{try{t(e)}catch(n){console.error("Error in queue snapshot listener:",n)}})})}onProgress(e){return this.progressListeners.add(e),()=>this.progressListeners.delete(e)}onQueueSnapshot(e){return this.queueListeners.add(e),()=>this.queueListeners.delete(e)}onConnectionChange(e){return this.connectionListeners.add(e),e(this.isConnected),()=>this.connectionListeners.delete(e)}_notifyConnection(e){this.connectionListeners.forEach(t=>t(e))}pauseTask(e){this.socket&&this.isConnected&&this.socket.emit("upload_pause",{id:e})}resumeTask(e){this.socket&&this.isConnected&&this.socket.emit("upload_resume",{id:e})}cancelTask(e){this.socket&&this.isConnected&&this.socket.emit("upload_cancel",{id:e})}},M=new Z;function x(i,e=2){if(!i||i===0)return"0 B";let t=1024,n=e<0?0:e,a=["B","KB","MB","GB","TB"],s=Math.floor(Math.log(i)/Math.log(t));return parseFloat((i/Math.pow(t,s)).toFixed(n))+" "+a[s]}function pe(i){return!i||i<=0?"0 KB/s":x(i,1)+"/s"}function me(i){if(!i||i<=0||!isFinite(i))return"--";let e=Math.round(i);if(e<60)return`${e}s`;let t=Math.floor(e/60),n=e%60;if(t<60)return`${t}m ${n}s`;let a=Math.floor(t/60),s=t%60;return`${a}h ${s}m`}function p(i){return i?String(i).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"):""}function $(i,e="info"){let t=document.getElementById("toastContainer");if(!t)return;let n=document.createElement("div");n.className=`toast ${e}`;let a="\u2139\uFE0F";e==="success"&&(a="\u2705"),e==="error"&&(a="\u274C"),e==="warning"&&(a="\u26A0\uFE0F"),n.innerHTML=`<span>${a}</span><span>${p(i)}</span>`,t.appendChild(n),setTimeout(()=>{n.style.opacity="0",n.style.transform="translateX(100%)",n.style.transition="all 0.3s ease",setTimeout(()=>n.remove(),300)},4e3)}function fe(i){let e=(i.type||"").toLowerCase(),t=(i.name||"").toLowerCase();if(e.startsWith("image/"))return"photo";if(e.startsWith("video/"))return"video";if(e.startsWith("audio/"))return"audio";let n=t.split(".").pop();return["jpg","jpeg","png","webp","gif"].includes(n)?"photo":["mp4","mkv","mov","avi","webm","flv"].includes(n)?"video":["mp3","wav","flac","aac","ogg","m4a"].includes(n)?"audio":["zip","rar","7z","tar","gz","iso"].includes(n)?"archive":(["pdf","doc","docx","xls","xlsx","ppt","pptx","txt"].includes(n),"document")}function O(i,e=null){if(!i)return"";let t=i.lastIndexOf("."),n=t!==-1?i.slice(0,t):i,a=t!==-1?i.slice(t):"",s=n;if(s=s.replace(/https?:\/\/\S+/gi," "),s=s.replace(/\b(?:t|telegram)\.me\/[\w\+\-_/]+/gi," "),s=s.replace(/\b(?:www\.[a-z0-9\.\-_]+|[a-z0-9\.\-_]+\.(?:com|org|net|in|yt|vip|me|to|is|cx|ms|li|co|cc|ws|site|xyz|online|live|tv))\b/gi," "),s=s.replace(/[\._]+/g," "),s=s.replace(/@\S+/g," "),s=s.replace(/^[\[\{][^\]\}]+[\]\}]\s*/g," "),e){let l=(typeof e=="string"?e:`${e.name||""} ${e.username||""}`).replace(/[\._\-@#\$%^&\*()\[\]{}|\\/]/g," ").split(/\s+/).map(h=>h.trim().toLowerCase()).filter(h=>h.length>2&&!/^(the|and|for|official|channel|group|hd|cloud|saved|messages)$/i.test(h));if(l.length>0){let h=l.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"));s=s.replace(new RegExp(`\\b(?:${h.join("|")})\\b`,"gi")," ")}}let o=["tamilmovoo","tamildbox","tamilblasters","tamilmv","1tamilmv","tamilyogi","moviesda","bollyflix","katmovie","vegamovies","rarbg","yify","psa","pahe","tn69","cinemavilla","isaimini","movies4u","cinemahub","tamilrockers","movierulz","cinevood","worldfree4u","khatrimaza","filmyzilla","9xmovies","extramovies","starflixtamil","starflix","moviesnation","mkvking","skymovies","cinehub","filmywap","coolmoviez","todaypk","desiremovies"];s=s.replace(new RegExp(`\\b(?:${o.join("|")})\\b`,"gi")," "),s=s.replace(/\b(2160p?|4k|uhd|1080p?|720p?|480p?|360p?|1p|hdrip|bdrip|bluray|blu-ray|webrip|web-dl|web|hdtv|dvdrip|hq|x264|x265|hevc|avc|xvid|divx|10bit|8bit|aac|ac3|eac3|ddp?\d?|dts|atmos|mp3|esub|esubs|subrip|subs?|sub|multi|dual|hindi|tamil|telugu|kannada|malayalam|english|dubbed)\b/gi," "),s=s.replace(/^[a-z0-9\-_]+\s+(?:org|com|net|in|tv|vip|me|cc|site|hub|flix|movies|channel)\s+/i," "),s=s.replace(/[\/\\:*?"<>|\[\]\(\)\{\}\-]/g," "),s=s.replace(/\s+/g," ").trim();let r=s.match(/\b(19\d\d|20\d\d)\b/);if(r){let u=r[1],l=s.indexOf(u),h=s.slice(0,l).trim(),w=s.slice(l+u.length).trim();h&&w?s=`${h} (${u}) ${w}`:h?s=`${h} (${u})`:w&&(s=`${w} (${u})`)}return s=s.replace(/\s+/g," ").trim(),s?`${s}${a}`:i}var ee=class{constructor(){this.modal=null,this.searchInput=null,this.listContainer=null,this.chats=[],this.selectedChat={id:"me",name:"Saved Messages (Personal Cloud)",type:"saved_messages"},this.activeFilter="all",this.onSelectCallback=null,this.storageKey="tg_selected_chat",this.isLoading=!1}init(e){this.onSelectCallback=e,this.modal=document.getElementById("chatModal"),this.searchInput=document.getElementById("chatSearchInput"),this.listContainer=document.getElementById("chatListContainer");let t=document.getElementById("btnChooseChat"),n=document.getElementById("btnCloseChatModal");t&&t.addEventListener("click",()=>this.open()),n&&n.addEventListener("click",()=>this.close()),this.modal&&this.modal.addEventListener("click",s=>{s.target===this.modal&&this.close()}),this.searchInput&&this.searchInput.addEventListener("input",s=>{this.renderList(s.target.value)});let a=document.querySelectorAll("#chatModalFilterTabs .filter-chip");a.forEach(s=>{s.addEventListener("click",()=>{a.forEach(o=>o.classList.remove("active")),s.classList.add("active"),this.activeFilter=s.getAttribute("data-filter")||"all",this.renderList(this.searchInput?this.searchInput.value:"")})}),this.loadSavedSelection(),setTimeout(()=>this.fetchChats(),100)}loadSavedSelection(){try{let e=localStorage.getItem(this.storageKey);e&&(this.selectedChat=JSON.parse(e))}catch(e){console.warn("Could not load saved chat from localStorage:",e)}this.updateTriggerUI(this.selectedChat),this.onSelectCallback&&this.onSelectCallback(this.selectedChat)}saveSelection(e){this.selectedChat=e;try{localStorage.setItem(this.storageKey,JSON.stringify(e))}catch{}this.updateTriggerUI(e),this.onSelectCallback&&this.onSelectCallback(e)}updateTriggerUI(e){let t=document.getElementById("currentChatName"),n=document.getElementById("currentChatType"),a=document.getElementById("currentChatAvatarWrapper");if(t&&e&&(t.textContent=e.name||"Saved Messages"),n&&e){let s=e.type==="saved_messages"?"CLOUD":(e.type||"CHAT").replace("_"," ").toUpperCase();n.textContent=s}if(a&&e)if(e.type==="saved_messages")a.innerHTML=`
+(() => {
+  // frontend/js/socket.js
+  var SocketManager = class {
+    constructor() {
+      this.socket = null;
+      this.progressListeners = /* @__PURE__ */ new Set();
+      this.queueListeners = /* @__PURE__ */ new Set();
+      this.connectionListeners = /* @__PURE__ */ new Set();
+      this.isConnected = false;
+    }
+    init() {
+      if (typeof io === "undefined") {
+        console.error("Socket.IO client library is not loaded!");
+        return;
+      }
+      this.socket = io({
+        path: "/socket.io",
+        transports: ["websocket", "polling"],
+        reconnectionAttempts: 20,
+        reconnectionDelay: 1e3,
+        reconnectionDelayMax: 5e3,
+        timeout: 2e4
+      });
+      this.socket.on("connect", () => {
+        console.log("[WS] Connected to backend Socket.IO. ID:", this.socket.id);
+        this.isConnected = true;
+        this._notifyConnection(true);
+        this.socket.emit("queue:get");
+      });
+      this.socket.on("disconnect", (reason) => {
+        console.warn("[WS] Disconnected from backend Socket.IO. Reason:", reason);
+        this.isConnected = false;
+        this._notifyConnection(false);
+      });
+      this.socket.on("upload:progress", (data) => {
+        this.progressListeners.forEach((fn) => {
+          try {
+            fn(data);
+          } catch (e) {
+            console.error("Error in progress listener:", e);
+          }
+        });
+      });
+      this.socket.on("queue:snapshot", (tasks) => {
+        this.queueListeners.forEach((fn) => {
+          try {
+            fn(tasks);
+          } catch (e) {
+            console.error("Error in queue snapshot listener:", e);
+          }
+        });
+      });
+    }
+    onProgress(callback) {
+      this.progressListeners.add(callback);
+      return () => this.progressListeners.delete(callback);
+    }
+    onQueueSnapshot(callback) {
+      this.queueListeners.add(callback);
+      return () => this.queueListeners.delete(callback);
+    }
+    onConnectionChange(callback) {
+      this.connectionListeners.add(callback);
+      callback(this.isConnected);
+      return () => this.connectionListeners.delete(callback);
+    }
+    _notifyConnection(state) {
+      this.connectionListeners.forEach((fn) => fn(state));
+    }
+    pauseTask(taskId) {
+      if (this.socket && this.isConnected) {
+        this.socket.emit("upload_pause", { id: taskId });
+      }
+    }
+    resumeTask(taskId) {
+      if (this.socket && this.isConnected) {
+        this.socket.emit("upload_resume", { id: taskId });
+      }
+    }
+    cancelTask(taskId) {
+      if (this.socket && this.isConnected) {
+        this.socket.emit("upload_cancel", { id: taskId });
+      }
+    }
+  };
+  var socketManager = new SocketManager();
+
+  // frontend/js/utils.js
+  function formatBytes(bytes, decimals = 2) {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+  }
+  function formatSpeed(bytesPerSec) {
+    if (!bytesPerSec || bytesPerSec <= 0) return "0 KB/s";
+    return formatBytes(bytesPerSec, 1) + "/s";
+  }
+  function formatETA(seconds) {
+    if (!seconds || seconds <= 0 || !isFinite(seconds)) return "--";
+    const sec = Math.round(seconds);
+    if (sec < 60) return `${sec}s`;
+    const min = Math.floor(sec / 60);
+    const remSec = sec % 60;
+    if (min < 60) return `${min}m ${remSec}s`;
+    const hrs = Math.floor(min / 60);
+    const remMin = min % 60;
+    return `${hrs}h ${remMin}m`;
+  }
+  function escapeHtml(str) {
+    if (!str) return "";
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+  function showToast(message, type = "info") {
+    const container = document.getElementById("toastContainer");
+    if (!container) return;
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    let icon = "\u2139\uFE0F";
+    if (type === "success") icon = "\u2705";
+    if (type === "error") icon = "\u274C";
+    if (type === "warning") icon = "\u26A0\uFE0F";
+    toast.innerHTML = `<span>${icon}</span><span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(100%)";
+      toast.style.transition = "all 0.3s ease";
+      setTimeout(() => toast.remove(), 300);
+    }, 4e3);
+  }
+  function getFileCategory(file) {
+    const type = (file.type || "").toLowerCase();
+    const name = (file.name || "").toLowerCase();
+    if (type.startsWith("image/")) return "photo";
+    if (type.startsWith("video/")) return "video";
+    if (type.startsWith("audio/")) return "audio";
+    const ext = name.split(".").pop();
+    if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) return "photo";
+    if (["mp4", "mkv", "mov", "avi", "webm", "flv"].includes(ext)) return "video";
+    if (["mp3", "wav", "flac", "aac", "ogg", "m4a"].includes(ext)) return "audio";
+    if (["zip", "rar", "7z", "tar", "gz", "iso"].includes(ext)) return "archive";
+    if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt"].includes(ext)) return "document";
+    return "document";
+  }
+  function cleanFileName(raw, channelContext = null) {
+    if (!raw) return "";
+    const lastDot = raw.lastIndexOf(".");
+    const name = lastDot !== -1 ? raw.slice(0, lastDot) : raw;
+    const ext = lastDot !== -1 ? raw.slice(lastDot) : "";
+    let cleaned = name;
+    cleaned = cleaned.replace(/https?:\/\/\S+/gi, " ");
+    cleaned = cleaned.replace(/\b(?:t|telegram)\.me\/[\w\+\-_/]+/gi, " ");
+    cleaned = cleaned.replace(/\b(?:www\.[a-z0-9\.\-_]+|[a-z0-9\.\-_]+\.(?:com|org|net|in|yt|vip|me|to|is|cx|ms|li|co|cc|ws|site|xyz|online|live|tv))\b/gi, " ");
+    cleaned = cleaned.replace(/[\._]+/g, " ");
+    cleaned = cleaned.replace(/@\S+/g, " ");
+    cleaned = cleaned.replace(/^[\[\{][^\]\}]+[\]\}]\s*/g, " ");
+    if (channelContext) {
+      const rawContext = typeof channelContext === "string" ? channelContext : `${channelContext.name || ""} ${channelContext.username || ""}`;
+      const channelTokens = rawContext.replace(/[\._\-@#\$%^&\*()\[\]{}|\\/]/g, " ").split(/\s+/).map((t) => t.trim().toLowerCase()).filter((t) => t.length > 2 && !/^(the|and|for|official|channel|group|hd|cloud|saved|messages)$/i.test(t));
+      if (channelTokens.length > 0) {
+        const escaped = channelTokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        cleaned = cleaned.replace(new RegExp(`\\b(?:${escaped.join("|")})\\b`, "gi"), " ");
+      }
+    }
+    const watermarks = [
+      "tamilmovoo",
+      "tamildbox",
+      "tamilblasters",
+      "tamilmv",
+      "1tamilmv",
+      "tamilyogi",
+      "moviesda",
+      "bollyflix",
+      "katmovie",
+      "vegamovies",
+      "rarbg",
+      "yify",
+      "psa",
+      "pahe",
+      "tn69",
+      "cinemavilla",
+      "isaimini",
+      "movies4u",
+      "cinemahub",
+      "tamilrockers",
+      "movierulz",
+      "cinevood",
+      "worldfree4u",
+      "khatrimaza",
+      "filmyzilla",
+      "9xmovies",
+      "extramovies",
+      "starflixtamil",
+      "starflix",
+      "moviesnation",
+      "mkvking",
+      "skymovies",
+      "cinehub",
+      "filmywap",
+      "coolmoviez",
+      "todaypk",
+      "desiremovies"
+    ];
+    cleaned = cleaned.replace(new RegExp(`\\b(?:${watermarks.join("|")})\\b`, "gi"), " ");
+    cleaned = cleaned.replace(/\b(2160p?|4k|uhd|1080p?|720p?|480p?|360p?|1p|hdrip|bdrip|bluray|blu-ray|webrip|web-dl|web|hdtv|dvdrip|hq|x264|x265|hevc|avc|xvid|divx|10bit|8bit|aac|ac3|eac3|ddp?\d?|dts|atmos|mp3|esub|esubs|subrip|subs?|sub|multi|dual|hindi|tamil|telugu|kannada|malayalam|english|dubbed)\b/gi, " ");
+    cleaned = cleaned.replace(/^[a-z0-9\-_]+\s+(?:org|com|net|in|tv|vip|me|cc|site|hub|flix|movies|channel)\s+/i, " ");
+    cleaned = cleaned.replace(/[\/\\:*?"<>|\[\]\(\)\{\}\-]/g, " ");
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+    const yearMatch = cleaned.match(/\b(19\d\d|20\d\d)\b/);
+    if (yearMatch) {
+      const year = yearMatch[1];
+      const idx = cleaned.indexOf(year);
+      const titlePart = cleaned.slice(0, idx).trim();
+      const restPart = cleaned.slice(idx + year.length).trim();
+      if (titlePart && restPart) {
+        cleaned = `${titlePart} (${year}) ${restPart}`;
+      } else if (titlePart) {
+        cleaned = `${titlePart} (${year})`;
+      } else if (restPart) {
+        cleaned = `${restPart} (${year})`;
+      }
+    }
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+    return cleaned ? `${cleaned}${ext}` : raw;
+  }
+
+  // frontend/js/chat-picker.js
+  var ChatPicker = class {
+    constructor() {
+      this.modal = null;
+      this.searchInput = null;
+      this.listContainer = null;
+      this.chats = [];
+      this.selectedChat = {
+        id: "me",
+        name: "Saved Messages (Personal Cloud)",
+        type: "saved_messages"
+      };
+      this.activeFilter = "all";
+      this.onSelectCallback = null;
+      this.storageKey = "tg_selected_chat";
+      this.isLoading = false;
+      window._chatPicker = this;
+    }
+    init(onSelect) {
+      this.onSelectCallback = onSelect;
+      this.modal = document.getElementById("chatModal");
+      this.searchInput = document.getElementById("chatSearchInput");
+      this.listContainer = document.getElementById("chatListContainer");
+      const openBtn = document.getElementById("btnChooseChat");
+      const closeBtn = document.getElementById("btnCloseChatModal");
+      if (openBtn) openBtn.addEventListener("click", () => this.open());
+      if (closeBtn) closeBtn.addEventListener("click", () => this.close());
+      if (this.modal) {
+        this.modal.addEventListener("click", (e) => {
+          if (e.target === this.modal) this.close();
+        });
+      }
+      if (this.searchInput) {
+        this.searchInput.addEventListener("input", (e) => {
+          this.renderList(e.target.value);
+        });
+      }
+      const filterChips = document.querySelectorAll("#chatModalFilterTabs .filter-chip");
+      filterChips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          filterChips.forEach((c) => c.classList.remove("active"));
+          chip.classList.add("active");
+          this.activeFilter = chip.getAttribute("data-filter") || "all";
+          this.renderList(this.searchInput ? this.searchInput.value : "");
+        });
+      });
+      this.loadSavedSelection();
+      setTimeout(() => this.fetchChats(), 100);
+    }
+    loadSavedSelection() {
+      try {
+        const saved = localStorage.getItem(this.storageKey);
+        if (saved) {
+          this.selectedChat = JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn("Could not load saved chat from localStorage:", e);
+      }
+      this.updateTriggerUI(this.selectedChat);
+      if (this.onSelectCallback) this.onSelectCallback(this.selectedChat);
+    }
+    saveSelection(chat) {
+      this.selectedChat = chat;
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify(chat));
+      } catch (e) {
+      }
+      this.updateTriggerUI(chat);
+      if (this.onSelectCallback) this.onSelectCallback(chat);
+    }
+    updateTriggerUI(chat) {
+      const nameEl = document.getElementById("currentChatName");
+      const typeEl = document.getElementById("currentChatType");
+      const avatarWrapper = document.getElementById("currentChatAvatarWrapper");
+      if (nameEl && chat) {
+        nameEl.textContent = chat.name || "Saved Messages";
+      }
+      if (typeEl && chat) {
+        const typeLabel = chat.type === "saved_messages" ? "CLOUD" : (chat.type || "CHAT").replace("_", " ").toUpperCase();
+        typeEl.textContent = typeLabel;
+      }
+      if (avatarWrapper && chat) {
+        if (chat.type === "saved_messages") {
+          avatarWrapper.innerHTML = `
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
           </svg>
-        `;else{let s=(e.name||"C").charAt(0).toUpperCase(),o=`/api/chats/${encodeURIComponent(e.id)}/avatar`;a.innerHTML=`
-          <img src="${o}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span style=\\'font-weight:700; font-size:1rem; color:var(--accent-secondary);\\'>${p(s)}</span>'">
-        `}}async fetchChats(e=!1){if(!this.isLoading){this.isLoading=!0;try{let n=await fetch(e?"/api/chats?force_refresh=true":"/api/chats");if(!n.ok)throw new Error("Failed to fetch chats");this.chats=await n.json(),this.selectedChat&&this.selectedChat.type==="saved_messages"&&this.chats.length>0&&(this.selectedChat=this.chats[0]),this.modal&&this.modal.classList.contains("open")&&this.renderList(this.searchInput?this.searchInput.value:"")}catch(t){console.error("Error loading chats:",t)}finally{this.isLoading=!1}}}open(e=null){this.customCallback=e,this.modal&&(this.modal.classList.add("open"),this.searchInput&&(this.searchInput.value="",setTimeout(()=>{this.searchInput.focus(),this.searchInput.select()},50)),this.chats.length===0?(this.renderLoading(),this.fetchChats()):this.renderList())}renderLoading(){this.listContainer&&(this.listContainer.innerHTML=`
+        `;
+        } else {
+          const initial = (chat.name || "C").charAt(0).toUpperCase();
+          const avatarUrl = `/api/chats/${encodeURIComponent(chat.id)}/avatar`;
+          avatarWrapper.innerHTML = `
+          <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span style=\\'font-weight:700; font-size:1rem; color:var(--accent-secondary);\\'>${escapeHtml(initial)}</span>'">
+        `;
+        }
+      }
+    }
+    async fetchChats(force = false) {
+      if (this.isLoading) return;
+      this.isLoading = true;
+      try {
+        const url = force ? "/api/chats?force_refresh=true" : "/api/chats";
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to fetch chats");
+        this.chats = await res.json();
+        const hasSaved = this.chats.some((c) => c.type === "saved_messages" || c.id === "me");
+        if (!hasSaved) {
+          this.chats.unshift({
+            id: "me",
+            name: "Saved Messages (Personal Cloud)",
+            type: "saved_messages",
+            unread_count: 0,
+            pinned: true
+          });
+        }
+        if (this.selectedChat) {
+          const matching = this.chats.find((c) => String(c.id) === String(this.selectedChat.id));
+          if (matching) {
+            this.selectedChat = matching;
+            this.updateTriggerUI(matching);
+          }
+        }
+        if (this.modal && (this.modal.classList.contains("open") || this.modal.classList.contains("active"))) {
+          this.renderList(this.searchInput ? this.searchInput.value : "");
+        }
+      } catch (e) {
+        console.error("Error loading chats:", e);
+      } finally {
+        this.isLoading = false;
+      }
+    }
+    open(customCallback = null) {
+      if (customCallback !== null && customCallback !== void 0) {
+        this.customCallback = customCallback;
+      }
+      if (!this.modal) this.modal = document.getElementById("chatModal");
+      if (!this.searchInput) this.searchInput = document.getElementById("chatSearchInput");
+      if (!this.listContainer) this.listContainer = document.getElementById("chatListContainer");
+      if (!this.modal) return;
+      this.modal.classList.add("open", "active");
+      if (this.searchInput) {
+        this.searchInput.value = "";
+        setTimeout(() => {
+          this.searchInput.focus();
+          this.searchInput.select();
+        }, 50);
+      }
+      if (this.chats.length === 0) {
+        this.renderLoading();
+        this.fetchChats();
+      } else {
+        this.renderList();
+      }
+    }
+    renderLoading() {
+      if (!this.listContainer) this.listContainer = document.getElementById("chatListContainer");
+      if (!this.listContainer) return;
+      this.listContainer.innerHTML = `
       <div style="padding: 32px; text-align: center; color: var(--text-muted);">
         <div style="display: inline-block; width: 24px; height: 24px; border: 2px solid var(--accent-primary); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px;"></div>
         <p>Loading Telegram chats...</p>
       </div>
-    `)}close(){this.customCallback=null,this.modal&&this.modal.classList.remove("open")}renderList(e=""){if(!this.listContainer)return;let t=e.trim().toLowerCase(),n=this.chats.filter(a=>{if(this.activeFilter&&this.activeFilter!=="all"){let r=(a.type||"").toLowerCase();if(this.activeFilter==="channel"&&r!=="channel"||this.activeFilter==="group"&&!r.includes("group")&&r!=="megagroup"||this.activeFilter==="bot"&&r!=="bot"||this.activeFilter==="user"&&r!=="user"&&r!=="saved_messages")return!1}if(!t)return!0;let s=(a.name||"").toLowerCase().includes(t),o=a.username?a.username.toLowerCase().includes(t):!1;return s||o});if(n.length===0){this.listContainer.innerHTML=`
+    `;
+    }
+    close() {
+      this.customCallback = null;
+      if (!this.modal) this.modal = document.getElementById("chatModal");
+      if (!this.modal) return;
+      this.modal.classList.remove("open", "active");
+    }
+    renderList(filter = "") {
+      if (!this.listContainer) return;
+      const q = filter.trim().toLowerCase();
+      const filtered = this.chats.filter((c) => {
+        if (this.activeFilter && this.activeFilter !== "all") {
+          const cType = (c.type || "").toLowerCase();
+          if (this.activeFilter === "channel" && cType !== "channel") return false;
+          if (this.activeFilter === "group" && !cType.includes("group") && cType !== "megagroup") return false;
+          if (this.activeFilter === "bot" && cType !== "bot") return false;
+          if (this.activeFilter === "user" && cType !== "user" && cType !== "saved_messages") return false;
+        }
+        if (!q) return true;
+        const nameMatch = (c.name || "").toLowerCase().includes(q);
+        const userMatch = c.username ? c.username.toLowerCase().includes(q) : false;
+        return nameMatch || userMatch;
+      });
+      if (filtered.length === 0) {
+        this.listContainer.innerHTML = `
         <div style="padding: 24px; text-align: center; color: var(--text-muted);">
-          No ${this.activeFilter!=="all"?this.activeFilter+"s":"chats"} found matching "${p(e)}"
+          No ${this.activeFilter !== "all" ? this.activeFilter + "s" : "chats"} found matching "${escapeHtml(filter)}"
         </div>
-      `;return}this.listContainer.innerHTML=n.map(a=>{let s=this.selectedChat&&this.selectedChat.id===a.id,o=(a.name||"C").charAt(0).toUpperCase(),r=a.type==="saved_messages"?"Cloud":a.type.toUpperCase(),u=a.type==="saved_messages"?'<span style="font-size: 1.15rem;">\u2601\uFE0F</span>':`<img src="/api/chats/${encodeURIComponent(a.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span>${p(o)}</span>'">`;return`
-        <div class="chat-option-item ${s?"selected":""}" data-id="${a.id}">
+      `;
+        return;
+      }
+      this.listContainer.innerHTML = filtered.map((c) => {
+        const isSelected = this.selectedChat && this.selectedChat.id === c.id;
+        const initial = (c.name || "C").charAt(0).toUpperCase();
+        const typeLabel = c.type === "saved_messages" ? "Cloud" : c.type.toUpperCase();
+        const avatarContent = c.type === "saved_messages" ? `<span style="font-size: 1.15rem;">\u2601\uFE0F</span>` : `<img src="/api/chats/${encodeURIComponent(c.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" onerror="this.outerHTML='<span>${escapeHtml(initial)}</span>'">`;
+        return `
+        <div class="chat-option-item ${isSelected ? "selected" : ""}" data-id="${c.id}">
           <div class="chat-avatar" style="overflow: hidden; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-            ${u}
+            ${avatarContent}
           </div>
           <div class="chat-meta">
-            <div class="chat-meta-name">${p(a.name)}</div>
+            <div class="chat-meta-name">${escapeHtml(c.name)}</div>
             <div class="chat-meta-sub">
-              ${a.username?"@"+p(a.username)+" \u2022 ":""}
-              <span class="chat-type-tag">${p(r)}</span>
+              ${c.username ? "@" + escapeHtml(c.username) + " \u2022 " : ""}
+              <span class="chat-type-tag">${escapeHtml(typeLabel)}</span>
             </div>
           </div>
-          ${s?'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00cec9" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>':""}
+          ${isSelected ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00cec9" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ""}
         </div>
-      `}).join(""),this.listContainer.querySelectorAll(".chat-option-item").forEach(a=>{a.addEventListener("click",()=>{let s=a.getAttribute("data-id"),o=this.chats.find(r=>String(r.id)===String(s));if(o){if(this.customCallback){let r=this.customCallback;this.customCallback=null,r(o)}else this.saveSelection(o);this.close()}})})}getSelectedChat(){return this.selectedChat}},A=new ee;var W=new Map;function ge(i,e){if(W.has(i))return W.get(i);let t=fe(e),n=null,a=!1;if(t==="photo"||t==="video"&&e.size<100*1024*1024)try{n=URL.createObjectURL(e),a=!0}catch(o){console.warn("Could not create Object URL preview:",o)}let s={fileId:i,category:t,url:n,hasObjectUrl:a,revoke:()=>{if(a&&n){try{URL.revokeObjectURL(n)}catch(o){console.warn("Error revoking Object URL:",o)}n=null,a=!1}W.delete(i)}};return W.set(i,s),s}function R(i){let e=W.get(i);e&&e.revoke()}var te=class{constructor(){this.queue=[],this.activeTask=null,this.isProcessing=!1,this.activeXhrs=new Map,this.onQueueChangeCallbacks=new Set,this.speedLimitMbS=0,this.nightMode={enabled:!1,start_time:"01:00",end_time:"06:00",in_window:!0},setInterval(()=>{let e=!1,t=Date.now()/1e3;this.queue.forEach(n=>{n.status==="scheduled"&&(e=!0,n.scheduled_at&&n.scheduled_at<=t&&(n.status="queued",n.scheduled_at=null,setTimeout(()=>this.processNext(),50)))}),e&&this._notify()},1e3)}onQueueChange(e){return this.onQueueChangeCallbacks.add(e),()=>this.onQueueChangeCallbacks.delete(e)}_notify(){this.onQueueChangeCallbacks.forEach(e=>{try{e(this.queue)}catch(t){console.error("Queue change callback error:",t)}})}addFiles(e,t=null){let n=A.getSelectedChat(),a=n?n.id:"me",s=n?n.name:"Saved Messages (Personal Cloud)",o=!!(t&&t>Date.now()/1e3);Array.from(e).forEach(r=>{let u="task_"+Math.random().toString(36).substring(2,10)+"_"+Date.now(),l=ge(u,r),h={id:u,file:r,filename:r.name,customFilename:r.name,fileSize:r.size,chatId:a,chatName:s,caption:"",sendAs:"auto",status:o?"scheduled":"queued",scheduled_at:o?t:null,progress:0,uploadedBytes:0,speed:0,eta:0,currentPart:1,totalParts:1,error:null,preview:l,transferredToServer:!1,isTransferring:!1};this.queue.push(h)}),this._notify(),this.processNext()}updateTaskConfig(e,{customFilename:t,caption:n,sendAs:a}){let s=this.queue.find(o=>o.id===e);s&&(s.status==="queued"||s.status==="scheduled")&&!s.transferredToServer&&(t!==void 0&&(s.customFilename=t),n!==void 0&&(s.caption=n),a!==void 0&&(s.sendAs=a),this._notify())}async processNext(){if(this.isProcessing)return;let e=Date.now()/1e3,t=this.queue.find(o=>(o.status==="queued"||o.status==="streaming")&&!o.transferredToServer&&!o.isTransferring&&(!o.scheduled_at||o.scheduled_at<=e));if(!t||!t.file)return;this.isProcessing=!0,this.activeTask=t,t.isTransferring=!0,t.status="streaming",t.progress=0,this._notify();let a=t.file.size,s=25*1024*1024;a>s?await this._uploadFileInChunks(t,s):await this._uploadFileDirect(t)}async _uploadFileInChunks(e,t){let n=e.file,a=n.size,s=Math.ceil(a/t),o=performance.now(),r=0,u=e.uploadedChunkIndex||0;for(let l=u;l<s;l++){if(e.status==="cancelled"||e.status==="paused"){e.isTransferring=!1,this.isProcessing=!1,this.activeTask=null;return}let h=l*t,w=Math.min(a,h+t),d=n.slice(h,w),g=new FormData;g.append("file",d,e.filename),g.append("upload_id",e.id),g.append("chunk_index",l),g.append("total_chunks",s),g.append("offset",h),g.append("total_size",a),g.append("filename",e.filename);let f=!1;for(let c=1;c<=3;c++){if(e.status==="cancelled"||e.status==="paused"){e.isTransferring=!1,this.isProcessing=!1,this.activeTask=null;return}try{await new Promise((m,C)=>{let v=new XMLHttpRequest;this.activeXhrs.set(e.id,v),v.upload.onprogress=b=>{if(b.lengthComputable&&e.status!=="cancelled"&&e.status!=="failed"&&e.status!=="paused"){let T=h+b.loaded,E=performance.now(),_=(E-o)/1e3,L=Math.min(99,T/a*100);if(e.progress=Math.round(L*10)/10,e.uploadedBytes=T,_>=.25){let B=T-r;e.speed=Math.max(0,B/_);let N=a-T;e.eta=e.speed>0?N/e.speed:0,o=E,r=T}this._notify()}},v.onload=()=>{this.activeXhrs.delete(e.id),v.status>=200&&v.status<300?(e.uploadedChunkIndex=l+1,m()):C(new Error(`Chunk ${l} failed with status ${v.status}`))},v.onerror=()=>{this.activeXhrs.delete(e.id),C(new Error(`Network connection error on chunk ${l}`))},v.onabort=()=>{this.activeXhrs.delete(e.id),C(new Error("aborted"))},v.open("POST","/api/upload/chunk",!0),v.send(g)}),f=!0;break}catch(m){if(e.status==="cancelled"||e.status==="paused"||m.message==="aborted"){e.isTransferring=!1,this.isProcessing=!1,this.activeTask=null;return}if(console.warn(`[ChunkUpload] Attempt ${c}/3 failed for chunk ${l}:`,m),c===3){e.status="failed",e.error=m.message||"Chunk transfer failed after 3 attempts",this._notify(),this.isProcessing=!1,this.activeTask=null,setTimeout(()=>this.processNext(),200);return}await new Promise(C=>setTimeout(C,1e3))}}if(!f)return}try{let l=await fetch("/api/upload/chunk/complete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:e.id,chat_id:String(e.chatId),chat_name:e.chatName||"",caption:e.caption||"",filename:e.customFilename||e.filename,send_as:e.sendAs||"auto",total_size:a,scheduled_at:e.scheduled_at||null})});if(!l.ok){let h=await l.json().catch(()=>({}));throw new Error(h.detail||`Complete error (${l.status})`)}console.log(`[Upload] Chunked file transfer finalized for task ${e.id}`),e.transferredToServer=!0,e.isTransferring=!1,e.status==="streaming"&&(e.status="uploading",this._notify())}catch(l){e.status="failed",e.error=l.message||"Failed to finalize chunked upload",this._notify()}this.isProcessing=!1,this.activeTask=null,setTimeout(()=>this.processNext(),150)}async _uploadFileDirect(e){let t=new FormData;t.append("file",e.file),t.append("upload_id",e.id),t.append("chat_id",e.chatId),t.append("chat_name",e.chatName),t.append("caption",e.caption||""),t.append("filename",e.customFilename||e.filename),t.append("send_as",e.sendAs||"auto");let n=new XMLHttpRequest;this.activeXhrs.set(e.id,n);let a=performance.now(),s=0;n.upload.onprogress=o=>{if(o.lengthComputable&&e.status!=="cancelled"&&e.status!=="failed"){let r=performance.now(),u=(r-a)/1e3,l=Math.min(99,o.loaded/o.total*100);if(e.progress=Math.round(l*10)/10,e.uploadedBytes=o.loaded,u>=.25){let h=o.loaded-s;e.speed=Math.max(0,h/u);let w=o.total-o.loaded;e.eta=e.speed>0?w/e.speed:0,a=r,s=o.loaded}(e.status==="queued"||e.status==="preparing")&&(e.status="streaming"),this._notify()}},n.onload=()=>{if(this.activeXhrs.delete(e.id),e.isTransferring=!1,n.status>=200&&n.status<300)console.log(`[Upload] File stream accepted by backend for task ${e.id}`),e.transferredToServer=!0,e.status==="streaming"&&(e.status="uploading",this._notify());else{let o=`Server error (${n.status})`;try{o=JSON.parse(n.responseText).detail||o}catch{}e.status="failed",e.error=o,this._notify()}this.isProcessing=!1,this.activeTask=null,setTimeout(()=>this.processNext(),150)},n.onerror=()=>{this.activeXhrs.delete(e.id),e.isTransferring=!1,e.status!=="cancelled"&&(e.status="failed",e.error="Network connection to backend failed",this._notify()),this.isProcessing=!1,this.activeTask=null,setTimeout(()=>this.processNext(),300)},n.onabort=()=>{this.activeXhrs.delete(e.id),e.isTransferring=!1,e.status="cancelled",this._notify(),this.isProcessing=!1,this.activeTask=null,setTimeout(()=>this.processNext(),150)},n.open("POST","/api/upload",!0),n.send(t)}pause(e){let t=this.queue.find(n=>n.id===e);if(t){t.status="paused",t.isTransferring=!1;let n=this.activeXhrs.get(e);n&&(n.abort(),this.activeXhrs.delete(e)),M.pauseTask(e),fetch(`/api/tasks/${encodeURIComponent(e)}/pause`,{method:"POST"}).catch(()=>{}),this.activeTask&&this.activeTask.id===e&&(this.isProcessing=!1,this.activeTask=null),this._notify()}}resume(e){let t=this.queue.find(n=>n.id===e);t&&(t.transferredToServer?(t.status="uploading",M.resumeTask(e),fetch(`/api/tasks/${encodeURIComponent(e)}/resume`,{method:"POST"}).catch(()=>{})):(t.status="queued",t.isTransferring=!1,this.isProcessing=!1,this.activeTask=null,setTimeout(()=>this.processNext(),50)),this._notify())}scheduleTask(e,t){let n=this.queue.find(a=>a.id===e);if(n){n.status="scheduled",n.scheduled_at=t,n.isTransferring=!1;let a=this.activeXhrs.get(e);a&&(a.abort(),this.activeXhrs.delete(e)),this.activeTask&&this.activeTask.id===e&&(this.isProcessing=!1,this.activeTask=null),this._notify(),fetch(`/api/tasks/${encodeURIComponent(e)}/schedule`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scheduled_at:t})}).catch(s=>console.warn("Schedule task error:",s)),setTimeout(()=>this.processNext(),100)}}startNow(e){let t=this.queue.find(n=>n.id===e);t&&(t.status=t.transferredToServer?"uploading":"queued",t.scheduled_at=null,t.isTransferring=!1,this._notify(),fetch(`/api/tasks/${encodeURIComponent(e)}/start_now`,{method:"POST"}).catch(n=>console.warn("Start now error:",n)),this.isProcessing=!1,this.activeTask=null,setTimeout(()=>this.processNext(),50))}async setSpeedLimit(e){this.speedLimitMbS=parseFloat(e)||0;try{await fetch("/api/settings/speed_limit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit_mb_s:this.speedLimitMbS})})}catch(t){console.warn("Set speed limit error:",t)}}async setNightMode({enabled:e,start_time:t,end_time:n}){this.nightMode={enabled:e,start_time:t,end_time:n};try{let s=await(await fetch("/api/settings/night_mode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:e,start_time:t,end_time:n})})).json();s.night_mode&&(this.nightMode=s.night_mode)}catch(a){console.warn("Set night mode error:",a)}}cancel(e){let t=this.queue.find(n=>n.id===e);if(t){let n=this.activeXhrs.get(e);n&&(n.abort(),this.activeXhrs.delete(e)),M.cancelTask(e),fetch(`/api/tasks/${encodeURIComponent(e)}/cancel`,{method:"POST"}).catch(()=>{}),t.status="cancelled",t.isTransferring=!1,R(e),this._notify(),this.activeTask&&this.activeTask.id===e&&(this.isProcessing=!1,this.activeTask=null,setTimeout(()=>this.processNext(),150))}}async pauseAll(){try{await fetch("/api/upload/batch/pause",{method:"POST"})}catch(e){console.warn("Could not pause all tasks:",e)}this.queue.forEach(e=>{if(["uploading","streaming","queued","splitting"].includes(e.status)){e.status="paused",e.isTransferring=!1;let t=this.activeXhrs.get(e.id);t&&(t.abort(),this.activeXhrs.delete(e.id))}}),this.isProcessing=!1,this.activeTask=null,this._notify()}async resumeAll(){try{await fetch("/api/upload/batch/resume",{method:"POST"})}catch(e){console.warn("Could not resume all tasks:",e)}this.queue.forEach(e=>{e.status==="paused"&&(e.status=e.transferredToServer?"uploading":"queued",e.isTransferring=!1)}),this.isProcessing=!1,this.activeTask=null,this._notify(),setTimeout(()=>this.processNext(),50)}async cancelAll(){try{await fetch("/api/upload/batch/cancel",{method:"POST"})}catch(e){console.warn("Could not cancel all tasks:",e)}this.activeXhrs.forEach(e=>e.abort()),this.activeXhrs.clear(),this.queue.forEach(e=>{e.status!=="completed"&&(e.status="cancelled",R(e.id))}),this.isProcessing=!1,this._notify()}async clearCompleted(){try{await fetch("/api/upload/batch/clear",{method:"POST"})}catch(e){console.warn("Could not clear completed tasks on server:",e)}this.queue=this.queue.filter(e=>!["completed","cancelled","failed"].includes(e.status)),this._notify()}remove(e){let t=this.queue.findIndex(n=>n.id===e);t!==-1&&(this.cancel(e),R(e),this.queue.splice(t,1),this._notify())}handleSocketProgress(e){let t=this.queue.find(n=>n.id===e.id);!t&&e.status!=="completed"&&e.status!=="cancelled"&&(t={id:e.id,file:null,filename:e.filename||"Uploading File",customFilename:e.filename||"Uploading File",fileSize:e.file_size||0,chatId:e.chat_id||"me",chatName:e.chat_name||"Telegram Chat",caption:"",sendAs:"auto",status:e.status,progress:e.progress||0,uploadedBytes:e.uploaded_bytes||0,speed:e.speed||0,eta:e.eta||0,currentPart:e.current_part||1,totalParts:e.total_parts||1,error:e.error,preview:null,transferredToServer:!0,isTransferring:!1},this.queue.push(t)),t&&(t.status=e.status,t.progress=e.progress,t.uploadedBytes=e.uploaded_bytes,t.speed=e.speed,t.eta=e.eta,t.currentPart=e.current_part||1,t.totalParts=e.total_parts||1,t.error=e.error,t.transferredToServer=!0,(e.status==="completed"||e.status==="failed")&&R(t.id),this._notify())}syncWithSnapshot(e){Array.isArray(e)&&(e.forEach(t=>{let n=this.queue.find(a=>a.id===t.id);if(n)(t.status!=="queued"||!n.transferredToServer)&&(n.status=t.status),n.progress=t.progress,n.uploadedBytes=t.uploaded_bytes,n.speed=t.speed,n.eta=t.eta,n.currentPart=t.current_part,n.totalParts=t.total_parts,n.error=t.error,n.transferredToServer=!0;else if(t.status!=="completed"&&t.status!=="cancelled"){let a={id:t.id,file:null,filename:t.filename||"Uploading File",customFilename:t.filename||"Uploading File",fileSize:t.file_size||0,chatId:t.chat_id||"me",chatName:t.chat_name||"Telegram Chat",caption:"",sendAs:"auto",status:t.status,progress:t.progress||0,uploadedBytes:t.uploaded_bytes||0,speed:t.speed||0,eta:t.eta||0,currentPart:t.current_part||1,totalParts:t.total_parts||1,error:t.error,preview:null,transferredToServer:!0,isTransferring:!1};this.queue.push(a)}}),this._notify())}},S=new te;function y(i,e="info"){let t=document.getElementById("toastContainer");if(!t)return;let n=document.createElement("div");n.className=`toast ${e}`;let a="\u2139\uFE0F";e==="success"&&(a="\u2705"),e==="error"&&(a="\u274C"),e==="warning"&&(a="\u26A0\uFE0F"),n.innerHTML=`<span>${a}</span><span>${p(i)}</span>`,t.appendChild(n),setTimeout(()=>{n.style.opacity="0",n.style.transform="translateX(100%)",n.style.transition="all 0.3s ease",setTimeout(()=>n.remove(),300)},4e3)}function ye(i){let e=i.status==="splitting",t=i.status==="paused",n=i.status==="completed",a=i.status==="failed",s=i.status==="cancelled";if(e)return`<span class="badge splitting" title="Auto-splitting large file for 2GB Telegram limit">\u2702\uFE0F SPLITTING (${i.progress?i.progress.toFixed(0):0}%)</span>`;if(i.status==="streaming")return`<span class="badge uploading" style="background: rgba(0, 206, 201, 0.18); color: var(--accent-secondary); border-color: rgba(0, 206, 201, 0.4);" title="Streaming to local engine buffer">STREAMING (${i.progress?i.progress.toFixed(0):0}%)</span>`;if(i.status==="preparing")return'<span class="badge uploading" title="Connecting to Telegram MTProto">PREPARING...</span>';if(i.status==="uploading")return`<span class="badge uploading" title="Uploading to Telegram MTProto">UPLOADING${i.totalParts>1?` (${i.currentPart}/${i.totalParts})`:""}</span>`;if(i.status==="scheduled"){let o="";if(i.scheduled_at){let r=Math.max(0,Math.round((i.scheduled_at*1e3-Date.now())/1e3)),u=Math.floor(r/3600),l=Math.floor(r%3600/60),h=r%60;u>0?o=`${u}h ${l}m`:l>0?o=`${l}m ${h}s`:o=`${h}s`}return`<span class="badge" style="background: rgba(162, 155, 254, 0.2); color: #a29bfe; border: 1px solid rgba(162,155,254,0.4);" title="Scheduled upload">\u23F0 SCHEDULED ${o?"("+o+")":""}</span>`}else{if(t)return'<span class="badge" style="background: rgba(253, 203, 110, 0.2); color: var(--status-warning);">PAUSED</span>';if(n)return'<span class="badge completed">COMPLETED</span>';if(a)return`<span class="badge failed" title="${p(i.error||"Upload error occurred")}">FAILED</span>`;if(s)return'<span class="badge" style="background: rgba(255,255,255,0.1); color: var(--text-dim);">CANCELLED</span>'}return'<span class="badge" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">QUEUED</span>'}function ve(i){if(i.status==="splitting")return`<div class="card-stage-line splitting">\u2702\uFE0F <strong>Stage 1 of 2:</strong> Splitting into 1.9GB sequence parts (${i.progress?i.progress.toFixed(1):0}%) \u2022 <em>Preparing Telegram slices</em></div>`;if(i.totalParts>1&&i.status==="uploading")return`<div class="card-stage-line uploading">\u{1F680} <strong>Stage 2 of 2:</strong> Uploading Part ${i.currentPart} of ${i.totalParts} to Telegram Cloud</div>`;if(i.status==="streaming")return`<div class="card-stage-line streaming">\u26A1 <strong>Buffering Stream:</strong> Streaming file to local engine (${i.progress?i.progress.toFixed(1):0}%)</div>`;if(i.status==="uploading")return'<div class="card-stage-line uploading">\u{1F680} <strong>Turbo MTProto Upload:</strong> Streaming to Telegram (6 Workers)</div>';if(i.status==="scheduled"){let e="later";if(i.scheduled_at){let t=new Date(i.scheduled_at*1e3);e=t.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+" ("+t.toLocaleDateString([],{month:"short",day:"numeric"})+")"}return`<div class="card-stage-line" style="color: #a29bfe;">\u23F0 <strong>Scheduled:</strong> Will start streaming at ${e}</div>`}else{if(i.status==="completed")return`<div class="card-stage-line completed">\u2705 <strong>Upload Finished:</strong> Delivered to ${p(i.chatName||"Telegram")}</div>`;if(i.status==="paused")return'<div class="card-stage-line">\u23F8\uFE0F <strong>Upload Paused:</strong> Resume anytime without losing progress</div>';if(i.status==="failed")return`<div class="card-stage-line" style="color: var(--status-danger);">\u274C <strong>Error:</strong> ${p(i.error||"Failed to upload")}</div>`}return'<div class="card-stage-line">\u23F3 <strong>Queued:</strong> Waiting for worker slot...</div>'}function be(i){let e=i.status==="uploading"||i.status==="streaming"||i.status==="preparing"||i.status==="splitting",t=i.status==="paused",n=i.status==="queued",a=i.status==="scheduled";return e?`
-      <button class="icon-btn" title="Pause Upload" onclick="window._app.pause('${i.id}')">
+      `;
+      }).join("");
+      this.listContainer.querySelectorAll(".chat-option-item").forEach((el) => {
+        el.addEventListener("click", () => {
+          const rawId = el.getAttribute("data-id");
+          const chat = this.chats.find((c) => String(c.id) === String(rawId));
+          if (chat) {
+            if (this.customCallback) {
+              const cb = this.customCallback;
+              this.customCallback = null;
+              cb(chat);
+            } else {
+              this.saveSelection(chat);
+            }
+            this.close();
+          }
+        });
+      });
+    }
+    getSelectedChat() {
+      return this.selectedChat;
+    }
+  };
+  var chatPicker = new ChatPicker();
+
+  // frontend/js/preview.js
+  var activePreviews = /* @__PURE__ */ new Map();
+  function createSafePreview(fileId, file) {
+    if (activePreviews.has(fileId)) {
+      return activePreviews.get(fileId);
+    }
+    const category = getFileCategory(file);
+    let previewUrl = null;
+    let hasObjectUrl = false;
+    if (category === "photo" || category === "video" && file.size < 100 * 1024 * 1024) {
+      try {
+        previewUrl = URL.createObjectURL(file);
+        hasObjectUrl = true;
+      } catch (e) {
+        console.warn("Could not create Object URL preview:", e);
+      }
+    }
+    const previewObj = {
+      fileId,
+      category,
+      url: previewUrl,
+      hasObjectUrl,
+      revoke: () => {
+        if (hasObjectUrl && previewUrl) {
+          try {
+            URL.revokeObjectURL(previewUrl);
+          } catch (e) {
+            console.warn("Error revoking Object URL:", e);
+          }
+          previewUrl = null;
+          hasObjectUrl = false;
+        }
+        activePreviews.delete(fileId);
+      }
+    };
+    activePreviews.set(fileId, previewObj);
+    return previewObj;
+  }
+  function revokePreview(fileId) {
+    const p = activePreviews.get(fileId);
+    if (p) {
+      p.revoke();
+    }
+  }
+
+  // frontend/js/uploader.js
+  var Uploader = class {
+    constructor() {
+      this.queue = [];
+      this.activeTask = null;
+      this.isProcessing = false;
+      this.activeXhrs = /* @__PURE__ */ new Map();
+      this.onQueueChangeCallbacks = /* @__PURE__ */ new Set();
+      this.speedLimitMbS = 0;
+      this.nightMode = { enabled: false, start_time: "01:00", end_time: "06:00", in_window: true };
+      setInterval(() => {
+        let shouldNotify = false;
+        const nowSec = Date.now() / 1e3;
+        this.queue.forEach((t) => {
+          if (t.status === "scheduled") {
+            shouldNotify = true;
+            if (t.scheduled_at && t.scheduled_at <= nowSec) {
+              t.status = "queued";
+              t.scheduled_at = null;
+              setTimeout(() => this.processNext(), 50);
+            }
+          }
+        });
+        if (shouldNotify) {
+          this._notify();
+        }
+      }, 1e3);
+    }
+    onQueueChange(cb) {
+      this.onQueueChangeCallbacks.add(cb);
+      return () => this.onQueueChangeCallbacks.delete(cb);
+    }
+    _notify() {
+      this.onQueueChangeCallbacks.forEach((cb) => {
+        try {
+          cb(this.queue);
+        } catch (e) {
+          console.error("Queue change callback error:", e);
+        }
+      });
+    }
+    addFiles(fileList, scheduledAt = null) {
+      const selectedChat = chatPicker.getSelectedChat();
+      const chatId = selectedChat ? selectedChat.id : "me";
+      const chatName = selectedChat ? selectedChat.name : "Saved Messages (Personal Cloud)";
+      const isScheduled = Boolean(scheduledAt && scheduledAt > Date.now() / 1e3);
+      Array.from(fileList).forEach((file) => {
+        const id = "task_" + Math.random().toString(36).substring(2, 10) + "_" + Date.now();
+        const preview = createSafePreview(id, file);
+        const task = {
+          id,
+          file,
+          filename: file.name,
+          customFilename: file.name,
+          fileSize: file.size,
+          chatId,
+          chatName,
+          caption: "",
+          sendAs: "auto",
+          // auto | document | media
+          status: isScheduled ? "scheduled" : "queued",
+          // queued | scheduled | streaming | uploading | splitting | paused | completed | failed | cancelled
+          scheduled_at: isScheduled ? scheduledAt : null,
+          progress: 0,
+          uploadedBytes: 0,
+          speed: 0,
+          eta: 0,
+          currentPart: 1,
+          totalParts: 1,
+          error: null,
+          preview,
+          transferredToServer: false,
+          // Prevents duplicate XHR uploads
+          isTransferring: false
+        };
+        this.queue.push(task);
+      });
+      this._notify();
+      this.processNext();
+    }
+    updateTaskConfig(id, { customFilename, caption, sendAs }) {
+      const task = this.queue.find((t) => t.id === id);
+      if (task && (task.status === "queued" || task.status === "scheduled") && !task.transferredToServer) {
+        if (customFilename !== void 0) task.customFilename = customFilename;
+        if (caption !== void 0) task.caption = caption;
+        if (sendAs !== void 0) task.sendAs = sendAs;
+        this._notify();
+      }
+    }
+    async processNext() {
+      if (this.isProcessing) return;
+      const nowSec = Date.now() / 1e3;
+      const nextTask = this.queue.find(
+        (t) => (t.status === "queued" || t.status === "streaming") && !t.transferredToServer && !t.isTransferring && (!t.scheduled_at || t.scheduled_at <= nowSec)
+      );
+      if (!nextTask || !nextTask.file) return;
+      this.isProcessing = true;
+      this.activeTask = nextTask;
+      nextTask.isTransferring = true;
+      nextTask.status = "streaming";
+      nextTask.progress = 0;
+      this._notify();
+      const file = nextTask.file;
+      const totalSize = file.size;
+      const CHUNK_SIZE = 25 * 1024 * 1024;
+      if (totalSize > CHUNK_SIZE) {
+        await this._uploadFileInChunks(nextTask, CHUNK_SIZE);
+      } else {
+        await this._uploadFileDirect(nextTask);
+      }
+    }
+    async _uploadFileInChunks(nextTask, chunkSize) {
+      const file = nextTask.file;
+      const totalSize = file.size;
+      const totalChunks = Math.ceil(totalSize / chunkSize);
+      let lastTime = performance.now();
+      let lastLoaded = 0;
+      const startChunk = nextTask.uploadedChunkIndex || 0;
+      for (let chunkIdx = startChunk; chunkIdx < totalChunks; chunkIdx++) {
+        if (nextTask.status === "cancelled" || nextTask.status === "paused") {
+          nextTask.isTransferring = false;
+          this.isProcessing = false;
+          this.activeTask = null;
+          return;
+        }
+        const start = chunkIdx * chunkSize;
+        const end = Math.min(totalSize, start + chunkSize);
+        const chunkBlob = file.slice(start, end);
+        const formData = new FormData();
+        formData.append("file", chunkBlob, nextTask.filename);
+        formData.append("upload_id", nextTask.id);
+        formData.append("chunk_index", chunkIdx);
+        formData.append("total_chunks", totalChunks);
+        formData.append("offset", start);
+        formData.append("total_size", totalSize);
+        formData.append("filename", nextTask.filename);
+        let chunkSuccess = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          if (nextTask.status === "cancelled" || nextTask.status === "paused") {
+            nextTask.isTransferring = false;
+            this.isProcessing = false;
+            this.activeTask = null;
+            return;
+          }
+          try {
+            await new Promise((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              this.activeXhrs.set(nextTask.id, xhr);
+              xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable && nextTask.status !== "cancelled" && nextTask.status !== "failed" && nextTask.status !== "paused") {
+                  const totalLoaded = start + e.loaded;
+                  const now = performance.now();
+                  const elapsed = (now - lastTime) / 1e3;
+                  const percent = Math.min(99, totalLoaded / totalSize * 100);
+                  nextTask.progress = Math.round(percent * 10) / 10;
+                  nextTask.uploadedBytes = totalLoaded;
+                  if (elapsed >= 0.25) {
+                    const delta = totalLoaded - lastLoaded;
+                    nextTask.speed = Math.max(0, delta / elapsed);
+                    const remaining = totalSize - totalLoaded;
+                    nextTask.eta = nextTask.speed > 0 ? remaining / nextTask.speed : 0;
+                    lastTime = now;
+                    lastLoaded = totalLoaded;
+                  }
+                  this._notify();
+                }
+              };
+              xhr.onload = () => {
+                this.activeXhrs.delete(nextTask.id);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  nextTask.uploadedChunkIndex = chunkIdx + 1;
+                  resolve();
+                } else {
+                  reject(new Error(`Chunk ${chunkIdx} failed with status ${xhr.status}`));
+                }
+              };
+              xhr.onerror = () => {
+                this.activeXhrs.delete(nextTask.id);
+                reject(new Error(`Network connection error on chunk ${chunkIdx}`));
+              };
+              xhr.onabort = () => {
+                this.activeXhrs.delete(nextTask.id);
+                reject(new Error("aborted"));
+              };
+              xhr.open("POST", "/api/upload/chunk", true);
+              xhr.send(formData);
+            });
+            chunkSuccess = true;
+            break;
+          } catch (err) {
+            if (nextTask.status === "cancelled" || nextTask.status === "paused" || err.message === "aborted") {
+              nextTask.isTransferring = false;
+              this.isProcessing = false;
+              this.activeTask = null;
+              return;
+            }
+            console.warn(`[ChunkUpload] Attempt ${attempt}/3 failed for chunk ${chunkIdx}:`, err);
+            if (attempt === 3) {
+              nextTask.status = "failed";
+              nextTask.error = err.message || "Chunk transfer failed after 3 attempts";
+              this._notify();
+              this.isProcessing = false;
+              this.activeTask = null;
+              setTimeout(() => this.processNext(), 200);
+              return;
+            }
+            await new Promise((r) => setTimeout(r, 1e3));
+          }
+        }
+        if (!chunkSuccess) return;
+      }
+      try {
+        const completeResp = await fetch("/api/upload/chunk/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            upload_id: nextTask.id,
+            chat_id: String(nextTask.chatId),
+            chat_name: nextTask.chatName || "",
+            caption: nextTask.caption || "",
+            filename: nextTask.customFilename || nextTask.filename,
+            send_as: nextTask.sendAs || "auto",
+            total_size: totalSize,
+            scheduled_at: nextTask.scheduled_at || null
+          })
+        });
+        if (!completeResp.ok) {
+          const errJson = await completeResp.json().catch(() => ({}));
+          throw new Error(errJson.detail || `Complete error (${completeResp.status})`);
+        }
+        console.log(`[Upload] Chunked file transfer finalized for task ${nextTask.id}`);
+        nextTask.transferredToServer = true;
+        nextTask.isTransferring = false;
+        if (nextTask.status === "streaming") {
+          nextTask.status = "uploading";
+          this._notify();
+        }
+      } catch (err) {
+        nextTask.status = "failed";
+        nextTask.error = err.message || "Failed to finalize chunked upload";
+        this._notify();
+      }
+      this.isProcessing = false;
+      this.activeTask = null;
+      setTimeout(() => this.processNext(), 150);
+    }
+    async _uploadFileDirect(nextTask) {
+      const formData = new FormData();
+      formData.append("file", nextTask.file);
+      formData.append("upload_id", nextTask.id);
+      formData.append("chat_id", nextTask.chatId);
+      formData.append("chat_name", nextTask.chatName);
+      formData.append("caption", nextTask.caption || "");
+      formData.append("filename", nextTask.customFilename || nextTask.filename);
+      formData.append("send_as", nextTask.sendAs || "auto");
+      const xhr = new XMLHttpRequest();
+      this.activeXhrs.set(nextTask.id, xhr);
+      let lastTime = performance.now();
+      let lastLoaded = 0;
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && nextTask.status !== "cancelled" && nextTask.status !== "failed") {
+          const now = performance.now();
+          const elapsed = (now - lastTime) / 1e3;
+          const percent = Math.min(99, e.loaded / e.total * 100);
+          nextTask.progress = Math.round(percent * 10) / 10;
+          nextTask.uploadedBytes = e.loaded;
+          if (elapsed >= 0.25) {
+            const delta = e.loaded - lastLoaded;
+            nextTask.speed = Math.max(0, delta / elapsed);
+            const remaining = e.total - e.loaded;
+            nextTask.eta = nextTask.speed > 0 ? remaining / nextTask.speed : 0;
+            lastTime = now;
+            lastLoaded = e.loaded;
+          }
+          if (nextTask.status === "queued" || nextTask.status === "preparing") {
+            nextTask.status = "streaming";
+          }
+          this._notify();
+        }
+      };
+      xhr.onload = () => {
+        this.activeXhrs.delete(nextTask.id);
+        nextTask.isTransferring = false;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          console.log(`[Upload] File stream accepted by backend for task ${nextTask.id}`);
+          nextTask.transferredToServer = true;
+          if (nextTask.status === "streaming") {
+            nextTask.status = "uploading";
+            this._notify();
+          }
+        } else {
+          let errMessage = `Server error (${xhr.status})`;
+          try {
+            const errObj = JSON.parse(xhr.responseText);
+            errMessage = errObj.detail || errMessage;
+          } catch (_) {
+          }
+          nextTask.status = "failed";
+          nextTask.error = errMessage;
+          this._notify();
+        }
+        this.isProcessing = false;
+        this.activeTask = null;
+        setTimeout(() => this.processNext(), 150);
+      };
+      xhr.onerror = () => {
+        this.activeXhrs.delete(nextTask.id);
+        nextTask.isTransferring = false;
+        if (nextTask.status !== "cancelled") {
+          nextTask.status = "failed";
+          nextTask.error = "Network connection to backend failed";
+          this._notify();
+        }
+        this.isProcessing = false;
+        this.activeTask = null;
+        setTimeout(() => this.processNext(), 300);
+      };
+      xhr.onabort = () => {
+        this.activeXhrs.delete(nextTask.id);
+        nextTask.isTransferring = false;
+        nextTask.status = "cancelled";
+        this._notify();
+        this.isProcessing = false;
+        this.activeTask = null;
+        setTimeout(() => this.processNext(), 150);
+      };
+      xhr.open("POST", "/api/upload", true);
+      xhr.send(formData);
+    }
+    pause(id) {
+      const task = this.queue.find((t) => t.id === id);
+      if (task) {
+        task.status = "paused";
+        task.isTransferring = false;
+        const xhr = this.activeXhrs.get(id);
+        if (xhr) {
+          xhr.abort();
+          this.activeXhrs.delete(id);
+        }
+        socketManager.pauseTask(id);
+        fetch(`/api/tasks/${encodeURIComponent(id)}/pause`, { method: "POST" }).catch(() => {
+        });
+        if (this.activeTask && this.activeTask.id === id) {
+          this.isProcessing = false;
+          this.activeTask = null;
+        }
+        this._notify();
+      }
+    }
+    resume(id) {
+      const task = this.queue.find((t) => t.id === id);
+      if (task) {
+        if (task.transferredToServer) {
+          task.status = "uploading";
+          socketManager.resumeTask(id);
+          fetch(`/api/tasks/${encodeURIComponent(id)}/resume`, { method: "POST" }).catch(() => {
+          });
+        } else {
+          task.status = "queued";
+          task.isTransferring = false;
+          this.isProcessing = false;
+          this.activeTask = null;
+          setTimeout(() => this.processNext(), 50);
+        }
+        this._notify();
+      }
+    }
+    scheduleTask(id, timestamp) {
+      const task = this.queue.find((t) => t.id === id);
+      if (task) {
+        task.status = "scheduled";
+        task.scheduled_at = timestamp;
+        task.isTransferring = false;
+        const xhr = this.activeXhrs.get(id);
+        if (xhr) {
+          xhr.abort();
+          this.activeXhrs.delete(id);
+        }
+        if (this.activeTask && this.activeTask.id === id) {
+          this.isProcessing = false;
+          this.activeTask = null;
+        }
+        this._notify();
+        fetch(`/api/tasks/${encodeURIComponent(id)}/schedule`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scheduled_at: timestamp })
+        }).catch((e) => console.warn("Schedule task error:", e));
+        setTimeout(() => this.processNext(), 100);
+      }
+    }
+    startNow(id) {
+      const task = this.queue.find((t) => t.id === id);
+      if (task) {
+        task.status = task.transferredToServer ? "uploading" : "queued";
+        task.scheduled_at = null;
+        task.isTransferring = false;
+        this._notify();
+        fetch(`/api/tasks/${encodeURIComponent(id)}/start_now`, { method: "POST" }).catch(
+          (e) => console.warn("Start now error:", e)
+        );
+        this.isProcessing = false;
+        this.activeTask = null;
+        setTimeout(() => this.processNext(), 50);
+      }
+    }
+    async setSpeedLimit(mb_s) {
+      this.speedLimitMbS = parseFloat(mb_s) || 0;
+      try {
+        await fetch("/api/settings/speed_limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit_mb_s: this.speedLimitMbS })
+        });
+      } catch (e) {
+        console.warn("Set speed limit error:", e);
+      }
+    }
+    async setNightMode({ enabled, start_time, end_time }) {
+      this.nightMode = { enabled, start_time, end_time };
+      try {
+        const res = await fetch("/api/settings/night_mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled, start_time, end_time })
+        });
+        const data = await res.json();
+        if (data.night_mode) {
+          this.nightMode = data.night_mode;
+        }
+      } catch (e) {
+        console.warn("Set night mode error:", e);
+      }
+    }
+    cancel(id) {
+      const task = this.queue.find((t) => t.id === id);
+      if (task) {
+        const xhr = this.activeXhrs.get(id);
+        if (xhr) {
+          xhr.abort();
+          this.activeXhrs.delete(id);
+        }
+        socketManager.cancelTask(id);
+        fetch(`/api/tasks/${encodeURIComponent(id)}/cancel`, { method: "POST" }).catch(() => {
+        });
+        task.status = "cancelled";
+        task.isTransferring = false;
+        revokePreview(id);
+        this._notify();
+        if (this.activeTask && this.activeTask.id === id) {
+          this.isProcessing = false;
+          this.activeTask = null;
+          setTimeout(() => this.processNext(), 150);
+        }
+      }
+    }
+    async pauseAll() {
+      try {
+        await fetch("/api/upload/batch/pause", { method: "POST" });
+      } catch (e) {
+        console.warn("Could not pause all tasks:", e);
+      }
+      this.queue.forEach((task) => {
+        if (["uploading", "streaming", "queued", "splitting"].includes(task.status)) {
+          task.status = "paused";
+          task.isTransferring = false;
+          const xhr = this.activeXhrs.get(task.id);
+          if (xhr) {
+            xhr.abort();
+            this.activeXhrs.delete(task.id);
+          }
+        }
+      });
+      this.isProcessing = false;
+      this.activeTask = null;
+      this._notify();
+    }
+    async resumeAll() {
+      try {
+        await fetch("/api/upload/batch/resume", { method: "POST" });
+      } catch (e) {
+        console.warn("Could not resume all tasks:", e);
+      }
+      this.queue.forEach((task) => {
+        if (task.status === "paused") {
+          task.status = task.transferredToServer ? "uploading" : "queued";
+          task.isTransferring = false;
+        }
+      });
+      this.isProcessing = false;
+      this.activeTask = null;
+      this._notify();
+      setTimeout(() => this.processNext(), 50);
+    }
+    async cancelAll() {
+      try {
+        await fetch("/api/upload/batch/cancel", { method: "POST" });
+      } catch (e) {
+        console.warn("Could not cancel all tasks:", e);
+      }
+      this.activeXhrs.forEach((xhr) => xhr.abort());
+      this.activeXhrs.clear();
+      this.queue.forEach((task) => {
+        if (task.status !== "completed") {
+          task.status = "cancelled";
+          revokePreview(task.id);
+        }
+      });
+      this.isProcessing = false;
+      this._notify();
+    }
+    async clearCompleted() {
+      try {
+        await fetch("/api/upload/batch/clear", { method: "POST" });
+      } catch (e) {
+        console.warn("Could not clear completed tasks on server:", e);
+      }
+      this.queue = this.queue.filter((t) => !["completed", "cancelled", "failed"].includes(t.status));
+      this._notify();
+    }
+    remove(id) {
+      const idx = this.queue.findIndex((t) => t.id === id);
+      if (idx !== -1) {
+        this.cancel(id);
+        revokePreview(id);
+        this.queue.splice(idx, 1);
+        this._notify();
+      }
+    }
+    handleSocketProgress(data) {
+      let task = this.queue.find((t) => t.id === data.id);
+      if (!task && data.status !== "completed" && data.status !== "cancelled") {
+        task = {
+          id: data.id,
+          file: null,
+          filename: data.filename || "Uploading File",
+          customFilename: data.filename || "Uploading File",
+          fileSize: data.file_size || 0,
+          chatId: data.chat_id || "me",
+          chatName: data.chat_name || "Telegram Chat",
+          caption: "",
+          sendAs: "auto",
+          status: data.status,
+          progress: data.progress || 0,
+          uploadedBytes: data.uploaded_bytes || 0,
+          speed: data.speed || 0,
+          eta: data.eta || 0,
+          currentPart: data.current_part || 1,
+          totalParts: data.total_parts || 1,
+          error: data.error,
+          preview: null,
+          transferredToServer: true,
+          isTransferring: false
+        };
+        this.queue.push(task);
+      }
+      if (task) {
+        task.status = data.status;
+        task.progress = data.progress;
+        task.uploadedBytes = data.uploaded_bytes;
+        task.speed = data.speed;
+        task.eta = data.eta;
+        task.currentPart = data.current_part || 1;
+        task.totalParts = data.total_parts || 1;
+        task.error = data.error;
+        task.transferredToServer = true;
+        if (data.status === "completed" || data.status === "failed") {
+          revokePreview(task.id);
+        }
+        this._notify();
+      }
+    }
+    syncWithSnapshot(tasks) {
+      if (!Array.isArray(tasks)) return;
+      tasks.forEach((srvTask) => {
+        const existing = this.queue.find((t) => t.id === srvTask.id);
+        if (existing) {
+          if (srvTask.status !== "queued" || !existing.transferredToServer) {
+            existing.status = srvTask.status;
+          }
+          existing.progress = srvTask.progress;
+          existing.uploadedBytes = srvTask.uploaded_bytes;
+          existing.speed = srvTask.speed;
+          existing.eta = srvTask.eta;
+          existing.currentPart = srvTask.current_part;
+          existing.totalParts = srvTask.total_parts;
+          existing.error = srvTask.error;
+          existing.transferredToServer = true;
+        } else if (srvTask.status !== "completed" && srvTask.status !== "cancelled") {
+          const rehydratedTask = {
+            id: srvTask.id,
+            file: null,
+            filename: srvTask.filename || "Uploading File",
+            customFilename: srvTask.filename || "Uploading File",
+            fileSize: srvTask.file_size || 0,
+            chatId: srvTask.chat_id || "me",
+            chatName: srvTask.chat_name || "Telegram Chat",
+            caption: "",
+            sendAs: "auto",
+            status: srvTask.status,
+            progress: srvTask.progress || 0,
+            uploadedBytes: srvTask.uploaded_bytes || 0,
+            speed: srvTask.speed || 0,
+            eta: srvTask.eta || 0,
+            currentPart: srvTask.current_part || 1,
+            totalParts: srvTask.total_parts || 1,
+            error: srvTask.error,
+            preview: null,
+            transferredToServer: true,
+            isTransferring: false
+          };
+          this.queue.push(rehydratedTask);
+        }
+      });
+      this._notify();
+    }
+  };
+  var uploader = new Uploader();
+
+  // frontend/js/ui.js
+  function showToast2(message, type = "info") {
+    const container = document.getElementById("toastContainer");
+    if (!container) return;
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    let icon = "\u2139\uFE0F";
+    if (type === "success") icon = "\u2705";
+    if (type === "error") icon = "\u274C";
+    if (type === "warning") icon = "\u26A0\uFE0F";
+    toast.innerHTML = `<span>${icon}</span><span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(100%)";
+      toast.style.transition = "all 0.3s ease";
+      setTimeout(() => toast.remove(), 300);
+    }, 4e3);
+  }
+  function buildStatusBadgeHtml(task) {
+    const isSplitting = task.status === "splitting";
+    const isPaused = task.status === "paused";
+    const isCompleted = task.status === "completed";
+    const isFailed = task.status === "failed";
+    const isCancelled = task.status === "cancelled";
+    if (isSplitting) {
+      return `<span class="badge splitting" title="Auto-splitting large file for 2GB Telegram limit">\u2702\uFE0F SPLITTING (${task.progress ? task.progress.toFixed(0) : 0}%)</span>`;
+    } else if (task.status === "streaming") {
+      return `<span class="badge uploading" style="background: rgba(0, 206, 201, 0.18); color: var(--accent-secondary); border-color: rgba(0, 206, 201, 0.4);" title="Streaming to local engine buffer">STREAMING (${task.progress ? task.progress.toFixed(0) : 0}%)</span>`;
+    } else if (task.status === "preparing") {
+      return `<span class="badge uploading" title="Connecting to Telegram MTProto">PREPARING...</span>`;
+    } else if (task.status === "uploading") {
+      const partInfo = task.totalParts > 1 ? ` (${task.currentPart}/${task.totalParts})` : "";
+      return `<span class="badge uploading" title="Uploading to Telegram MTProto">UPLOADING${partInfo}</span>`;
+    } else if (task.status === "scheduled") {
+      let countdownStr = "";
+      if (task.scheduled_at) {
+        const diff = Math.max(0, Math.round((task.scheduled_at * 1e3 - Date.now()) / 1e3));
+        const hrs = Math.floor(diff / 3600);
+        const mins = Math.floor(diff % 3600 / 60);
+        const secs = diff % 60;
+        if (hrs > 0) countdownStr = `${hrs}h ${mins}m`;
+        else if (mins > 0) countdownStr = `${mins}m ${secs}s`;
+        else countdownStr = `${secs}s`;
+      }
+      return `<span class="badge" style="background: rgba(162, 155, 254, 0.2); color: #a29bfe; border: 1px solid rgba(162,155,254,0.4);" title="Scheduled upload">\u23F0 SCHEDULED ${countdownStr ? "(" + countdownStr + ")" : ""}</span>`;
+    } else if (isPaused) {
+      return `<span class="badge" style="background: rgba(253, 203, 110, 0.2); color: var(--status-warning);">PAUSED</span>`;
+    } else if (isCompleted) {
+      return `<span class="badge completed">COMPLETED</span>`;
+    } else if (isFailed) {
+      const errTooltip = escapeHtml(task.error || "Upload error occurred");
+      return `<span class="badge failed" title="${errTooltip}">FAILED</span>`;
+    } else if (isCancelled) {
+      return `<span class="badge" style="background: rgba(255,255,255,0.1); color: var(--text-dim);">CANCELLED</span>`;
+    }
+    return `<span class="badge" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">QUEUED</span>`;
+  }
+  function buildStageLineHtml(task) {
+    if (task.status === "splitting") {
+      return `<div class="card-stage-line splitting">\u2702\uFE0F <strong>Stage 1 of 2:</strong> Splitting into 1.9GB sequence parts (${task.progress ? task.progress.toFixed(1) : 0}%) \u2022 <em>Preparing Telegram slices</em></div>`;
+    } else if (task.totalParts > 1 && task.status === "uploading") {
+      return `<div class="card-stage-line uploading">\u{1F680} <strong>Stage 2 of 2:</strong> Uploading Part ${task.currentPart} of ${task.totalParts} to Telegram Cloud</div>`;
+    } else if (task.status === "streaming") {
+      return `<div class="card-stage-line streaming">\u26A1 <strong>Buffering Stream:</strong> Streaming file to local engine (${task.progress ? task.progress.toFixed(1) : 0}%)</div>`;
+    } else if (task.status === "uploading") {
+      return `<div class="card-stage-line uploading">\u{1F680} <strong>Turbo MTProto Upload:</strong> Streaming to Telegram (6 Workers)</div>`;
+    } else if (task.status === "scheduled") {
+      let timeStr = "later";
+      if (task.scheduled_at) {
+        const dt = new Date(task.scheduled_at * 1e3);
+        timeStr = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " (" + dt.toLocaleDateString([], { month: "short", day: "numeric" }) + ")";
+      }
+      return `<div class="card-stage-line" style="color: #a29bfe;">\u23F0 <strong>Scheduled:</strong> Will start streaming at ${timeStr}</div>`;
+    } else if (task.status === "completed") {
+      return `<div class="card-stage-line completed">\u2705 <strong>Upload Finished:</strong> Delivered to ${escapeHtml(task.chatName || "Telegram")}</div>`;
+    } else if (task.status === "paused") {
+      return `<div class="card-stage-line">\u23F8\uFE0F <strong>Upload Paused:</strong> Resume anytime without losing progress</div>`;
+    } else if (task.status === "failed") {
+      return `<div class="card-stage-line" style="color: var(--status-danger);">\u274C <strong>Error:</strong> ${escapeHtml(task.error || "Failed to upload")}</div>`;
+    }
+    return `<div class="card-stage-line">\u23F3 <strong>Queued:</strong> Waiting for worker slot...</div>`;
+  }
+  function buildActionButtonsHtml(task) {
+    const isUploading = task.status === "uploading" || task.status === "streaming" || task.status === "preparing" || task.status === "splitting";
+    const isPaused = task.status === "paused";
+    const isQueued = task.status === "queued";
+    const isScheduled = task.status === "scheduled";
+    if (isUploading) {
+      return `
+      <button class="icon-btn" title="Pause Upload" onclick="window._app.pause('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
       </button>
-      <button class="icon-btn danger" title="Cancel Upload" onclick="window._app.cancel('${i.id}')">
+      <button class="icon-btn danger" title="Cancel Upload" onclick="window._app.cancel('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
-    `:a?`
-      <button class="icon-btn" title="Start Upload Now" onclick="window._app.startNow('${i.id}')" style="color: var(--accent-secondary);">
+    `;
+    } else if (isScheduled) {
+      return `
+      <button class="icon-btn" title="Start Upload Now" onclick="window._app.startNow('${task.id}')" style="color: var(--accent-secondary);">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
-      <button class="icon-btn" title="Reschedule Timer" onclick="window._openScheduleModal('${i.id}')">
+      <button class="icon-btn" title="Reschedule Timer" onclick="window._openScheduleModal('${task.id}')">
         <span style="font-size: 0.95rem;">\u23F0</span>
       </button>
-      <button class="icon-btn danger" title="Cancel Upload" onclick="window._app.cancel('${i.id}')">
+      <button class="icon-btn danger" title="Cancel Upload" onclick="window._app.cancel('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
-    `:t?`
-      <button class="icon-btn" title="Resume Upload" onclick="window._app.resume('${i.id}')">
+    `;
+    } else if (isPaused) {
+      return `
+      <button class="icon-btn" title="Resume Upload" onclick="window._app.resume('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
-      <button class="icon-btn" title="Schedule Resume" onclick="window._openScheduleModal('${i.id}')">
+      <button class="icon-btn" title="Schedule Resume" onclick="window._openScheduleModal('${task.id}')">
         <span style="font-size: 0.95rem;">\u23F0</span>
       </button>
-      <button class="icon-btn danger" title="Cancel" onclick="window._app.cancel('${i.id}')">
+      <button class="icon-btn danger" title="Cancel" onclick="window._app.cancel('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
-    `:n?`
-      <button class="icon-btn" title="Schedule Upload" onclick="window._openScheduleModal('${i.id}')">
+    `;
+    } else if (isQueued) {
+      return `
+      <button class="icon-btn" title="Schedule Upload" onclick="window._openScheduleModal('${task.id}')">
         <span style="font-size: 0.95rem;">\u23F0</span>
       </button>
-      <button class="icon-btn danger" title="Remove from Queue" onclick="window._app.remove('${i.id}')">
+      <button class="icon-btn danger" title="Remove from Queue" onclick="window._app.remove('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
       </button>
-    `:`
-      <button class="icon-btn" title="Dismiss" onclick="window._app.remove('${i.id}')">
+    `;
+    } else {
+      return `
+      <button class="icon-btn" title="Dismiss" onclick="window._app.remove('${task.id}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
-    `}function we(i){let e=document.getElementById("queueListContainer"),t=document.getElementById("queueCountBadge"),n=document.getElementById("queueEmptyState"),a=document.getElementById("workspaceLayout");if(t&&(t.textContent=i.length,t.classList.toggle("has-items",i.length>0)),a&&(i.length>0?a.classList.add("active-split"):a.classList.remove("active-split")),!e)return;if(i.length===0){n&&(n.style.display="block"),e.innerHTML="";return}n&&(n.style.display="none");let s=new Set;i.forEach(o=>{s.add(o.id);let r=document.getElementById(`card_${o.id}`),u=o.status==="splitting",l=o.status==="uploading"||o.status==="streaming"||o.status==="preparing";if(!r){r=document.createElement("div"),r.className="queue-card",r.id=`card_${o.id}`;let m="";o.preview&&o.preview.url?m=`<img src="${o.preview.url}" alt="Preview" />`:m=`
+    `;
+    }
+  }
+  function renderQueue(queue) {
+    const container = document.getElementById("queueListContainer");
+    const countBadge = document.getElementById("queueCountBadge");
+    const emptyState = document.getElementById("queueEmptyState");
+    const workspace = document.getElementById("workspaceLayout");
+    if (countBadge) {
+      countBadge.textContent = queue.length;
+      countBadge.classList.toggle("has-items", queue.length > 0);
+    }
+    if (workspace) {
+      if (queue.length > 0) {
+        workspace.classList.add("active-split");
+      } else {
+        workspace.classList.remove("active-split");
+      }
+    }
+    if (!container) return;
+    if (queue.length === 0) {
+      if (emptyState) emptyState.style.display = "block";
+      container.innerHTML = "";
+      return;
+    }
+    if (emptyState) emptyState.style.display = "none";
+    const existingCardIds = /* @__PURE__ */ new Set();
+    queue.forEach((task) => {
+      existingCardIds.add(task.id);
+      let card = document.getElementById(`card_${task.id}`);
+      const isSplitting = task.status === "splitting";
+      const isUploading = task.status === "uploading" || task.status === "streaming" || task.status === "preparing";
+      if (!card) {
+        card = document.createElement("div");
+        card.className = "queue-card";
+        card.id = `card_${task.id}`;
+        let thumbHtml = "";
+        if (task.preview && task.preview.url) {
+          thumbHtml = `<img src="${task.preview.url}" alt="Preview" />`;
+        } else {
+          thumbHtml = `
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
           </svg>
-        `,r.innerHTML=`
-        <div class="card-thumbnail">${m}</div>
+        `;
+        }
+        card.innerHTML = `
+        <div class="card-thumbnail">${thumbHtml}</div>
         <div class="card-details">
           <div class="card-filename-row">
             <input 
               type="text" 
               class="editable-filename" 
-              value="${p(o.customFilename||o.filename)}" 
+              value="${escapeHtml(task.customFilename || task.filename)}" 
               title="Click to rename"
-              ${o.status!=="queued"?"readonly":""}
-              onchange="window._app.updateFilename('${o.id}', this.value)"
+              ${task.status !== "queued" ? "readonly" : ""}
+              onchange="window._app.updateFilename('${task.id}', this.value)"
             />
-            <div class="badge-slot">${ye(o)}</div>
+            <div class="badge-slot">${buildStatusBadgeHtml(task)}</div>
           </div>
-          <div class="stage-slot">${ve(o)}</div>
+          <div class="stage-slot">${buildStageLineHtml(task)}</div>
           <div class="card-meta-row">
             <span class="meta-item">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              ${x(o.fileSize)}
+              ${formatBytes(task.fileSize)}
             </span>
             <span class="meta-item">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-              ${p(o.chatName||"Telegram Chat")}
+              ${escapeHtml(task.chatName || "Telegram Chat")}
             </span>
           </div>
           <div class="progress-container">
             <div class="progress-track">
               <div 
-                class="progress-bar-fill ${u?"splitting":l?"uploading":""}" 
-                style="width: ${Math.min(100,o.progress||0)}%;"
+                class="progress-bar-fill ${isSplitting ? "splitting" : isUploading ? "uploading" : ""}" 
+                style="width: ${Math.min(100, task.progress || 0)}%;"
               ></div>
             </div>
             <div class="progress-metrics-row">
               <div class="metrics-left"></div>
-              <div class="metrics-right">${x(o.uploadedBytes||0)} / ${x(o.fileSize)}</div>
+              <div class="metrics-right">${formatBytes(task.uploadedBytes || 0)} / ${formatBytes(task.fileSize)}</div>
             </div>
           </div>
         </div>
-        <div class="card-actions">${be(o)}</div>
-      `,e.appendChild(r)}r.className=`queue-card status-${o.status}`;let h=r.querySelector(".badge-slot");h&&(h.innerHTML=ye(o));let w=r.querySelector(".stage-slot");w&&(w.innerHTML=ve(o));let d=r.querySelector(".progress-bar-fill");d&&(d.style.width=`${Math.min(100,o.progress||0)}%`,d.className=`progress-bar-fill ${u?"splitting":l?"uploading":""}`);let g=r.querySelector(".metrics-left");g&&(u?g.innerHTML=`<span>\u2702\uFE0F Splitting: ${o.progress?o.progress.toFixed(1):0}%</span><span>\u{1F4E6} 1.9GB Part Buffer</span>`:l?g.innerHTML=`<span>${o.progress?o.progress.toFixed(1):0}%</span><span>\u26A1 ${pe(o.speed)}</span><span>\u23F3 ETA: ${me(o.eta)}</span>`:g.innerHTML=`<span>${o.progress?o.progress.toFixed(1):0}%</span>`);let f=r.querySelector(".metrics-right");f&&(f.textContent=`${x(o.uploadedBytes||0)} / ${x(o.fileSize)}`);let c=r.querySelector(".card-actions");c&&(c.innerHTML=be(o))}),Array.from(e.children).forEach(o=>{let r=o.id.replace("card_","");s.has(r)||o.remove()})}var P=[],ne="all",H="";function Ce(){let i=document.getElementById("historySearchInput"),e=document.getElementById("historyStatusFilter"),t=document.getElementById("btnExportCSV"),n=document.getElementById("btnExportJSON"),a=document.getElementById("btnClearHistoryBtn"),s=document.getElementById("btnRefreshHistory");i&&i.addEventListener("input",o=>{H=(o.target.value||"").toLowerCase().trim(),se()}),e&&e.addEventListener("change",o=>{ne=o.target.value,se()}),t&&t.addEventListener("click",()=>Pe()),n&&n.addEventListener("click",()=>Fe()),a&&a.addEventListener("click",()=>{window._app&&window._app.clearHistory&&window._app.clearHistory()}),s&&s.addEventListener("click",()=>{U(),y("History refreshed","info")})}function se(){let i=document.getElementById("fullHistoryContainer"),e=document.getElementById("historyTotalBadge");if(!i)return;let t=P;if(ne!=="all"&&(t=t.filter(n=>n.status===ne)),H&&(t=t.filter(n=>{let a=(n.filename||"").toLowerCase(),s=(n.chat_name||"").toLowerCase(),o=String(n.chat_id||"").toLowerCase(),r=(n.created_at||"").toLowerCase();return a.includes(H)||s.includes(H)||o.includes(H)||r.includes(H)})),e&&(e.textContent=t.length),t.length===0){i.innerHTML=`
+        <div class="card-actions">${buildActionButtonsHtml(task)}</div>
+      `;
+        container.appendChild(card);
+      }
+      card.className = `queue-card status-${task.status}`;
+      const badgeSlot = card.querySelector(".badge-slot");
+      if (badgeSlot) badgeSlot.innerHTML = buildStatusBadgeHtml(task);
+      const stageSlot = card.querySelector(".stage-slot");
+      if (stageSlot) stageSlot.innerHTML = buildStageLineHtml(task);
+      const barFill = card.querySelector(".progress-bar-fill");
+      if (barFill) {
+        barFill.style.width = `${Math.min(100, task.progress || 0)}%`;
+        barFill.className = `progress-bar-fill ${isSplitting ? "splitting" : isUploading ? "uploading" : ""}`;
+      }
+      const metricsLeft = card.querySelector(".metrics-left");
+      if (metricsLeft) {
+        if (isSplitting) {
+          metricsLeft.innerHTML = `<span>\u2702\uFE0F Splitting: ${task.progress ? task.progress.toFixed(1) : 0}%</span><span>\u{1F4E6} 1.9GB Part Buffer</span>`;
+        } else if (isUploading) {
+          metricsLeft.innerHTML = `<span>${task.progress ? task.progress.toFixed(1) : 0}%</span><span>\u26A1 ${formatSpeed(task.speed)}</span><span>\u23F3 ETA: ${formatETA(task.eta)}</span>`;
+        } else {
+          metricsLeft.innerHTML = `<span>${task.progress ? task.progress.toFixed(1) : 0}%</span>`;
+        }
+      }
+      const metricsRight = card.querySelector(".metrics-right");
+      if (metricsRight) {
+        metricsRight.textContent = `${formatBytes(task.uploadedBytes || 0)} / ${formatBytes(task.fileSize)}`;
+      }
+      const actionsSlot = card.querySelector(".card-actions");
+      if (actionsSlot) {
+        actionsSlot.innerHTML = buildActionButtonsHtml(task);
+      }
+    });
+    Array.from(container.children).forEach((child) => {
+      const id = child.id.replace("card_", "");
+      if (!existingCardIds.has(id)) {
+        child.remove();
+      }
+    });
+  }
+  var _cachedHistory = [];
+  var _historyFilterStatus = "all";
+  var _historySearchQuery = "";
+  function initHistoryControls() {
+    const searchInput = document.getElementById("historySearchInput");
+    const statusFilter = document.getElementById("historyStatusFilter");
+    const btnExportCSV = document.getElementById("btnExportCSV");
+    const btnExportJSON = document.getElementById("btnExportJSON");
+    const btnClearHistory = document.getElementById("btnClearHistoryBtn");
+    const btnRefreshHistory = document.getElementById("btnRefreshHistory");
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        _historySearchQuery = (e.target.value || "").toLowerCase().trim();
+        renderFilteredHistory();
+      });
+    }
+    if (statusFilter) {
+      statusFilter.addEventListener("change", (e) => {
+        _historyFilterStatus = e.target.value;
+        renderFilteredHistory();
+      });
+    }
+    if (btnExportCSV) {
+      btnExportCSV.addEventListener("click", () => exportHistoryCSV());
+    }
+    if (btnExportJSON) {
+      btnExportJSON.addEventListener("click", () => exportHistoryJSON());
+    }
+    if (btnClearHistory) {
+      btnClearHistory.addEventListener("click", () => {
+        if (window._app && window._app.clearHistory) {
+          window._app.clearHistory();
+        }
+      });
+    }
+    if (btnRefreshHistory) {
+      btnRefreshHistory.addEventListener("click", () => {
+        loadHistory();
+        showToast2("History refreshed", "info");
+      });
+    }
+  }
+  function renderFilteredHistory() {
+    const fullContainer = document.getElementById("fullHistoryContainer");
+    const badge = document.getElementById("historyTotalBadge");
+    if (!fullContainer) return;
+    let filtered = _cachedHistory;
+    if (_historyFilterStatus !== "all") {
+      filtered = filtered.filter((item) => item.status === _historyFilterStatus);
+    }
+    if (_historySearchQuery) {
+      filtered = filtered.filter((item) => {
+        const fn = (item.filename || "").toLowerCase();
+        const cn = (item.chat_name || "").toLowerCase();
+        const cid = String(item.chat_id || "").toLowerCase();
+        const dt = (item.created_at || "").toLowerCase();
+        return fn.includes(_historySearchQuery) || cn.includes(_historySearchQuery) || cid.includes(_historySearchQuery) || dt.includes(_historySearchQuery);
+      });
+    }
+    if (badge) {
+      badge.textContent = filtered.length;
+    }
+    if (filtered.length === 0) {
+      fullContainer.innerHTML = `
       <div class="history-empty">
         <p>No matching transfers found.</p>
       </div>
-    `;return}i.innerHTML=t.map(n=>{let a=n.status==="completed",s=n.status==="failed",o=n.parts_count>1?`<span class="history-parts-tag">\u{1F4E6} ${n.parts_count} Parts</span>`:"",r="\u26A1 UPLOADING";return a?r="\u2713 COMPLETED":s&&(r="\u2715 FAILED"),`
-      <div class="history-item ${a?"status-ok":s?"status-err":"status-pending"}">
+    `;
+      return;
+    }
+    fullContainer.innerHTML = filtered.map((item) => {
+      const isOk = item.status === "completed";
+      const isFail = item.status === "failed";
+      const partsBadge = item.parts_count > 1 ? `<span class="history-parts-tag">\u{1F4E6} ${item.parts_count} Parts</span>` : "";
+      let statusLabel = "\u26A1 UPLOADING";
+      if (isOk) statusLabel = "\u2713 COMPLETED";
+      else if (isFail) statusLabel = "\u2715 FAILED";
+      return `
+      <div class="history-item ${isOk ? "status-ok" : isFail ? "status-err" : "status-pending"}">
         <div class="history-item-top">
           <div class="history-file-info">
             <span class="history-file-icon">\u{1F4C4}</span>
-            <span class="history-filename" title="${p(n.filename)}">${p(n.filename)}</span>
+            <span class="history-filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</span>
           </div>
-          <span class="badge ${a?"completed":s?"failed":"uploading"}">
-            ${r}
+          <span class="badge ${isOk ? "completed" : isFail ? "failed" : "uploading"}">
+            ${statusLabel}
           </span>
         </div>
         <div class="history-item-sub">
-          <span class="history-sub-meta">\u{1F4BE} ${x(n.file_size)}</span>
+          <span class="history-sub-meta">\u{1F4BE} ${formatBytes(item.file_size)}</span>
           <span class="history-dot">\u2022</span>
-          <span class="history-sub-meta" title="${p(n.chat_name||n.chat_id)}">\u{1F4AC} ${p(n.chat_name||n.chat_id)}</span>
-          ${o?'<span class="history-dot">\u2022</span>'+o:""}
+          <span class="history-sub-meta" title="${escapeHtml(item.chat_name || item.chat_id)}">\u{1F4AC} ${escapeHtml(item.chat_name || item.chat_id)}</span>
+          ${partsBadge ? `<span class="history-dot">\u2022</span>` + partsBadge : ""}
           <span class="history-dot">\u2022</span>
-          <span class="history-date">${p(n.created_at||"")}</span>
+          <span class="history-date">${escapeHtml(item.created_at || "")}</span>
         </div>
       </div>
-    `}).join("")}function Pe(){if(P.length===0){y("No history records to export","warning");return}let i=["ID","Filename","File Size (Bytes)","Chat ID","Chat Name","Status","Parts Count","Created At"],e=P.map(s=>[`"${s.id||""}"`,`"${(s.filename||"").replace(/"/g,'""')}"`,s.file_size||0,`"${s.chat_id||""}"`,`"${(s.chat_name||"").replace(/"/g,'""')}"`,`"${s.status||""}"`,s.parts_count||1,`"${s.created_at||""}"`]),t="data:text/csv;charset=utf-8,"+[i.join(","),...e.map(s=>s.join(","))].join(`
-`),n=encodeURI(t),a=document.createElement("a");a.setAttribute("href",n),a.setAttribute("download",`tg_power_suite_history_${Date.now()}.csv`),document.body.appendChild(a),a.click(),a.remove(),y("Transfer history exported as CSV \u2713","success")}function Fe(){if(P.length===0){y("No history records to export","warning");return}let i="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(P,null,2)),e=document.createElement("a");e.setAttribute("href",i),e.setAttribute("download",`tg_power_suite_history_${Date.now()}.json`),document.body.appendChild(e),e.click(),e.remove(),y("Transfer history exported as JSON \u2713","success")}async function U(){let i=document.getElementById("historyListContainer"),e=document.getElementById("fullHistoryContainer"),t=document.getElementById("historyTotalBadge");if(!(!i&&!e))try{let n=await fetch("/api/history");if(!n.ok)return;P=await n.json()||[],t&&(t.textContent=P.length),se(),i&&(P.length===0?i.innerHTML='<div class="history-empty"><p>No uploads recorded yet.</p></div>':i.innerHTML=P.slice(0,5).map(s=>{let o=s.status==="completed";return`
-            <div class="history-item ${o?"status-ok":"status-err"}">
+    `;
+    }).join("");
+  }
+  function exportHistoryCSV() {
+    if (_cachedHistory.length === 0) {
+      showToast2("No history records to export", "warning");
+      return;
+    }
+    const headers = ["ID", "Filename", "File Size (Bytes)", "Chat ID", "Chat Name", "Status", "Parts Count", "Created At"];
+    const rows = _cachedHistory.map((item) => [
+      `"${item.id || ""}"`,
+      `"${(item.filename || "").replace(/"/g, '""')}"`,
+      item.file_size || 0,
+      `"${item.chat_id || ""}"`,
+      `"${(item.chat_name || "").replace(/"/g, '""')}"`,
+      `"${item.status || ""}"`,
+      item.parts_count || 1,
+      `"${item.created_at || ""}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `tg_power_suite_history_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast2("Transfer history exported as CSV \u2713", "success");
+  }
+  function exportHistoryJSON() {
+    if (_cachedHistory.length === 0) {
+      showToast2("No history records to export", "warning");
+      return;
+    }
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(_cachedHistory, null, 2));
+    const link = document.createElement("a");
+    link.setAttribute("href", dataStr);
+    link.setAttribute("download", `tg_power_suite_history_${Date.now()}.json`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast2("Transfer history exported as JSON \u2713", "success");
+  }
+  async function loadHistory() {
+    const container = document.getElementById("historyListContainer");
+    const fullContainer = document.getElementById("fullHistoryContainer");
+    const badge = document.getElementById("historyTotalBadge");
+    if (!container && !fullContainer) return;
+    try {
+      const res = await fetch("/api/history");
+      if (!res.ok) return;
+      const history2 = await res.json();
+      _cachedHistory = history2 || [];
+      if (badge) {
+        badge.textContent = _cachedHistory.length;
+      }
+      renderFilteredHistory();
+      if (container) {
+        if (_cachedHistory.length === 0) {
+          container.innerHTML = `<div class="history-empty"><p>No uploads recorded yet.</p></div>`;
+        } else {
+          container.innerHTML = _cachedHistory.slice(0, 5).map((item) => {
+            const isOk = item.status === "completed";
+            return `
+            <div class="history-item ${isOk ? "status-ok" : "status-err"}">
               <div class="history-item-top">
                 <div class="history-file-info">
                   <span class="history-file-icon">\u{1F4C4}</span>
-                  <span class="history-filename" title="${p(s.filename)}">${p(s.filename)}</span>
+                  <span class="history-filename" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</span>
                 </div>
-                <span class="badge ${o?"completed":"failed"}">
-                  ${o?"\u2713 SENT":"\u2715 FAILED"}
+                <span class="badge ${isOk ? "completed" : "failed"}">
+                  ${isOk ? "\u2713 SENT" : "\u2715 FAILED"}
                 </span>
               </div>
               <div class="history-item-sub">
-                <span class="history-sub-meta">\u{1F4BE} ${x(s.file_size)}</span>
+                <span class="history-sub-meta">\u{1F4BE} ${formatBytes(item.file_size)}</span>
                 <span class="history-dot">\u2022</span>
-                <span class="history-date">${p(s.created_at||"")}</span>
+                <span class="history-date">${escapeHtml(item.created_at || "")}</span>
               </div>
             </div>
-          `}).join(""))}catch(n){console.error("Error loading history:",n)}}var ie=class{constructor(){this.isOnline=navigator.onLine!==!1,this.wasInterrupted=!1,this.interruptedTasks=new Set,this.heartbeatTimer=null,this.bannerElem=null,this.consecutiveFailures=0}init(){this._createBanner(),this._setupListeners(),this._startHeartbeat(),console.log("Network Watchdog & Auto-Recovery initialized.")}_createBanner(){let e=document.getElementById("networkWatchdogBanner");e||(e=document.createElement("div"),e.id="networkWatchdogBanner",e.className="watchdog-banner hidden",e.title="Click to test connection and resume immediately",e.style.cursor="pointer",e.addEventListener("click",()=>{this._probeAndRecover()}),document.body.prepend(e)),this.bannerElem=e}_setupListeners(){window.addEventListener("online",()=>{console.log("[NetworkWatchdog] Browser online event fired."),this._handleOnline()}),window.addEventListener("offline",()=>{console.warn("[NetworkWatchdog] Browser offline event fired."),this._handleOffline()})}async _probeAndRecover(){try{(await fetch("/api/auth/status",{cache:"no-store"})).ok&&(this._handleOnline(),y("Connection verified active!","success"))}catch{y("Backend still reconnecting...","info")}}_startHeartbeat(){this.heartbeatTimer&&clearInterval(this.heartbeatTimer),this.heartbeatTimer=setInterval(async()=>{if(navigator.onLine===!1){this.isOnline&&this._handleOffline("Device Offline");return}try{let e=new AbortController,t=setTimeout(()=>e.abort(),6e3),n=await fetch("/api/auth/status",{method:"GET",signal:e.signal,cache:"no-store"});clearTimeout(t),n.ok?(this.isOnline||this._handleOnline(),this.consecutiveFailures=0):(this.consecutiveFailures++,this.consecutiveFailures>=6&&this.isOnline&&this._handleOffline("Backend Server Reconnecting"))}catch{this.consecutiveFailures++,this.consecutiveFailures>=6&&this.isOnline&&this._handleOffline("Connection Interrupted")}},8e3)}_handleOffline(e="Network Offline"){this.isOnline=!1,this.wasInterrupted=!0;let t=S.queue.some(n=>n.status==="uploading"||n.status==="streaming"||n.status==="splitting");S.queue.forEach(n=>{(n.status==="uploading"||n.status==="streaming"||n.status==="splitting")&&(this.interruptedTasks.add(n.id),S.pause(n.id))}),t?(this._showBanner(`\u26A0\uFE0F ${e} \u2014 Pausing active transfers safely. Waiting for reconnection...`,"offline"),y("Network connection lost. Uploads paused safely.","warning")):console.debug(`[NetworkWatchdog] Idle connection blip (${e}). Silently reconnecting...`)}_handleOnline(){this.isOnline=!0,this.consecutiveFailures=0,this.wasInterrupted?(this.interruptedTasks.size>0&&(this._showBanner("\u26A1 Connection Restored \u2014 Auto-resuming upload queue...","online"),y("Back online! Auto-resuming upload queue...","success")),M.init(),setTimeout(()=>{this.interruptedTasks.size>0?(this.interruptedTasks.forEach(e=>{S.resume(e)}),this.interruptedTasks.clear()):S.processNext(),this.wasInterrupted=!1,setTimeout(()=>{this._hideBanner()},2e3)},1e3)):this._hideBanner()}_showBanner(e,t){this.bannerElem&&(this.bannerElem.textContent=e,this.bannerElem.className=`watchdog-banner visible ${t}`)}_hideBanner(){this.bannerElem&&(this.bannerElem.className="watchdog-banner hidden")}},Se=new ie;var Ee={light:{"--bg-primary":"#f4f6fb","--bg-secondary":"#e9ecf5","--bg-card":"rgba(255, 255, 255, 0.85)","--bg-card-hover":"rgba(255, 255, 255, 0.98)","--bg-input":"rgba(235, 238, 246, 0.85)","--text-main":"#111827","--text-muted":"#4b5563","--text-dim":"#6b7280","--accent-primary":"#6c5ce7","--accent-secondary":"#0984e3","--accent-gradient":"linear-gradient(135deg, #6c5ce7 0%, #0984e3 100%)","--accent-gradient-hover":"linear-gradient(135deg, #5b4cc4 0%, #0873c4 100%)","--border-glass":"rgba(0, 0, 0, 0.1)"},"deep-space":{"--bg-primary":"#0f111a","--bg-secondary":"#161926","--bg-card":"rgba(26, 31, 46, 0.65)","--bg-card-hover":"rgba(34, 40, 60, 0.85)","--bg-input":"rgba(18, 22, 34, 0.7)","--text-main":"#e4e7eb","--text-muted":"#8a94a6","--text-dim":"#5a6474","--accent-primary":"#6c5ce7","--accent-secondary":"#00cec9","--accent-gradient":"linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)","--accent-gradient-hover":"linear-gradient(135deg, #5b4cc4 0%, #8c82f8 100%)","--border-glass":"rgba(255, 255, 255, 0.08)"},oled:{"--bg-primary":"#000000","--bg-secondary":"#050505","--bg-card":"rgba(12, 12, 12, 0.95)","--bg-card-hover":"rgba(20, 20, 20, 1.0)","--bg-input":"rgba(10, 10, 10, 0.9)","--text-main":"#ffffff","--text-muted":"#9ca3af","--text-dim":"#6b7280","--accent-primary":"#10b981","--accent-secondary":"#06b6d4","--accent-gradient":"linear-gradient(135deg, #10b981 0%, #06b6d4 100%)","--accent-gradient-hover":"linear-gradient(135deg, #0ea271 0%, #0891b2 100%)","--border-glass":"rgba(255, 255, 255, 0.12)"},cyberpunk:{"--bg-primary":"#080811","--bg-secondary":"#121124","--bg-card":"rgba(20, 16, 38, 0.75)","--bg-card-hover":"rgba(32, 24, 60, 0.9)","--bg-input":"rgba(15, 12, 30, 0.8)","--text-main":"#f1f2f6","--text-muted":"#a4b0be","--text-dim":"#747d8c","--accent-primary":"#ff007f","--accent-secondary":"#00f0ff","--accent-gradient":"linear-gradient(135deg, #ff007f 0%, #00f0ff 100%)","--accent-gradient-hover":"linear-gradient(135deg, #e60072 0%, #00d4e0 100%)","--border-glass":"rgba(255, 0, 127, 0.2)"},nord:{"--bg-primary":"#242933","--bg-secondary":"#2e3440","--bg-card":"rgba(46, 52, 64, 0.7)","--bg-card-hover":"rgba(59, 66, 82, 0.85)","--bg-input":"rgba(35, 41, 51, 0.8)","--text-main":"#eceff4","--text-muted":"#d8dee9","--text-dim":"#81a1c1","--accent-primary":"#88c0d0","--accent-secondary":"#81a1c1","--accent-gradient":"linear-gradient(135deg, #88c0d0 0%, #5e81ac 100%)","--accent-gradient-hover":"linear-gradient(135deg, #78b0c0 0%, #4e719c 100%)","--border-glass":"rgba(255, 255, 255, 0.1)"},sunset:{"--bg-primary":"#140e1b","--bg-secondary":"#1e1428","--bg-card":"rgba(35, 22, 48, 0.7)","--bg-card-hover":"rgba(48, 30, 66, 0.85)","--bg-input":"rgba(24, 15, 34, 0.8)","--text-main":"#f8e9f0","--text-muted":"#d6a2b8","--text-dim":"#98687f","--accent-primary":"#fd79a8","--accent-secondary":"#e17055","--accent-gradient":"linear-gradient(135deg, #fd79a8 0%, #e17055 100%)","--accent-gradient-hover":"linear-gradient(135deg, #e86a98 0%, #cf634a 100%)","--border-glass":"rgba(253, 121, 168, 0.18)"}},ae=class{constructor(){this.currentTheme=localStorage.getItem("tg_theme_preset")||"deep-space",this.glassIntensity=parseInt(localStorage.getItem("tg_glass_intensity")||"16",10)}init(){this.applyTheme(this.currentTheme),this.applyGlassIntensity(this.glassIntensity),this._setupUI()}applyTheme(e){Ee[e]||(e="deep-space"),this.currentTheme=e,localStorage.setItem("tg_theme_preset",e);let t=document.documentElement,n=Ee[e];for(let[a,s]of Object.entries(n))t.style.setProperty(a,s);document.querySelectorAll(".preset-card").forEach(a=>{a.classList.toggle("active",a.dataset.theme===e)})}applyGlassIntensity(e){this.glassIntensity=e,localStorage.setItem("tg_glass_intensity",e),document.documentElement.style.setProperty("--glass-blur",`${e}px`);let t=document.getElementById("glassIntensityValue");t&&(t.textContent=`${e}px`);let n=document.getElementById("glassIntensitySlider");n&&(n.value=e)}_setupUI(){let e=document.getElementById("btnThemeCustomizer")||document.getElementById("btnThemeToggle")||document.querySelector(".btn-theme-customizer")||document.querySelector(".theme-toggle-btn"),t=document.getElementById("themeModalBackdrop"),n=document.getElementById("btnCloseThemeModal"),a=document.getElementById("glassIntensitySlider");e&&t&&e.addEventListener("click",s=>{s.preventDefault(),s.stopPropagation(),t.classList.add("visible")}),document.querySelectorAll("#btnThemeCustomizer, #btnThemeToggle, .btn-theme-customizer, .theme-toggle-btn").forEach(s=>{s.addEventListener("click",o=>{o.preventDefault(),o.stopPropagation(),t&&t.classList.add("visible")})}),n&&t&&n.addEventListener("click",s=>{s.preventDefault(),t.classList.remove("visible")}),t&&t.addEventListener("click",s=>{s.target===t&&t.classList.remove("visible")}),document.querySelectorAll(".preset-card").forEach(s=>{s.addEventListener("click",()=>{let o=s.dataset.theme;this.applyTheme(o)})}),a&&(a.value=this.glassIntensity,a.addEventListener("input",s=>{this.applyGlassIntensity(parseInt(s.target.value,10))}))}},Le=new ae;var oe=class{constructor(){this.tabButtons=[],this.tabPanes={},this.currentTab="uploader",this.listeners=new Map}init(){this.tabButtons=Array.from(document.querySelectorAll(".header-nav-tabs .tab-btn")),this.tabPanes={uploader:document.getElementById("tabPaneUploader"),sniffer:document.getElementById("tabPaneSniffer"),history:document.getElementById("tabPaneHistory"),cinema:document.getElementById("tabPaneCinema"),settings:document.getElementById("tabPaneSettings")},this.tabButtons.forEach(t=>{t.addEventListener("click",n=>{n.preventDefault();let a=t.dataset.tab;a&&this.switchTab(a)})});let e=window.location.hash.replace("#","").toLowerCase();if(e&&this.tabPanes[e])this.switchTab(e);else{let t=localStorage.getItem("tg_active_tab");t&&this.tabPanes[t]?this.switchTab(t):this.switchTab("uploader")}window._switchTab=t=>this.switchTab(t)}onTabSwitch(e,t){this.listeners.has(e)||this.listeners.set(e,[]),this.listeners.get(e).push(t)}switchTab(e){if(!e)return;(!this.tabPanes||!this.tabPanes[e])&&(this.tabPanes={uploader:document.getElementById("tabPaneUploader"),sniffer:document.getElementById("tabPaneSniffer"),history:document.getElementById("tabPaneHistory"),settings:document.getElementById("tabPaneSettings")});let t=this.tabPanes[e];if(!t)return;this.currentTab=e;try{localStorage.setItem("tg_active_tab",e),history.replaceState(null,"",`#${e}`)}catch{}Array.from(document.querySelectorAll(".header-nav-tabs .tab-btn")).forEach(s=>{s.classList.toggle("active",s.dataset.tab===e)}),document.querySelectorAll(".tab-pane").forEach(s=>{s.classList.remove("active")}),t.classList.add("active"),(this.listeners.get(e)||[]).forEach(s=>{try{s()}catch(o){console.error("Tab callback error:",o)}})}},j=new oe;window._switchTab=i=>j.switchTab(i);var re=class{constructor(){this.watchedChannelsList=null,this.watchedChannelsCount=null,this.activeWatchedCountLabel=null,this.btnOpenWatchModal=null,this.watchChannelModal=null,this.btnCloseWatchModal=null,this.watchChannelSearchInput=null,this.watchModalFilterTabs=null,this.watchChannelListContainer=null,this.btnRefreshWatchDialogs=null,this.btnToggleManualChannel=null,this.formAddChannel=null,this.inputChannelId=null,this.detectedManagersGrid=null,this.snifferFeedContainer=null,this.snifferFeedCount=null,this.btnRefreshSnifferFeed=null,this.snifferStatusBadge=null,this.btnGoToSettings=null,this.cachedChats=[],this.activeChannels=new Set,this.currentFilter="all"}init(e,t){this.watchedChannelsList=document.getElementById("channelChipsList"),this.watchedChannelsCount=document.getElementById("watchedChannelsCount"),this.activeWatchedCountLabel=document.getElementById("activeWatchedCountLabel"),this.btnOpenWatchModal=document.getElementById("btnOpenWatchModal"),this.watchChannelModal=document.getElementById("watchChannelModal"),this.btnCloseWatchModal=document.getElementById("btnCloseWatchModal"),this.watchChannelSearchInput=document.getElementById("watchChannelSearchInput"),this.watchModalFilterTabs=document.getElementById("watchModalFilterTabs"),this.watchChannelListContainer=document.getElementById("watchChannelListContainer"),this.btnRefreshWatchDialogs=document.getElementById("btnRefreshWatchDialogs"),this.btnToggleManualChannel=document.getElementById("btnToggleManualChannel"),this.formAddChannel=document.getElementById("formAddChannel"),this.inputChannelId=document.getElementById("inputChannelId"),this.detectedManagersGrid=document.getElementById("detectedManagersGrid"),this.snifferFeedContainer=document.getElementById("snifferFeedContainer"),this.snifferFeedCount=document.getElementById("snifferFeedCount"),this.btnRefreshSnifferFeed=document.getElementById("btnRefreshSnifferFeed"),this.snifferStatusBadge=document.getElementById("snifferStatusBadge"),this.btnGoToSettings=document.getElementById("btnGoToSettings"),this.btnOpenWatchModal&&this.btnOpenWatchModal.addEventListener("click",()=>this.openModal()),this.btnCloseWatchModal&&this.btnCloseWatchModal.addEventListener("click",()=>this.closeModal()),this.watchChannelModal&&this.watchChannelModal.addEventListener("click",n=>{n.target===this.watchChannelModal&&this.closeModal()}),this.watchChannelSearchInput&&this.watchChannelSearchInput.addEventListener("input",n=>{this.renderModalList(n.target.value)}),this.watchModalFilterTabs&&this.watchModalFilterTabs.querySelectorAll(".filter-chip").forEach(n=>{n.addEventListener("click",()=>{this.watchModalFilterTabs.querySelectorAll(".filter-chip").forEach(a=>a.classList.remove("active")),n.classList.add("active"),this.currentFilter=n.dataset.filter||"all",this.renderModalList(this.watchChannelSearchInput?this.watchChannelSearchInput.value:"")})}),this.btnRefreshWatchDialogs&&this.btnRefreshWatchDialogs.addEventListener("click",()=>{this.fetchAccountChannels(!0),$("Refreshing dialogs list...","info")}),this.btnToggleManualChannel&&this.formAddChannel&&this.btnToggleManualChannel.addEventListener("click",()=>{let n=this.formAddChannel.style.display==="none";this.formAddChannel.style.display=n?"flex":"none",this.btnToggleManualChannel.textContent=n?"\u25B2 Hide manual custom input":"\u270F\uFE0F Or enter custom Channel ID / @username",n&&this.inputChannelId&&this.inputChannelId.focus()}),this.formAddChannel&&this.formAddChannel.addEventListener("submit",n=>{if(n.preventDefault(),!this.inputChannelId)return;let a=this.inputChannelId.value.trim();a&&(this.addChannel(a),this.inputChannelId.value="")}),this.btnRefreshSnifferFeed&&this.btnRefreshSnifferFeed.addEventListener("click",()=>{this.fetchFeed(),this.fetchStatus()}),this.btnGoToSettings&&t&&this.btnGoToSettings.addEventListener("click",()=>{t.switchTab("settings")}),e&&(e.on("sniffer:status",n=>{this.renderStatus(n)}),e.on("sniffer:feed_snapshot",n=>{this.renderFeed(n)}),e.on("sniffer:sniffer_feed",n=>{this.prependFeedItem(n)})),this.fetchStatus(),this.fetchFeed(),this.fetchAccountChannels(),window._snifferUI=this}openModal(){this.watchChannelModal&&(this.watchChannelModal.classList.add("open"),this.watchChannelSearchInput&&(this.watchChannelSearchInput.value="",setTimeout(()=>this.watchChannelSearchInput.focus(),150)),this.renderModalList(""))}closeModal(){this.watchChannelModal&&this.watchChannelModal.classList.remove("open")}async fetchAccountChannels(e=!1){try{let n=await fetch(e?"/api/chats?force_refresh=true":"/api/chats");if(!n.ok)throw new Error(`HTTP ${n.status}`);let a=await n.json();this.cachedChats=(a||[]).filter(s=>s.type!=="saved_messages"),this.updateFilterBadgeCounts(),this.renderModalList(this.watchChannelSearchInput?this.watchChannelSearchInput.value:"")}catch(t){console.debug("Could not load account dialogs:",t)}}updateFilterBadgeCounts(){if(!this.watchModalFilterTabs)return;let e=this.cachedChats.filter(r=>r.type==="channel").length,t=this.cachedChats.filter(r=>r.type==="group"||r.type==="supergroup").length,n=this.cachedChats.filter(r=>r.type==="bot").length,a=this.cachedChats.filter(r=>r.type==="user").length,s=this.cachedChats.length;this.watchModalFilterTabs.querySelectorAll(".filter-chip").forEach(r=>{let u=r.dataset.filter;u==="all"&&(r.textContent=`All (${s})`),u==="channel"&&(r.textContent=`\u{1F4E2} Channels (${e})`),u==="group"&&(r.textContent=`\u{1F465} Groups (${t})`),u==="bot"&&(r.textContent=`\u{1F916} Bots (${n})`),u==="user"&&(r.textContent=`\u{1F464} Contacts (${a})`)})}renderModalList(e=""){if(!this.watchChannelListContainer)return;let t=(e||"").toLowerCase().trim(),n=this.cachedChats;if(this.currentFilter==="channel"?n=n.filter(s=>s.type==="channel"):this.currentFilter==="group"?n=n.filter(s=>s.type==="group"||s.type==="supergroup"):this.currentFilter==="bot"?n=n.filter(s=>s.type==="bot"):this.currentFilter==="user"&&(n=n.filter(s=>s.type==="user")),t&&(n=n.filter(s=>{let o=(s.name||"").toLowerCase(),r=(s.username||"").toLowerCase(),u=String(s.id);return o.includes(t)||r.includes(t)||u.includes(t)})),n.length===0){this.watchChannelListContainer.innerHTML=`
+          `;
+          }).join("");
+        }
+      }
+    } catch (e) {
+      console.error("Error loading history:", e);
+    }
+  }
+
+  // frontend/js/network-watchdog.js
+  var NetworkWatchdog = class {
+    constructor() {
+      this.isOnline = navigator.onLine !== false;
+      this.wasInterrupted = false;
+      this.interruptedTasks = /* @__PURE__ */ new Set();
+      this.heartbeatTimer = null;
+      this.bannerElem = null;
+      this.consecutiveFailures = 0;
+    }
+    init() {
+      this._createBanner();
+      this._setupListeners();
+      this._startHeartbeat();
+      console.log("Network Watchdog & Auto-Recovery initialized.");
+    }
+    _createBanner() {
+      let banner = document.getElementById("networkWatchdogBanner");
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "networkWatchdogBanner";
+        banner.className = "watchdog-banner hidden";
+        banner.title = "Click to test connection and resume immediately";
+        banner.style.cursor = "pointer";
+        banner.addEventListener("click", () => {
+          this._probeAndRecover();
+        });
+        document.body.prepend(banner);
+      }
+      this.bannerElem = banner;
+    }
+    _setupListeners() {
+      window.addEventListener("online", () => {
+        console.log("[NetworkWatchdog] Browser online event fired.");
+        this._handleOnline();
+      });
+      window.addEventListener("offline", () => {
+        console.warn("[NetworkWatchdog] Browser offline event fired.");
+        this._handleOffline();
+      });
+    }
+    async _probeAndRecover() {
+      try {
+        const res = await fetch("/api/auth/status", { cache: "no-store" });
+        if (res.ok) {
+          this._handleOnline();
+          showToast2("Connection verified active!", "success");
+        }
+      } catch {
+        showToast2("Backend still reconnecting...", "info");
+      }
+    }
+    _startHeartbeat() {
+      if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = setInterval(async () => {
+        if (navigator.onLine === false) {
+          if (this.isOnline) this._handleOffline("Device Offline");
+          return;
+        }
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6e3);
+          const res = await fetch("/api/auth/status", {
+            method: "GET",
+            signal: controller.signal,
+            cache: "no-store"
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            if (!this.isOnline) {
+              this._handleOnline();
+            }
+            this.consecutiveFailures = 0;
+          } else {
+            this.consecutiveFailures++;
+            if (this.consecutiveFailures >= 6 && this.isOnline) {
+              this._handleOffline("Backend Server Reconnecting");
+            }
+          }
+        } catch (e) {
+          this.consecutiveFailures++;
+          if (this.consecutiveFailures >= 6 && this.isOnline) {
+            this._handleOffline("Connection Interrupted");
+          }
+        }
+      }, 8e3);
+    }
+    _handleOffline(reason = "Network Offline") {
+      this.isOnline = false;
+      this.wasInterrupted = true;
+      const hasActiveTransfers = uploader.queue.some(
+        (task) => task.status === "uploading" || task.status === "streaming" || task.status === "splitting"
+      );
+      uploader.queue.forEach((task) => {
+        if (task.status === "uploading" || task.status === "streaming" || task.status === "splitting") {
+          this.interruptedTasks.add(task.id);
+          uploader.pause(task.id);
+        }
+      });
+      if (hasActiveTransfers) {
+        this._showBanner(`\u26A0\uFE0F ${reason} \u2014 Pausing active transfers safely. Waiting for reconnection...`, "offline");
+        showToast2("Network connection lost. Uploads paused safely.", "warning");
+      } else {
+        console.debug(`[NetworkWatchdog] Idle connection blip (${reason}). Silently reconnecting...`);
+      }
+    }
+    _handleOnline() {
+      this.isOnline = true;
+      this.consecutiveFailures = 0;
+      if (this.wasInterrupted) {
+        if (this.interruptedTasks.size > 0) {
+          this._showBanner("\u26A1 Connection Restored \u2014 Auto-resuming upload queue...", "online");
+          showToast2("Back online! Auto-resuming upload queue...", "success");
+        }
+        socketManager.init();
+        setTimeout(() => {
+          if (this.interruptedTasks.size > 0) {
+            this.interruptedTasks.forEach((taskId) => {
+              uploader.resume(taskId);
+            });
+            this.interruptedTasks.clear();
+          } else {
+            uploader.processNext();
+          }
+          this.wasInterrupted = false;
+          setTimeout(() => {
+            this._hideBanner();
+          }, 2e3);
+        }, 1e3);
+      } else {
+        this._hideBanner();
+      }
+    }
+    _showBanner(text, type) {
+      if (!this.bannerElem) return;
+      this.bannerElem.textContent = text;
+      this.bannerElem.className = `watchdog-banner visible ${type}`;
+    }
+    _hideBanner() {
+      if (!this.bannerElem) return;
+      this.bannerElem.className = "watchdog-banner hidden";
+    }
+  };
+  var networkWatchdog = new NetworkWatchdog();
+
+  // frontend/js/theme.js
+  var THEMES = {
+    "light": {
+      "--bg-primary": "#f4f6fb",
+      "--bg-secondary": "#e9ecf5",
+      "--bg-card": "rgba(255, 255, 255, 0.85)",
+      "--bg-card-hover": "rgba(255, 255, 255, 0.98)",
+      "--bg-input": "rgba(235, 238, 246, 0.85)",
+      "--text-main": "#111827",
+      "--text-muted": "#4b5563",
+      "--text-dim": "#6b7280",
+      "--accent-primary": "#6c5ce7",
+      "--accent-secondary": "#0984e3",
+      "--accent-gradient": "linear-gradient(135deg, #6c5ce7 0%, #0984e3 100%)",
+      "--accent-gradient-hover": "linear-gradient(135deg, #5b4cc4 0%, #0873c4 100%)",
+      "--border-glass": "rgba(0, 0, 0, 0.1)"
+    },
+    "deep-space": {
+      "--bg-primary": "#0f111a",
+      "--bg-secondary": "#161926",
+      "--bg-card": "rgba(26, 31, 46, 0.65)",
+      "--bg-card-hover": "rgba(34, 40, 60, 0.85)",
+      "--bg-input": "rgba(18, 22, 34, 0.7)",
+      "--text-main": "#e4e7eb",
+      "--text-muted": "#8a94a6",
+      "--text-dim": "#5a6474",
+      "--accent-primary": "#6c5ce7",
+      "--accent-secondary": "#00cec9",
+      "--accent-gradient": "linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)",
+      "--accent-gradient-hover": "linear-gradient(135deg, #5b4cc4 0%, #8c82f8 100%)",
+      "--border-glass": "rgba(255, 255, 255, 0.08)"
+    },
+    "oled": {
+      "--bg-primary": "#000000",
+      "--bg-secondary": "#050505",
+      "--bg-card": "rgba(12, 12, 12, 0.95)",
+      "--bg-card-hover": "rgba(20, 20, 20, 1.0)",
+      "--bg-input": "rgba(10, 10, 10, 0.9)",
+      "--text-main": "#ffffff",
+      "--text-muted": "#9ca3af",
+      "--text-dim": "#6b7280",
+      "--accent-primary": "#10b981",
+      "--accent-secondary": "#06b6d4",
+      "--accent-gradient": "linear-gradient(135deg, #10b981 0%, #06b6d4 100%)",
+      "--accent-gradient-hover": "linear-gradient(135deg, #0ea271 0%, #0891b2 100%)",
+      "--border-glass": "rgba(255, 255, 255, 0.12)"
+    },
+    "cyberpunk": {
+      "--bg-primary": "#080811",
+      "--bg-secondary": "#121124",
+      "--bg-card": "rgba(20, 16, 38, 0.75)",
+      "--bg-card-hover": "rgba(32, 24, 60, 0.9)",
+      "--bg-input": "rgba(15, 12, 30, 0.8)",
+      "--text-main": "#f1f2f6",
+      "--text-muted": "#a4b0be",
+      "--text-dim": "#747d8c",
+      "--accent-primary": "#ff007f",
+      "--accent-secondary": "#00f0ff",
+      "--accent-gradient": "linear-gradient(135deg, #ff007f 0%, #00f0ff 100%)",
+      "--accent-gradient-hover": "linear-gradient(135deg, #e60072 0%, #00d4e0 100%)",
+      "--border-glass": "rgba(255, 0, 127, 0.2)"
+    },
+    "nord": {
+      "--bg-primary": "#242933",
+      "--bg-secondary": "#2e3440",
+      "--bg-card": "rgba(46, 52, 64, 0.7)",
+      "--bg-card-hover": "rgba(59, 66, 82, 0.85)",
+      "--bg-input": "rgba(35, 41, 51, 0.8)",
+      "--text-main": "#eceff4",
+      "--text-muted": "#d8dee9",
+      "--text-dim": "#81a1c1",
+      "--accent-primary": "#88c0d0",
+      "--accent-secondary": "#81a1c1",
+      "--accent-gradient": "linear-gradient(135deg, #88c0d0 0%, #5e81ac 100%)",
+      "--accent-gradient-hover": "linear-gradient(135deg, #78b0c0 0%, #4e719c 100%)",
+      "--border-glass": "rgba(255, 255, 255, 0.1)"
+    },
+    "sunset": {
+      "--bg-primary": "#140e1b",
+      "--bg-secondary": "#1e1428",
+      "--bg-card": "rgba(35, 22, 48, 0.7)",
+      "--bg-card-hover": "rgba(48, 30, 66, 0.85)",
+      "--bg-input": "rgba(24, 15, 34, 0.8)",
+      "--text-main": "#f8e9f0",
+      "--text-muted": "#d6a2b8",
+      "--text-dim": "#98687f",
+      "--accent-primary": "#fd79a8",
+      "--accent-secondary": "#e17055",
+      "--accent-gradient": "linear-gradient(135deg, #fd79a8 0%, #e17055 100%)",
+      "--accent-gradient-hover": "linear-gradient(135deg, #e86a98 0%, #cf634a 100%)",
+      "--border-glass": "rgba(253, 121, 168, 0.18)"
+    }
+  };
+  var ThemeManager = class {
+    constructor() {
+      this.currentTheme = localStorage.getItem("tg_theme_preset") || "deep-space";
+      this.glassIntensity = parseInt(localStorage.getItem("tg_glass_intensity") || "16", 10);
+    }
+    init() {
+      this.applyTheme(this.currentTheme);
+      this.applyGlassIntensity(this.glassIntensity);
+      this._setupUI();
+    }
+    applyTheme(themeKey) {
+      if (!THEMES[themeKey]) themeKey = "deep-space";
+      this.currentTheme = themeKey;
+      localStorage.setItem("tg_theme_preset", themeKey);
+      const root = document.documentElement;
+      const colors = THEMES[themeKey];
+      for (const [prop, val] of Object.entries(colors)) {
+        root.style.setProperty(prop, val);
+      }
+      document.querySelectorAll(".preset-card").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.theme === themeKey);
+      });
+    }
+    applyGlassIntensity(blurPx) {
+      this.glassIntensity = blurPx;
+      localStorage.setItem("tg_glass_intensity", blurPx);
+      document.documentElement.style.setProperty("--glass-blur", `${blurPx}px`);
+      const valElem = document.getElementById("glassIntensityValue");
+      if (valElem) {
+        valElem.textContent = `${blurPx}px`;
+      }
+      const slider = document.getElementById("glassIntensitySlider");
+      if (slider) {
+        slider.value = blurPx;
+      }
+    }
+    _setupUI() {
+      const btnOpen = document.getElementById("btnThemeCustomizer") || document.getElementById("btnThemeToggle") || document.querySelector(".btn-theme-customizer") || document.querySelector(".theme-toggle-btn");
+      const backdrop = document.getElementById("themeModalBackdrop");
+      const btnClose = document.getElementById("btnCloseThemeModal");
+      const slider = document.getElementById("glassIntensitySlider");
+      if (btnOpen && backdrop) {
+        btnOpen.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          backdrop.classList.add("visible");
+        });
+      }
+      document.querySelectorAll("#btnThemeCustomizer, #btnThemeToggle, .btn-theme-customizer, .theme-toggle-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (backdrop) backdrop.classList.add("visible");
+        });
+      });
+      if (btnClose && backdrop) {
+        btnClose.addEventListener("click", (e) => {
+          e.preventDefault();
+          backdrop.classList.remove("visible");
+        });
+      }
+      if (backdrop) {
+        backdrop.addEventListener("click", (e) => {
+          if (e.target === backdrop) {
+            backdrop.classList.remove("visible");
+          }
+        });
+      }
+      document.querySelectorAll(".preset-card").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const theme = btn.dataset.theme;
+          this.applyTheme(theme);
+        });
+      });
+      if (slider) {
+        slider.value = this.glassIntensity;
+        slider.addEventListener("input", (e) => {
+          this.applyGlassIntensity(parseInt(e.target.value, 10));
+        });
+      }
+    }
+  };
+  var themeManager = new ThemeManager();
+
+  // frontend/js/tabs.js
+  var TabController = class {
+    constructor() {
+      this.tabButtons = [];
+      this.tabPanes = {};
+      this.currentTab = "uploader";
+      this.listeners = /* @__PURE__ */ new Map();
+    }
+    init() {
+      this.tabButtons = Array.from(document.querySelectorAll(".header-nav-tabs .tab-btn"));
+      this.tabPanes = {
+        uploader: document.getElementById("tabPaneUploader"),
+        sniffer: document.getElementById("tabPaneSniffer"),
+        history: document.getElementById("tabPaneHistory"),
+        cinema: document.getElementById("tabPaneCinema"),
+        settings: document.getElementById("tabPaneSettings")
+      };
+      this.tabButtons.forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          const tab = btn.dataset.tab;
+          if (tab) {
+            this.switchTab(tab);
+          }
+        });
+      });
+      const hash = window.location.hash.replace("#", "").toLowerCase();
+      if (hash && this.tabPanes[hash]) {
+        this.switchTab(hash);
+      } else {
+        const saved = localStorage.getItem("tg_active_tab");
+        if (saved && this.tabPanes[saved]) {
+          this.switchTab(saved);
+        } else {
+          this.switchTab("uploader");
+        }
+      }
+      window._switchTab = (tabName) => this.switchTab(tabName);
+    }
+    onTabSwitch(tabName, callback) {
+      if (!this.listeners.has(tabName)) {
+        this.listeners.set(tabName, []);
+      }
+      this.listeners.get(tabName).push(callback);
+    }
+    switchTab(tabName) {
+      if (!tabName) return;
+      if (!this.tabPanes || !this.tabPanes[tabName]) {
+        this.tabPanes = {
+          uploader: document.getElementById("tabPaneUploader"),
+          sniffer: document.getElementById("tabPaneSniffer"),
+          history: document.getElementById("tabPaneHistory"),
+          cinema: document.getElementById("tabPaneCinema"),
+          settings: document.getElementById("tabPaneSettings")
+        };
+      }
+      const targetPane = this.tabPanes[tabName];
+      if (!targetPane) return;
+      this.currentTab = tabName;
+      try {
+        localStorage.setItem("tg_active_tab", tabName);
+        history.replaceState(null, "", `#${tabName}`);
+      } catch (e) {
+      }
+      const buttons = Array.from(document.querySelectorAll(".header-nav-tabs .tab-btn"));
+      buttons.forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.tab === tabName);
+      });
+      document.querySelectorAll(".tab-pane").forEach((pane) => {
+        pane.classList.remove("active");
+      });
+      targetPane.classList.add("active");
+      const callbacks = this.listeners.get(tabName) || [];
+      callbacks.forEach((cb) => {
+        try {
+          cb();
+        } catch (err) {
+          console.error("Tab callback error:", err);
+        }
+      });
+    }
+  };
+  var tabController = new TabController();
+  window._switchTab = (tabName) => tabController.switchTab(tabName);
+
+  // frontend/js/sniffer-ui.js
+  var SnifferUI = class {
+    constructor() {
+      this.watchedChannelsList = null;
+      this.watchedChannelsCount = null;
+      this.activeWatchedCountLabel = null;
+      this.btnOpenWatchModal = null;
+      this.watchChannelModal = null;
+      this.btnCloseWatchModal = null;
+      this.watchChannelSearchInput = null;
+      this.watchModalFilterTabs = null;
+      this.watchChannelListContainer = null;
+      this.btnRefreshWatchDialogs = null;
+      this.btnToggleManualChannel = null;
+      this.formAddChannel = null;
+      this.inputChannelId = null;
+      this.detectedManagersGrid = null;
+      this.snifferFeedContainer = null;
+      this.snifferFeedCount = null;
+      this.btnRefreshSnifferFeed = null;
+      this.snifferStatusBadge = null;
+      this.btnGoToSettings = null;
+      this.cachedChats = [];
+      this.activeChannels = /* @__PURE__ */ new Set();
+      this.currentFilter = "all";
+    }
+    init(socket, tabController2) {
+      this.watchedChannelsList = document.getElementById("channelChipsList");
+      this.watchedChannelsCount = document.getElementById("watchedChannelsCount");
+      this.activeWatchedCountLabel = document.getElementById("activeWatchedCountLabel");
+      this.btnOpenWatchModal = document.getElementById("btnOpenWatchModal");
+      this.watchChannelModal = document.getElementById("watchChannelModal");
+      this.btnCloseWatchModal = document.getElementById("btnCloseWatchModal");
+      this.watchChannelSearchInput = document.getElementById("watchChannelSearchInput");
+      this.watchModalFilterTabs = document.getElementById("watchModalFilterTabs");
+      this.watchChannelListContainer = document.getElementById("watchChannelListContainer");
+      this.btnRefreshWatchDialogs = document.getElementById("btnRefreshWatchDialogs");
+      this.btnToggleManualChannel = document.getElementById("btnToggleManualChannel");
+      this.formAddChannel = document.getElementById("formAddChannel");
+      this.inputChannelId = document.getElementById("inputChannelId");
+      this.detectedManagersGrid = document.getElementById("detectedManagersGrid");
+      this.snifferFeedContainer = document.getElementById("snifferFeedContainer");
+      this.snifferFeedCount = document.getElementById("snifferFeedCount");
+      this.btnRefreshSnifferFeed = document.getElementById("btnRefreshSnifferFeed");
+      this.snifferStatusBadge = document.getElementById("snifferStatusBadge");
+      this.btnGoToSettings = document.getElementById("btnGoToSettings");
+      if (this.btnOpenWatchModal) {
+        this.btnOpenWatchModal.addEventListener("click", () => this.openModal());
+      }
+      if (this.btnCloseWatchModal) {
+        this.btnCloseWatchModal.addEventListener("click", () => this.closeModal());
+      }
+      if (this.watchChannelModal) {
+        this.watchChannelModal.addEventListener("click", (e) => {
+          if (e.target === this.watchChannelModal) this.closeModal();
+        });
+      }
+      if (this.watchChannelSearchInput) {
+        this.watchChannelSearchInput.addEventListener("input", (e) => {
+          this.renderModalList(e.target.value);
+        });
+      }
+      if (this.watchModalFilterTabs) {
+        this.watchModalFilterTabs.querySelectorAll(".filter-chip").forEach((chip) => {
+          chip.addEventListener("click", () => {
+            this.watchModalFilterTabs.querySelectorAll(".filter-chip").forEach((c) => c.classList.remove("active"));
+            chip.classList.add("active");
+            this.currentFilter = chip.dataset.filter || "all";
+            this.renderModalList(this.watchChannelSearchInput ? this.watchChannelSearchInput.value : "");
+          });
+        });
+      }
+      if (this.btnRefreshWatchDialogs) {
+        this.btnRefreshWatchDialogs.addEventListener("click", () => {
+          this.fetchAccountChannels(true);
+          showToast("Refreshing dialogs list...", "info");
+        });
+      }
+      if (this.btnToggleManualChannel && this.formAddChannel) {
+        this.btnToggleManualChannel.addEventListener("click", () => {
+          const isHidden = this.formAddChannel.style.display === "none";
+          this.formAddChannel.style.display = isHidden ? "flex" : "none";
+          this.btnToggleManualChannel.textContent = isHidden ? "\u25B2 Hide manual custom input" : "\u270F\uFE0F Or enter custom Channel ID / @username";
+          if (isHidden && this.inputChannelId) {
+            this.inputChannelId.focus();
+          }
+        });
+      }
+      if (this.formAddChannel) {
+        this.formAddChannel.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (!this.inputChannelId) return;
+          const val = this.inputChannelId.value.trim();
+          if (val) {
+            this.addChannel(val);
+            this.inputChannelId.value = "";
+          }
+        });
+      }
+      if (this.btnRefreshSnifferFeed) {
+        this.btnRefreshSnifferFeed.addEventListener("click", () => {
+          this.fetchFeed();
+          this.fetchStatus();
+        });
+      }
+      if (this.btnGoToSettings && tabController2) {
+        this.btnGoToSettings.addEventListener("click", () => {
+          tabController2.switchTab("settings");
+        });
+      }
+      if (socket) {
+        socket.on("sniffer:status", (status) => {
+          this.renderStatus(status);
+        });
+        socket.on("sniffer:feed_snapshot", (feed) => {
+          this.renderFeed(feed);
+        });
+        socket.on("sniffer:sniffer_feed", (item) => {
+          this.prependFeedItem(item);
+        });
+      }
+      this.fetchStatus();
+      this.fetchFeed();
+      this.fetchAccountChannels();
+      window._snifferUI = this;
+    }
+    openModal() {
+      if (!this.watchChannelModal) return;
+      this.watchChannelModal.classList.add("open");
+      if (this.watchChannelSearchInput) {
+        this.watchChannelSearchInput.value = "";
+        setTimeout(() => this.watchChannelSearchInput.focus(), 150);
+      }
+      this.renderModalList("");
+    }
+    closeModal() {
+      if (!this.watchChannelModal) return;
+      this.watchChannelModal.classList.remove("open");
+    }
+    async fetchAccountChannels(force = false) {
+      try {
+        const url = force ? "/api/chats?force_refresh=true" : "/api/chats";
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const chats = await res.json();
+        this.cachedChats = (chats || []).filter((c) => c.type !== "saved_messages");
+        this.updateFilterBadgeCounts();
+        this.renderModalList(this.watchChannelSearchInput ? this.watchChannelSearchInput.value : "");
+      } catch (err) {
+        console.debug("Could not load account dialogs:", err);
+      }
+    }
+    updateFilterBadgeCounts() {
+      if (!this.watchModalFilterTabs) return;
+      const channels = this.cachedChats.filter((c) => c.type === "channel").length;
+      const groups = this.cachedChats.filter((c) => c.type === "group" || c.type === "supergroup").length;
+      const bots = this.cachedChats.filter((c) => c.type === "bot").length;
+      const users = this.cachedChats.filter((c) => c.type === "user").length;
+      const all = this.cachedChats.length;
+      const chips = this.watchModalFilterTabs.querySelectorAll(".filter-chip");
+      chips.forEach((chip) => {
+        const f = chip.dataset.filter;
+        if (f === "all") chip.textContent = `All (${all})`;
+        if (f === "channel") chip.textContent = `\u{1F4E2} Channels (${channels})`;
+        if (f === "group") chip.textContent = `\u{1F465} Groups (${groups})`;
+        if (f === "bot") chip.textContent = `\u{1F916} Bots (${bots})`;
+        if (f === "user") chip.textContent = `\u{1F464} Contacts (${users})`;
+      });
+    }
+    renderModalList(searchQuery = "") {
+      if (!this.watchChannelListContainer) return;
+      const query = (searchQuery || "").toLowerCase().trim();
+      let filtered = this.cachedChats;
+      if (this.currentFilter === "channel") {
+        filtered = filtered.filter((c) => c.type === "channel");
+      } else if (this.currentFilter === "group") {
+        filtered = filtered.filter((c) => c.type === "group" || c.type === "supergroup");
+      } else if (this.currentFilter === "bot") {
+        filtered = filtered.filter((c) => c.type === "bot");
+      } else if (this.currentFilter === "user") {
+        filtered = filtered.filter((c) => c.type === "user");
+      }
+      if (query) {
+        filtered = filtered.filter((c) => {
+          const name = (c.name || "").toLowerCase();
+          const username = (c.username || "").toLowerCase();
+          const id = String(c.id);
+          return name.includes(query) || username.includes(query) || id.includes(query);
+        });
+      }
+      if (filtered.length === 0) {
+        this.watchChannelListContainer.innerHTML = `
         <div style="text-align: center; padding: 40px 16px; color: var(--text-muted);">
           <div style="font-size: 2rem; opacity: 0.5; margin-bottom: 8px;">\u{1F50D}</div>
           <p style="font-size: 0.9rem;">No matching dialogs found.</p>
         </div>
-      `;return}let a=n.slice(0,100);this.watchChannelListContainer.innerHTML=a.map(s=>{let o="\u{1F4E2}",r="CHANNEL",u="linear-gradient(135deg, #00cec9, #6c5ce7)";s.type==="supergroup"||s.type==="group"?(o="\u{1F465}",r="GROUP",u="linear-gradient(135deg, #fd79a8, #6c5ce7)"):s.type==="bot"?(o="\u{1F916}",r="BOT",u="linear-gradient(135deg, #00b894, #0984e3)"):s.type==="user"&&(o="\u{1F464}",r="CONTACT",u="linear-gradient(135deg, #fdcb6e, #e17055)");let l=s.username?`@${s.username}`:String(s.id).startsWith("-")?String(s.id):s.type==="channel"||s.type==="supergroup"?`-100${s.id}`:String(s.id),h=!1;for(let d of this.activeChannels){let g=String(d).toLowerCase().replace(/^@/,""),f=String(l).toLowerCase().replace(/^@/,"");if(g===f||String(d)===String(s.id)||String(d)===`-100${s.id}`){h=!0;break}}let w=s.username?`@${s.username}`:`ID: ${s.id}`;return`
-        <div class="chat-option-item ${h?"selected":""}" data-identifier="${p(l)}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;">
+      `;
+        return;
+      }
+      const displayList = filtered.slice(0, 100);
+      this.watchChannelListContainer.innerHTML = displayList.map((ch) => {
+        let icon = "\u{1F4E2}";
+        let typeLabel = "CHANNEL";
+        let avatarBg = "linear-gradient(135deg, #00cec9, #6c5ce7)";
+        if (ch.type === "supergroup" || ch.type === "group") {
+          icon = "\u{1F465}";
+          typeLabel = "GROUP";
+          avatarBg = "linear-gradient(135deg, #fd79a8, #6c5ce7)";
+        } else if (ch.type === "bot") {
+          icon = "\u{1F916}";
+          typeLabel = "BOT";
+          avatarBg = "linear-gradient(135deg, #00b894, #0984e3)";
+        } else if (ch.type === "user") {
+          icon = "\u{1F464}";
+          typeLabel = "CONTACT";
+          avatarBg = "linear-gradient(135deg, #fdcb6e, #e17055)";
+        }
+        const identifier = ch.username ? `@${ch.username}` : String(ch.id).startsWith("-") ? String(ch.id) : ch.type === "channel" || ch.type === "supergroup" ? `-100${ch.id}` : String(ch.id);
+        let isWatched = false;
+        for (const ac of this.activeChannels) {
+          const strAc = String(ac).toLowerCase().replace(/^@/, "");
+          const cleanId = String(identifier).toLowerCase().replace(/^@/, "");
+          if (strAc === cleanId || String(ac) === String(ch.id) || String(ac) === `-100${ch.id}`) {
+            isWatched = true;
+            break;
+          }
+        }
+        const handle = ch.username ? `@${ch.username}` : `ID: ${ch.id}`;
+        return `
+        <div class="chat-option-item ${isWatched ? "selected" : ""}" data-identifier="${escapeHtml(identifier)}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;">
           <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
-            <div class="chat-avatar" style="background: ${u}; width: 38px; height: 38px; font-size: 1.1rem; overflow: hidden; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-              <img src="/api/chats/${encodeURIComponent(s.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.outerHTML='<span>${o}</span>'">
+            <div class="chat-avatar" style="background: ${avatarBg}; width: 38px; height: 38px; font-size: 1.1rem; overflow: hidden; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <img src="/api/chats/${encodeURIComponent(ch.id)}/avatar" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.outerHTML='<span>${icon}</span>'">
             </div>
             <div class="chat-meta" style="min-width: 0;">
-              <div class="chat-meta-name" title="${p(s.name)}">${p(s.name)}</div>
+              <div class="chat-meta-name" title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</div>
               <div class="chat-meta-sub" style="display: flex; align-items: center; gap: 8px;">
-                <span>${p(w)}</span>
-                <span class="chat-type-tag" style="font-size: 0.65rem; padding: 1px 6px;">${r}</span>
+                <span>${escapeHtml(handle)}</span>
+                <span class="chat-type-tag" style="font-size: 0.65rem; padding: 1px 6px;">${typeLabel}</span>
               </div>
             </div>
           </div>
           
-          <button class="btn-toggle-watch ${h?"btn-secondary":"btn-primary"}" 
-                  data-identifier="${p(l)}" 
-                  data-watched="${h?"true":"false"}"
+          <button class="btn-toggle-watch ${isWatched ? "btn-secondary" : "btn-primary"}" 
+                  data-identifier="${escapeHtml(identifier)}" 
+                  data-watched="${isWatched ? "true" : "false"}"
                   type="button" 
                   style="padding: 6px 14px; font-size: 0.78rem; border-radius: var(--radius-full); white-space: nowrap; flex-shrink: 0;">
-            ${h?"\u2713 Watched":"+ Watch"}
+            ${isWatched ? "\u2713 Watched" : "+ Watch"}
           </button>
         </div>
-      `}).join(""),this.watchChannelListContainer.querySelectorAll(".btn-toggle-watch").forEach(s=>{s.addEventListener("click",async o=>{o.stopPropagation();let r=s.dataset.identifier;if(s.dataset.watched==="true"){await this.handleRemoveChannel(r),s.dataset.watched="false",s.className="btn-toggle-watch btn-primary",s.textContent="+ Watch";let l=s.closest(".chat-option-item");l&&l.classList.remove("selected")}else{await this.addChannel(r),s.dataset.watched="true",s.className="btn-toggle-watch btn-secondary",s.textContent="\u2713 Watched";let l=s.closest(".chat-option-item");l&&l.classList.add("selected")}})})}async fetchStatus(){try{let e=await fetch("/api/sniffer/status");if(e.ok){let t=await e.json();this.renderStatus(t)}}catch(e){console.debug("Could not fetch sniffer status:",e)}}async fetchFeed(){try{let e=await fetch("/api/sniffer/feed");if(e.ok){let t=await e.json();this.renderFeed(t)}}catch(e){console.debug("Could not fetch sniffer feed:",e)}}async addChannel(e){let t=String(e).trim();if(t)try{let n=await fetch("/api/sniffer/channels/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:t})}),a=await n.json();n.ok&&a.success?($(`Watched channel '${t}' added \u2713`,"success"),this.fetchStatus()):$("Channel already watched or invalid","warning")}catch(n){$(`Error adding channel: ${n.message}`,"error")}}async handleRemoveChannel(e){try{let t=await fetch("/api/sniffer/channels/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:e})}),n=await t.json();t.ok&&n.success&&($(`Channel '${e}' removed`,"info"),this.fetchStatus())}catch(t){$(`Error removing channel: ${t.message}`,"error")}}_resolveChannelDisplay(e){let t=String(e).trim(),n=t.toLowerCase().replace(/^@/,""),a=t.replace(/^-100/,""),s=this.cachedChats.find(r=>{let u=(r.username||"").toLowerCase(),l=String(r.id).replace(/^-100/,"");return u&&u===n||l===a||String(r.id)===t});if(s){let r="\u{1F4E2}";return s.type==="supergroup"||s.type==="group"?r="\u{1F465}":s.type==="bot"?r="\u{1F916}":s.type==="user"&&(r="\u{1F464}"),{icon:r,name:s.name||t,handle:s.username?`@${s.username}`:`ID: ${s.id}`,raw:t}}let o="\u{1F4E1}";return t.toLowerCase().endsWith("bot")?o="\u{1F916}":t.startsWith("@")&&(o="\u{1F4E2}"),{icon:o,name:t,handle:t,raw:t}}renderStatus(e){if(!e)return;let t=e.active_channels||[];if(this.activeChannels=new Set(t),this.watchedChannelsCount&&(this.watchedChannelsCount.textContent=t.length),this.activeWatchedCountLabel&&(this.activeWatchedCountLabel.textContent=`${t.length} Monitored`),this.watchedChannelsList&&(t.length===0?this.watchedChannelsList.innerHTML='<div class="empty-hint" style="color: var(--text-muted); font-size: 0.85rem;">No channels watched yet. Click "+ Pick Channels" above.</div>':(this.watchedChannelsList.innerHTML=t.map(n=>{let a=this._resolveChannelDisplay(n);return`
-            <div class="channel-chip" title="${p(a.raw)} (${p(a.handle)})">
-              <span class="chip-icon">${a.icon}</span>
-              <span class="chip-name">${p(a.name)}</span>
-              <button class="channel-chip-remove" title="Stop watching" data-channel="${p(n)}">&times;</button>
+      `;
+      }).join("");
+      this.watchChannelListContainer.querySelectorAll(".btn-toggle-watch").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.identifier;
+          const isWatched = btn.dataset.watched === "true";
+          if (isWatched) {
+            await this.handleRemoveChannel(id);
+            btn.dataset.watched = "false";
+            btn.className = "btn-toggle-watch btn-primary";
+            btn.textContent = "+ Watch";
+            const row = btn.closest(".chat-option-item");
+            if (row) row.classList.remove("selected");
+          } else {
+            await this.addChannel(id);
+            btn.dataset.watched = "true";
+            btn.className = "btn-toggle-watch btn-secondary";
+            btn.textContent = "\u2713 Watched";
+            const row = btn.closest(".chat-option-item");
+            if (row) row.classList.add("selected");
+          }
+        });
+      });
+    }
+    async fetchStatus() {
+      try {
+        const res = await fetch("/api/sniffer/status");
+        if (res.ok) {
+          const data = await res.json();
+          this.renderStatus(data);
+        }
+      } catch (err) {
+        console.debug("Could not fetch sniffer status:", err);
+      }
+    }
+    async fetchFeed() {
+      try {
+        const res = await fetch("/api/sniffer/feed");
+        if (res.ok) {
+          const feed = await res.json();
+          this.renderFeed(feed);
+        }
+      } catch (err) {
+        console.debug("Could not fetch sniffer feed:", err);
+      }
+    }
+    async addChannel(channelValue) {
+      const val = String(channelValue).trim();
+      if (!val) return;
+      try {
+        const res = await fetch("/api/sniffer/channels/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel: val })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Watched channel '${val}' added \u2713`, "success");
+          this.fetchStatus();
+        } else {
+          showToast(`Channel already watched or invalid`, "warning");
+        }
+      } catch (err) {
+        showToast(`Error adding channel: ${err.message}`, "error");
+      }
+    }
+    async handleRemoveChannel(channel) {
+      try {
+        const res = await fetch("/api/sniffer/channels/remove", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Channel '${channel}' removed`, "info");
+          this.fetchStatus();
+        }
+      } catch (err) {
+        showToast(`Error removing channel: ${err.message}`, "error");
+      }
+    }
+    _resolveChannelDisplay(channelIdentifier) {
+      const raw = String(channelIdentifier).trim();
+      const cleanHandle = raw.toLowerCase().replace(/^@/, "");
+      const cleanId = raw.replace(/^-100/, "");
+      const found = this.cachedChats.find((c) => {
+        const cUser = (c.username || "").toLowerCase();
+        const cId = String(c.id).replace(/^-100/, "");
+        return cUser && cUser === cleanHandle || cId === cleanId || String(c.id) === raw;
+      });
+      if (found) {
+        let icon2 = "\u{1F4E2}";
+        if (found.type === "supergroup" || found.type === "group") icon2 = "\u{1F465}";
+        else if (found.type === "bot") icon2 = "\u{1F916}";
+        else if (found.type === "user") icon2 = "\u{1F464}";
+        return {
+          icon: icon2,
+          name: found.name || raw,
+          handle: found.username ? `@${found.username}` : `ID: ${found.id}`,
+          raw
+        };
+      }
+      let icon = "\u{1F4E1}";
+      if (raw.toLowerCase().endsWith("bot")) icon = "\u{1F916}";
+      else if (raw.startsWith("@")) icon = "\u{1F4E2}";
+      return {
+        icon,
+        name: raw,
+        handle: raw,
+        raw
+      };
+    }
+    renderStatus(status) {
+      if (!status) return;
+      const channels = status.active_channels || [];
+      this.activeChannels = new Set(channels);
+      if (this.watchedChannelsCount) {
+        this.watchedChannelsCount.textContent = channels.length;
+      }
+      if (this.activeWatchedCountLabel) {
+        this.activeWatchedCountLabel.textContent = `${channels.length} Monitored`;
+      }
+      if (this.watchedChannelsList) {
+        if (channels.length === 0) {
+          this.watchedChannelsList.innerHTML = `<div class="empty-hint" style="color: var(--text-muted); font-size: 0.85rem;">No channels watched yet. Click "+ Pick Channels" above.</div>`;
+        } else {
+          this.watchedChannelsList.innerHTML = channels.map((ch) => {
+            const info = this._resolveChannelDisplay(ch);
+            return `
+            <div class="channel-chip" title="${escapeHtml(info.raw)} (${escapeHtml(info.handle)})">
+              <span class="chip-icon">${info.icon}</span>
+              <span class="chip-name">${escapeHtml(info.name)}</span>
+              <button class="channel-chip-remove" title="Stop watching" data-channel="${escapeHtml(ch)}">&times;</button>
             </div>
-          `}).join(""),this.watchedChannelsList.querySelectorAll(".channel-chip-remove").forEach(n=>{n.addEventListener("click",a=>{let s=a.currentTarget.dataset.channel;s&&this.handleRemoveChannel(s)})}))),this.watchChannelModal&&this.watchChannelModal.classList.contains("open")&&this.renderModalList(this.watchChannelSearchInput?this.watchChannelSearchInput.value:""),this.detectedManagersGrid){let n=e.detected_managers||{},a=Object.entries(n);a.length===0?this.detectedManagersGrid.innerHTML=`
+          `;
+          }).join("");
+          this.watchedChannelsList.querySelectorAll(".channel-chip-remove").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+              const ch = e.currentTarget.dataset.channel;
+              if (ch) this.handleRemoveChannel(ch);
+            });
+          });
+        }
+      }
+      if (this.watchChannelModal && this.watchChannelModal.classList.contains("open")) {
+        this.renderModalList(this.watchChannelSearchInput ? this.watchChannelSearchInput.value : "");
+      }
+      if (this.detectedManagersGrid) {
+        const managers = status.detected_managers || {};
+        const entries = Object.entries(managers);
+        if (entries.length === 0) {
+          this.detectedManagersGrid.innerHTML = `
           <div style="font-size: 0.85rem; color: var(--text-muted); grid-column: 1 / -1;">
             No external download manager (FDM, aria2, NeatDM) found. Direct streaming mode active.
           </div>
-        `:this.detectedManagersGrid.innerHTML=a.map(([s,o])=>`
+        `;
+        } else {
+          this.detectedManagersGrid.innerHTML = entries.map(([id, path]) => `
           <div class="manager-card">
-            <div class="mgr-title">${p(s.toUpperCase())}</div>
+            <div class="mgr-title">${escapeHtml(id.toUpperCase())}</div>
             <div class="mgr-badge badge-status-online">Installed</div>
             <div style="font-size: 0.7rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-              ${p(o)}
+              ${escapeHtml(path)}
             </div>
           </div>
-        `).join("")}}renderFeed(e){if(!this.snifferFeedContainer)return;let t=e||[];if(this.snifferFeedCount&&(this.snifferFeedCount.textContent=t.length),t.length===0){this.snifferFeedContainer.innerHTML=`
+        `).join("");
+        }
+      }
+    }
+    renderFeed(feed) {
+      if (!this.snifferFeedContainer) return;
+      const items = feed || [];
+      if (this.snifferFeedCount) {
+        this.snifferFeedCount.textContent = items.length;
+      }
+      if (items.length === 0) {
+        this.snifferFeedContainer.innerHTML = `
         <div class="feed-empty-state">
           <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">\u{1F4E1}</div>
           <p style="font-weight: 500; font-size: 1.05rem; color: var(--text-main); margin-bottom: 6px;">Sniffer Waiting for Media</p>
           <p style="font-size: 0.85rem;">New media posted to watched channels will automatically appear here and trigger your download manager.</p>
         </div>
-      `;return}this.snifferFeedContainer.innerHTML=t.map(n=>this._renderFeedCardHtml(n)).join(""),this._attachFeedCardListeners()}prependFeedItem(e){if(!this.snifferFeedContainer)return;this.snifferFeedContainer.querySelector(".feed-empty-state")&&(this.snifferFeedContainer.innerHTML="");let n=document.createElement("div");n.innerHTML=this._renderFeedCardHtml(e);let a=n.firstElementChild;if(this.snifferFeedContainer.prepend(a),this.snifferFeedCount){let s=parseInt(this.snifferFeedCount.textContent||"0");this.snifferFeedCount.textContent=s+1}this._attachFeedCardListeners(a)}_renderFeedCardHtml(e){let t=O(e.filename)||e.filename;return`
-      <div class="feed-card" data-chat="${e.chat_id}" data-msg="${e.message_id}" data-url="${e.download_url}">
+      `;
+        return;
+      }
+      this.snifferFeedContainer.innerHTML = items.map((item) => this._renderFeedCardHtml(item)).join("");
+      this._attachFeedCardListeners();
+    }
+    prependFeedItem(item) {
+      if (!this.snifferFeedContainer) return;
+      const emptyState = this.snifferFeedContainer.querySelector(".feed-empty-state");
+      if (emptyState) {
+        this.snifferFeedContainer.innerHTML = "";
+      }
+      const temp = document.createElement("div");
+      temp.innerHTML = this._renderFeedCardHtml(item);
+      const card = temp.firstElementChild;
+      this.snifferFeedContainer.prepend(card);
+      if (this.snifferFeedCount) {
+        const current = parseInt(this.snifferFeedCount.textContent || "0");
+        this.snifferFeedCount.textContent = current + 1;
+      }
+      this._attachFeedCardListeners(card);
+    }
+    _renderFeedCardHtml(item) {
+      const cleanName = cleanFileName(item.filename) || item.filename;
+      return `
+      <div class="feed-card" data-chat="${item.chat_id}" data-msg="${item.message_id}" data-url="${item.download_url}">
         <div class="feed-card-left">
-          <div class="feed-filename" title="${p(t)}">${p(t)}</div>
+          <div class="feed-filename" title="${escapeHtml(cleanName)}">${escapeHtml(cleanName)}</div>
           <div class="feed-meta">
-            <span style="color: var(--accent-secondary); font-weight: 600;">${p(e.size_formatted)}</span>
-            <span>Manager: <b>${p(e.manager)}</b></span>
-            <span class="${e.status==="dispatched"?"badge-status-online":"badge-status-offline"}">${p(e.status.toUpperCase())}</span>
+            <span style="color: var(--accent-secondary); font-weight: 600;">${escapeHtml(item.size_formatted)}</span>
+            <span>Manager: <b>${escapeHtml(item.manager)}</b></span>
+            <span class="${item.status === "dispatched" ? "badge-status-online" : "badge-status-offline"}">${escapeHtml(item.status.toUpperCase())}</span>
           </div>
         </div>
         <div class="feed-actions">
@@ -222,10 +2460,321 @@
           </button>
         </div>
       </div>
-    `}_attachFeedCardListeners(e=this.snifferFeedContainer){e.querySelectorAll(".btn-copy-link").forEach(t=>{t.onclick=n=>{let s=n.target.closest(".feed-card").dataset.url;s&&(navigator.clipboard.writeText(s),$("Proxy download link copied!","success"))}}),e.querySelectorAll(".btn-trigger-fdm").forEach(t=>{t.onclick=async n=>{let a=n.target.closest(".feed-card"),s=a.dataset.chat,o=a.dataset.msg;try{let u=await(await fetch(`/api/proxy/trigger?chat_id=${s}&message_id=${o}`,{method:"POST"})).json();u.success?$(`Sent to ${u.manager.toUpperCase()}`,"success"):$("Failed to launch manager","error")}catch(r){$(`Error: ${r.message}`,"error")}}})}},_e=new re;var ce=class{constructor(){this.form=null,this.btnSave=null,this.fields={}}init(e){this.form=document.getElementById("settingsForm"),this.btnSave=document.getElementById("btnSaveSettings"),this.fields={PREFERRED_MANAGER:document.getElementById("setPreferredManager"),MIN_FILE_SIZE_MB:document.getElementById("setMinFileSize"),ALLOWED_EXT:document.getElementById("setAllowedExt"),KEYWORD_BLOCK:document.getElementById("setKeywordBlock"),KEYWORD_ALLOW:document.getElementById("setKeywordAllow"),ENABLE_NOTIFICATIONS:document.getElementById("setNotifications"),NOTIFICATION_MODE:document.getElementById("setNotifMode"),PROXY_SPEED_LIMIT_MB:document.getElementById("setProxySpeedLimit"),AUTO_CLEAR_DONE:document.getElementById("setAutoClearDone")};let t=document.getElementById("btnTestNotification");t&&t.addEventListener("click",async()=>{if(!("Notification"in window)){$("Desktop notifications not supported in this browser","warning");return}Notification.permission==="granted"?(new Notification("\u{1F514} TG Power Suite Alert",{body:"Desktop notification alerts are working perfectly!",icon:"/assets/favicon.ico"}),$("Sample notification sent to desktop!","success")):await Notification.requestPermission()==="granted"?(new Notification("\u{1F514} TG Power Suite Alert",{body:"Desktop notifications enabled!",icon:"/assets/favicon.ico"}),$("Notifications enabled and test alert sent!","success")):$("Notification permission was denied in browser","warning")}),this.btnSave&&this.btnSave.addEventListener("click",()=>this.saveSettings()),this.form&&this.form.addEventListener("submit",n=>{n.preventDefault(),this.saveSettings()}),e&&e.onTabSwitch("settings",()=>{this.loadSettings()}),this.loadSettings()}async loadSettings(){try{let e=await fetch("/api/settings");if(e.ok){let t=await e.json();Object.entries(this.fields).forEach(([n,a])=>{a&&t[n]!==void 0&&(a.value=t[n])})}}catch(e){console.debug("Could not load settings:",e)}}async saveSettings(){let e={};Object.entries(this.fields).forEach(([t,n])=>{n&&(e[t]=n.value.trim())});try{let t=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({settings:e})}),n=await t.json();t.ok&&n.success?$("Settings successfully saved to .env","success"):$(`Failed to save settings: ${n.detail||"Unknown error"}`,"error")}catch(t){$(`Error saving settings: ${t.message}`,"error")}}},Ie=new ce;var k=[],z="me",D="Saved Messages (Personal Cloud)";async function Be(){let i=document.getElementById("btnCinemaChooseChat"),e=document.getElementById("cinemaSearchInput"),t=document.getElementById("btnCinemaRefresh"),n=document.getElementById("btnToggleOfflineSaver"),a=document.getElementById("offlineSaverStateLabel");Ae();try{await De()}catch(s){console.debug("Watched chips load deferred:",s)}n&&(fetch("/api/settings/offline_saver").then(s=>s.json()).then(s=>{a&&(a.textContent=s.enabled?"On":"Off"),n.classList.toggle("active",!!s.enabled)}).catch(()=>{}),n.addEventListener("click",async()=>{let o=!n.classList.contains("active");try{let u=await(await fetch("/api/settings/offline_saver",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:o})})).json();a&&(a.textContent=u.enabled?"On":"Off"),n.classList.toggle("active",!!u.enabled),y(u.enabled?"\u{1F4BE} Stream-to-Disk Auto-Saver Active: Full videos will save to ~/Videos/Telegram_Cinema":"\u{1F4BE} Stream-to-Disk Auto-Saver Disabled","info")}catch{y("Could not toggle offline saver","warning")}})),X(),i&&i.addEventListener("click",()=>{A.open(s=>{xe(s)})}),t&&t.addEventListener("click",()=>{G(z,!0),X()}),e&&e.addEventListener("input",s=>{Oe(s.target.value.toLowerCase().trim())}),G("me")}function Ae(){let i=document.getElementById("cinemaCurrentChatName"),e=document.getElementById("cinemaCurrentChatType"),t=document.getElementById("cinemaCurrentChatIcon");i&&(i.textContent="Saved Messages (Personal Cloud)"),e&&(e.textContent="CLOUD",e.className="chat-type-tag"),t&&(t.innerHTML='<span style="font-size: 1.15rem;">\u2601\uFE0F</span>')}function xe(i){z=i.id,D=i.name||"Chat";let e=document.getElementById("cinemaCurrentChatName"),t=document.getElementById("cinemaCurrentChatType"),n=document.getElementById("cinemaCurrentChatIcon");if(e&&(e.textContent=i.name),t&&(t.textContent=(i.type||"chat").toUpperCase(),t.className=`chat-type-tag type-${i.type||"chat"}`),n){let s={saved_messages:"\u2601\uFE0F",user:"\u{1F464}",channel:"\u{1F4E2}",supergroup:"\u{1F465}",group:"\u{1F465}",bot:"\u{1F916}"}[i.type]||"\u{1F4AC}";i.type==="saved_messages"?n.innerHTML="\u2601\uFE0F":n.innerHTML=`<img src="/api/chats/${encodeURIComponent(i.id)}/avatar" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${s}</span>'">`}document.querySelectorAll(".cinema-chip").forEach(a=>{let s=a.getAttribute("data-chat-id");a.classList.toggle("active",s==i.id)}),G(z)}async function De(){let i=document.getElementById("cinemaWatchedChips");if(i){i.innerHTML="";try{let n=(await(await fetch("/api/sniffer/status")).json()).watched_channels||[];if(n.length===0){i.style.display="none";return}i.style.display="flex",n.forEach(a=>{fetch(`/api/media/videos/${encodeURIComponent(a.id)}`).catch(()=>{});let s=document.createElement("button");s.type="button",s.className="cinema-chip"+(z==a.id?" active":""),s.setAttribute("data-chat-id",a.id);let o=a.type==="channel"?"\u{1F4E2}":a.type==="supergroup"||a.type==="group"?"\u{1F465}":"\u{1F4AC}";s.innerHTML=`
-        <img src="/api/chats/${encodeURIComponent(a.id)}/avatar" alt="" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${o}</span>'">
-        <span>${p(a.name)}</span>
-      `,s.addEventListener("click",()=>{xe({id:a.id,name:a.name,type:a.type})}),i.appendChild(s)})}catch(e){console.debug("Could not load watched channels for chips:",e),i.style.display="none"}}}async function G(i="me",e=!1){z=i;let t=document.getElementById("cinemaVideoGrid"),n=document.getElementById("cinemaSeriesPane"),a=document.getElementById("cinemaSeriesList"),s=document.getElementById("cinemaVideoCount"),o=document.getElementById("cinemaMoviesCount"),r=document.getElementById("cinemaSeriesCount"),u="tg_cinema_cache_"+i,l=!1;if(!e)try{let h=localStorage.getItem(u);if(h){let w=JSON.parse(h);Array.isArray(w)&&w.length>0&&(k=w,s&&(s.textContent=`${k.length} Videos`),J(k),l=!0)}}catch{}l||(k=[],s&&(s.textContent="Scanning..."),o&&(o.textContent="Loading..."),r&&(r.textContent="Loading..."),n&&n.classList.remove("hidden"),t&&(t.innerHTML=`
+    `;
+    }
+    _attachFeedCardListeners(scope = this.snifferFeedContainer) {
+      scope.querySelectorAll(".btn-copy-link").forEach((btn) => {
+        btn.onclick = (e) => {
+          const card = e.target.closest(".feed-card");
+          const url = card.dataset.url;
+          if (url) {
+            navigator.clipboard.writeText(url);
+            showToast("Proxy download link copied!", "success");
+          }
+        };
+      });
+      scope.querySelectorAll(".btn-trigger-fdm").forEach((btn) => {
+        btn.onclick = async (e) => {
+          const card = e.target.closest(".feed-card");
+          const chatId = card.dataset.chat;
+          const msgId = card.dataset.msg;
+          try {
+            const res = await fetch(`/api/proxy/trigger?chat_id=${chatId}&message_id=${msgId}`, { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+              showToast(`Sent to ${data.manager.toUpperCase()}`, "success");
+            } else {
+              showToast("Failed to launch manager", "error");
+            }
+          } catch (err) {
+            showToast(`Error: ${err.message}`, "error");
+          }
+        };
+      });
+    }
+  };
+  var snifferUI = new SnifferUI();
+
+  // frontend/js/settings-ui.js
+  var SettingsUI = class {
+    constructor() {
+      this.form = null;
+      this.btnSave = null;
+      this.fields = {};
+    }
+    init(tabController2) {
+      this.form = document.getElementById("settingsForm");
+      this.btnSave = document.getElementById("btnSaveSettings");
+      this.fields = {
+        PREFERRED_MANAGER: document.getElementById("setPreferredManager"),
+        MIN_FILE_SIZE_MB: document.getElementById("setMinFileSize"),
+        ALLOWED_EXT: document.getElementById("setAllowedExt"),
+        KEYWORD_BLOCK: document.getElementById("setKeywordBlock"),
+        KEYWORD_ALLOW: document.getElementById("setKeywordAllow"),
+        ENABLE_NOTIFICATIONS: document.getElementById("setNotifications"),
+        NOTIFICATION_MODE: document.getElementById("setNotifMode"),
+        PROXY_SPEED_LIMIT_MB: document.getElementById("setProxySpeedLimit"),
+        AUTO_CLEAR_DONE: document.getElementById("setAutoClearDone")
+      };
+      const btnTestNotification = document.getElementById("btnTestNotification");
+      if (btnTestNotification) {
+        btnTestNotification.addEventListener("click", async () => {
+          if (!("Notification" in window)) {
+            showToast("Desktop notifications not supported in this browser", "warning");
+            return;
+          }
+          if (Notification.permission === "granted") {
+            new Notification("\u{1F514} TG Power Suite Alert", {
+              body: "Desktop notification alerts are working perfectly!",
+              icon: "/assets/favicon.ico"
+            });
+            showToast("Sample notification sent to desktop!", "success");
+          } else {
+            const perm = await Notification.requestPermission();
+            if (perm === "granted") {
+              new Notification("\u{1F514} TG Power Suite Alert", {
+                body: "Desktop notifications enabled!",
+                icon: "/assets/favicon.ico"
+              });
+              showToast("Notifications enabled and test alert sent!", "success");
+            } else {
+              showToast("Notification permission was denied in browser", "warning");
+            }
+          }
+        });
+      }
+      if (this.btnSave) {
+        this.btnSave.addEventListener("click", () => this.saveSettings());
+      }
+      if (this.form) {
+        this.form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          this.saveSettings();
+        });
+      }
+      if (tabController2) {
+        tabController2.onTabSwitch("settings", () => {
+          this.loadSettings();
+        });
+      }
+      this.loadSettings();
+    }
+    async loadSettings() {
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          const config = await res.json();
+          Object.entries(this.fields).forEach(([key, element]) => {
+            if (element && config[key] !== void 0) {
+              element.value = config[key];
+            }
+          });
+        }
+      } catch (err) {
+        console.debug("Could not load settings:", err);
+      }
+    }
+    async saveSettings() {
+      const payload = {};
+      Object.entries(this.fields).forEach(([key, element]) => {
+        if (element) {
+          payload[key] = element.value.trim();
+        }
+      });
+      try {
+        const res = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings: payload })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast("Settings successfully saved to .env", "success");
+        } else {
+          showToast(`Failed to save settings: ${data.detail || "Unknown error"}`, "error");
+        }
+      } catch (err) {
+        showToast(`Error saving settings: ${err.message}`, "error");
+      }
+    }
+  };
+  var settingsUI = new SettingsUI();
+
+  // frontend/js/cinema-ui.js
+  var _cinemaVideos = [];
+  var _currentChatId = "me";
+  var _currentChatName = "Saved Messages (Personal Cloud)";
+  async function initCinema() {
+    const btnChooseChat = document.getElementById("btnCinemaChooseChat");
+    const videoSearch = document.getElementById("cinemaSearchInput");
+    const btnRefresh = document.getElementById("btnCinemaRefresh");
+    const btnToggleOfflineSaver = document.getElementById("btnToggleOfflineSaver");
+    const offlineSaverStateLabel = document.getElementById("offlineSaverStateLabel");
+    _initCinemaDestinationPicker();
+    if (btnChooseChat) {
+      btnChooseChat.addEventListener("click", () => {
+        chatPicker.open((chat) => _onCinemaChatSelected(chat));
+      });
+    }
+    try {
+      await _loadCinemaWatchedChips();
+    } catch (chipErr) {
+      console.debug("Watched chips load deferred:", chipErr);
+    }
+    if (btnToggleOfflineSaver) {
+      fetch("/api/settings/offline_saver").then((r) => r.json()).then((data) => {
+        if (offlineSaverStateLabel) offlineSaverStateLabel.textContent = data.enabled ? "On" : "Off";
+        btnToggleOfflineSaver.classList.toggle("active", Boolean(data.enabled));
+      }).catch(() => {
+      });
+      btnToggleOfflineSaver.addEventListener("click", async () => {
+        const isCurrentlyActive = btnToggleOfflineSaver.classList.contains("active");
+        const nextState = !isCurrentlyActive;
+        try {
+          const resp = await fetch("/api/settings/offline_saver", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: nextState })
+          });
+          const data = await resp.json();
+          if (offlineSaverStateLabel) offlineSaverStateLabel.textContent = data.enabled ? "On" : "Off";
+          btnToggleOfflineSaver.classList.toggle("active", Boolean(data.enabled));
+          showToast2(
+            data.enabled ? "\u{1F4BE} Stream-to-Disk Auto-Saver Active: Full videos will save to ~/Videos/Telegram_Cinema" : "\u{1F4BE} Stream-to-Disk Auto-Saver Disabled",
+            "info"
+          );
+        } catch (e) {
+          showToast2("Could not toggle offline saver", "warning");
+        }
+      });
+    }
+    loadContinueWatching();
+    if (btnChooseChat) {
+      btnChooseChat.addEventListener("click", () => {
+        chatPicker.open((selectedChat) => {
+          _onCinemaChatSelected(selectedChat);
+        });
+      });
+    }
+    if (btnRefresh) {
+      btnRefresh.addEventListener("click", () => {
+        loadCinemaVideos(_currentChatId, true);
+        loadContinueWatching();
+      });
+    }
+    if (videoSearch) {
+      videoSearch.addEventListener("input", (e) => {
+        _filterCinemaGrid(e.target.value.toLowerCase().trim());
+      });
+    }
+    loadCinemaVideos("me");
+  }
+  function _initCinemaDestinationPicker() {
+    const nameEl = document.getElementById("cinemaCurrentChatName");
+    const typeEl = document.getElementById("cinemaCurrentChatType");
+    const iconEl = document.getElementById("cinemaCurrentChatIcon");
+    if (nameEl) nameEl.textContent = "Saved Messages (Personal Cloud)";
+    if (typeEl) {
+      typeEl.textContent = "CLOUD";
+      typeEl.className = "chat-type-tag";
+    }
+    if (iconEl) iconEl.innerHTML = '<span style="font-size: 1.15rem;">\u2601\uFE0F</span>';
+  }
+  function _onCinemaChatSelected(chat) {
+    _currentChatId = chat.id;
+    _currentChatName = chat.name || "Chat";
+    const nameEl = document.getElementById("cinemaCurrentChatName");
+    const typeEl = document.getElementById("cinemaCurrentChatType");
+    const iconEl = document.getElementById("cinemaCurrentChatIcon");
+    if (nameEl) nameEl.textContent = chat.name;
+    if (typeEl) {
+      typeEl.textContent = (chat.type || "chat").toUpperCase();
+      typeEl.className = `chat-type-tag type-${chat.type || "chat"}`;
+    }
+    if (iconEl) {
+      const icons = { saved_messages: "\u2601\uFE0F", user: "\u{1F464}", channel: "\u{1F4E2}", supergroup: "\u{1F465}", group: "\u{1F465}", bot: "\u{1F916}" };
+      const defaultIcon = icons[chat.type] || "\u{1F4AC}";
+      if (chat.type === "saved_messages") {
+        iconEl.innerHTML = "\u2601\uFE0F";
+      } else {
+        iconEl.innerHTML = `<img src="/api/chats/${encodeURIComponent(chat.id)}/avatar" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${defaultIcon}</span>'">`;
+      }
+    }
+    document.querySelectorAll(".cinema-chip").forEach((c) => {
+      const chipId = c.getAttribute("data-chat-id");
+      c.classList.toggle("active", chipId == chat.id);
+    });
+    loadCinemaVideos(_currentChatId);
+  }
+  window._cinemaOnChatSelected = _onCinemaChatSelected;
+  async function _loadCinemaWatchedChips() {
+    const chipsContainer = document.getElementById("cinemaWatchedChips");
+    if (!chipsContainer) return;
+    chipsContainer.innerHTML = "";
+    try {
+      const resp = await fetch("/api/sniffer/status");
+      const data = await resp.json();
+      const channels = data.watched_channels || [];
+      if (channels.length === 0) {
+        chipsContainer.style.display = "none";
+        return;
+      }
+      chipsContainer.style.display = "flex";
+      channels.forEach((ch) => {
+        fetch(`/api/media/videos/${encodeURIComponent(ch.id)}`).catch(() => {
+        });
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "cinema-chip" + (_currentChatId == ch.id ? " active" : "");
+        chip.setAttribute("data-chat-id", ch.id);
+        const icon = ch.type === "channel" ? "\u{1F4E2}" : ch.type === "supergroup" || ch.type === "group" ? "\u{1F465}" : "\u{1F4AC}";
+        chip.innerHTML = `
+        <img src="/api/chats/${encodeURIComponent(ch.id)}/avatar" alt="" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${icon}</span>'">
+        <span>${escapeHtml(ch.name)}</span>
+      `;
+        chip.addEventListener("click", () => {
+          _onCinemaChatSelected({ id: ch.id, name: ch.name, type: ch.type });
+        });
+        chipsContainer.appendChild(chip);
+      });
+    } catch (err) {
+      console.debug("Could not load watched channels for chips:", err);
+      chipsContainer.style.display = "none";
+    }
+  }
+  async function loadCinemaVideos(chatId = "me", forceRefresh = false) {
+    _currentChatId = chatId;
+    const grid = document.getElementById("cinemaVideoGrid");
+    const seriesPane = document.getElementById("cinemaSeriesPane");
+    const seriesList = document.getElementById("cinemaSeriesList");
+    const countBadge = document.getElementById("cinemaVideoCount");
+    const moviesCountBadge = document.getElementById("cinemaMoviesCount");
+    const seriesCountBadge = document.getElementById("cinemaSeriesCount");
+    const cacheKey = "tg_cinema_cache_" + chatId;
+    let hasRenderedCached = false;
+    if (!forceRefresh) {
+      try {
+        const localCached = localStorage.getItem(cacheKey);
+        if (localCached) {
+          const cachedData = JSON.parse(localCached);
+          if (Array.isArray(cachedData) && cachedData.length > 0) {
+            _cinemaVideos = cachedData;
+            if (countBadge) countBadge.textContent = `${_cinemaVideos.length} Videos`;
+            renderCinemaGrid(_cinemaVideos);
+            hasRenderedCached = true;
+          }
+        }
+      } catch (e) {
+      }
+    }
+    if (!hasRenderedCached) {
+      _cinemaVideos = [];
+      if (countBadge) countBadge.textContent = "Scanning...";
+      if (moviesCountBadge) moviesCountBadge.textContent = "Loading...";
+      if (seriesCountBadge) seriesCountBadge.textContent = "Loading...";
+      if (seriesPane) seriesPane.classList.remove("hidden");
+      if (grid) {
+        grid.innerHTML = `
         <div class="cinema-loading-container" style="grid-column: 1 / -1; padding: 32px 16px; text-align: center;">
           <div class="mtproto-pulse-loader">
             <div class="pulse-ring"></div>
@@ -238,7 +2787,10 @@
         <div class="cinema-skeleton-card"></div>
         <div class="cinema-skeleton-card"></div>
         <div class="cinema-skeleton-card"></div>
-      `),a&&(a.innerHTML=`
+      `;
+      }
+      if (seriesList) {
+        seriesList.innerHTML = `
         <div class="series-skeleton-card" style="padding: 16px;">
           <div style="height: 16px; width: 60%; background: rgba(255,255,255,0.08); border-radius: 4px; margin-bottom: 12px;"></div>
           <div style="height: 12px; width: 40%; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 16px;"></div>
@@ -251,37 +2803,232 @@
           <div style="height: 16px; width: 50%; background: rgba(255,255,255,0.08); border-radius: 4px; margin-bottom: 12px;"></div>
           <div style="height: 12px; width: 35%; background: rgba(255,255,255,0.05); border-radius: 4px;"></div>
         </div>
-      `));try{let h=e?`/api/media/videos/${encodeURIComponent(i)}?force_refresh=true`:`/api/media/videos/${encodeURIComponent(i)}`,w=await fetch(h);if(!w.ok)throw new Error(`HTTP ${w.status}`);k=(await w.json()).videos||[];try{localStorage.setItem(u,JSON.stringify(k))}catch{}s&&(s.textContent=`${k.length} Videos`),J(k)}catch(h){!l&&t&&(t.innerHTML=`
+      `;
+      }
+    }
+    try {
+      const url = forceRefresh ? `/api/media/videos/${encodeURIComponent(chatId)}?force_refresh=true` : `/api/media/videos/${encodeURIComponent(chatId)}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      _cinemaVideos = data.videos || [];
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(_cinemaVideos));
+      } catch (e) {
+      }
+      if (countBadge) {
+        countBadge.textContent = `${_cinemaVideos.length} Videos`;
+      }
+      renderCinemaGrid(_cinemaVideos);
+    } catch (err) {
+      if (!hasRenderedCached && grid) {
+        grid.innerHTML = `
         <div class="cinema-empty">
           <span style="font-size: 2.2rem; margin-bottom: 8px;">\u26A0\uFE0F</span>
           <p style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">Could not load video archive</p>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">${p(h.message)}</p>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml(err.message)}</p>
           <button class="btn-secondary" style="margin-top: 14px; padding: 6px 14px; font-size: 0.8rem;" onclick="window._reloadCinema()">
             \u{1F504} Try Again
           </button>
         </div>
-      `,a&&(a.innerHTML=""),n&&n.classList.add("hidden"))}}window._reloadCinema=()=>G(z,!0);function $e(i,e){if(!i||!e)return;let t=null,n=0,a=5;i.addEventListener("mouseenter",()=>{let s=i.querySelector("img"),o=s?s.src:null;n=0,t=setInterval(()=>{n=(n+1)%a;let u=`/api/media/preview/${encodeURIComponent(e.chat_id)}/${e.message_id}/${n}`,l=new Image;l.onload=()=>{if(t){if(!s){let h=i.querySelector(".cinema-hub-thumb-fallback, .series-thumb-fallback");h&&(h.style.display="none"),s=document.createElement("img"),s.className="video-thumb-img",s.alt="",i.prepend(s)}s.src=u,s.style.display="block"}},l.src=u},420);let r=()=>{t&&(clearInterval(t),t=null),i.removeEventListener("mouseleave",r),s&&o&&(s.src=o)};i.addEventListener("mouseleave",r)})}function Ne(i){let e=D?{name:D,username:D}:null,t=O(i,e)||i,n=/^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}|ep\s*\d{1,3}|episode\s*\d{1,3}|part\s*\d{1,2}))(.*)$/i,a=t.match(n);if(a){let o=(a[1]||"").replace(/\.\w+$/,"").replace(/[._\-\(\)]+$/,"").trim();o||(o=t.replace(/\.\w+$/,"").trim());let r=O(o,e).replace(/\b(19\d\d|20\d\d)\b/g," ").replace(/[\(\)\[\]\{\}]/g," ").replace(/^(?:org|com|net|tv|hd|link|linkzz|official)\s+/i,"").replace(/\s+/g," ").trim();r||(r="TV Series");let u=(a[2]||"S01").toUpperCase().replace(/\s+/g," "),l=(a[3]||"EP01").toUpperCase().replace(/\s+/g," "),h=parseInt(u.replace(/\D/g,""))||1,w=`Season ${h}`,d=t.replace(/\(\s*\)/g,"").replace(/\[\s*\]/g,"").replace(/\s+/g," ").trim();return{isSeries:!0,canonicalTitle:r,seasonNum:h,seasonLabel:w,epLabel:l,cleanTitle:d}}return{isSeries:!1,cleanTitle:t.replace(/\(\s*\)/g,"").replace(/\[\s*\]/g,"").replace(/\s+/g," ").trim()}}function J(i){let e=document.getElementById("cinemaVideoGrid"),t=document.getElementById("cinemaSeriesPane"),n=document.getElementById("cinemaSeriesList"),a=document.getElementById("cinemaMoviesCount"),s=document.getElementById("cinemaSeriesCount");if(!e)return;if(e.innerHTML="",n&&(n.innerHTML=""),i.length===0){t&&t.classList.add("hidden"),e.innerHTML=`
+      `;
+        if (seriesList) seriesList.innerHTML = "";
+        if (seriesPane) seriesPane.classList.add("hidden");
+      }
+    }
+  }
+  window._reloadCinema = () => loadCinemaVideos(_currentChatId, true);
+  function _attachHoverScrubber(containerEl, videoItem) {
+    if (!containerEl || !videoItem) return;
+    let hoverTimer = null;
+    let currentFrame = 0;
+    const totalFrames = 5;
+    containerEl.addEventListener("mouseenter", () => {
+      let imgEl = containerEl.querySelector("img");
+      const originalSrc = imgEl ? imgEl.src : null;
+      currentFrame = 0;
+      hoverTimer = setInterval(() => {
+        currentFrame = (currentFrame + 1) % totalFrames;
+        const previewUrl = `/api/media/preview/${encodeURIComponent(videoItem.chat_id)}/${videoItem.message_id}/${currentFrame}`;
+        const nextImg = new Image();
+        nextImg.onload = () => {
+          if (hoverTimer) {
+            if (!imgEl) {
+              const fallback = containerEl.querySelector(".cinema-hub-thumb-fallback, .series-thumb-fallback");
+              if (fallback) fallback.style.display = "none";
+              imgEl = document.createElement("img");
+              imgEl.className = "video-thumb-img";
+              imgEl.alt = "";
+              containerEl.prepend(imgEl);
+            }
+            imgEl.src = previewUrl;
+            imgEl.style.display = "block";
+          }
+        };
+        nextImg.src = previewUrl;
+      }, 420);
+      const onLeave = () => {
+        if (hoverTimer) {
+          clearInterval(hoverTimer);
+          hoverTimer = null;
+        }
+        containerEl.removeEventListener("mouseleave", onLeave);
+        if (imgEl && originalSrc) {
+          imgEl.src = originalSrc;
+        }
+      };
+      containerEl.addEventListener("mouseleave", onLeave);
+    });
+  }
+  function _extractSeriesInfo(filename) {
+    const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
+    const clean = cleanFileName(filename, channelContext) || filename;
+    const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}|ep\s*\d{1,3}|episode\s*\d{1,3}|part\s*\d{1,2}))(.*)$/i;
+    const m = clean.match(regex);
+    if (m) {
+      let rawName = (m[1] || "").replace(/\.\w+$/, "").replace(/[._\-\(\)]+$/, "").trim();
+      if (!rawName) rawName = clean.replace(/\.\w+$/, "").trim();
+      let canonical = cleanFileName(rawName, channelContext).replace(/\b(19\d\d|20\d\d)\b/g, " ").replace(/[\(\)\[\]\{\}]/g, " ").replace(/^(?:org|com|net|tv|hd|link|linkzz|official)\s+/i, "").replace(/\s+/g, " ").trim();
+      if (!canonical) canonical = "TV Series";
+      const sSeason = (m[2] || "S01").toUpperCase().replace(/\s+/g, " ");
+      const sEp = (m[3] || "EP01").toUpperCase().replace(/\s+/g, " ");
+      const seasonNum = parseInt(sSeason.replace(/\D/g, "")) || 1;
+      const seasonLabel = `Season ${seasonNum}`;
+      const cleanedTitle2 = clean.replace(/\(\s*\)/g, "").replace(/\[\s*\]/g, "").replace(/\s+/g, " ").trim();
+      return {
+        isSeries: true,
+        canonicalTitle: canonical,
+        seasonNum,
+        seasonLabel,
+        epLabel: sEp,
+        cleanTitle: cleanedTitle2
+      };
+    }
+    const cleanedTitle = clean.replace(/\(\s*\)/g, "").replace(/\[\s*\]/g, "").replace(/\s+/g, " ").trim();
+    return { isSeries: false, cleanTitle: cleanedTitle };
+  }
+  function renderCinemaGrid(videos) {
+    const moviesGrid = document.getElementById("cinemaVideoGrid");
+    const seriesPane = document.getElementById("cinemaSeriesPane");
+    const seriesList = document.getElementById("cinemaSeriesList");
+    const moviesCountBadge = document.getElementById("cinemaMoviesCount");
+    const seriesCountBadge = document.getElementById("cinemaSeriesCount");
+    if (!moviesGrid) return;
+    moviesGrid.innerHTML = "";
+    if (seriesList) seriesList.innerHTML = "";
+    if (videos.length === 0) {
+      if (seriesPane) seriesPane.classList.add("hidden");
+      moviesGrid.innerHTML = `
       <div class="cinema-empty">
         <span style="font-size: 2.4rem; margin-bottom: 8px;">\u{1F3AC}</span>
         <p style="font-size: 1rem; font-weight: 600; color: var(--text-main);">No video files found</p>
         <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">This channel does not contain any video documents or movies</p>
       </div>
-    `,a&&(a.textContent="0 Movies"),s&&(s.textContent="0 Series");return}let o=new Map,r=[],u=D?{name:D,username:D}:null;i.forEach(d=>{let g=Ne(d.filename);if(g.isSeries){let f=g.canonicalTitle.toLowerCase();o.has(f)||o.set(f,{canonicalTitle:g.canonicalTitle,episodes:[]}),o.get(f).episodes.push({...d,...g})}else r.push({...d,...g})});let l=new Map;Array.from(o.keys()).sort((d,g)=>g.length-d.length).forEach(d=>{let g=o.get(d);if(!g)return;let f=!1;for(let[c,m]of l.entries())if(c===d||c.includes(d)||d.includes(c)){m.episodes.push(...g.episodes),g.canonicalTitle.length>m.canonicalTitle.length&&(m.canonicalTitle=g.canonicalTitle),f=!0;break}f||l.set(d,g)});let w=[];if(l.forEach(d=>{if(d.episodes.length>1){let g=new Map;d.episodes.forEach(C=>{let v=C.seasonLabel||"Season 1";g.has(v)||g.set(v,[]),g.get(v).push(C)}),g.forEach(C=>{C.sort((v,b)=>v.filename.localeCompare(b.filename,void 0,{numeric:!0}))});let f=Array.from(g.keys()).sort((C,v)=>{let b=parseInt(C.replace(/\D/g,""))||1,T=parseInt(v.replace(/\D/g,""))||1;return b-T}),c=d.episodes.reduce((C,v)=>C+(v.file_size||0),0),m=d.episodes.find(C=>C.has_thumb)?.thumb_url;w.push({showTitle:d.canonicalTitle,totalEpisodes:d.episodes.length,totalBytes:c,leadThumb:m,seasonsMap:g,seasonKeys:f,activeSeason:f[0]||"Season 1"})}else r.push(...d.episodes)}),a&&(a.textContent=`${r.length} Movies`),s&&(s.textContent=`${w.length} Shows`),t&&n&&(w.length===0?t.classList.add("hidden"):(t.classList.remove("hidden"),w.forEach((d,g)=>{let f=d.activeSeason,c=document.createElement("div");c.className="series-showcase-card";let m=d.seasonKeys.length>1;c.innerHTML=`
+    `;
+      if (moviesCountBadge) moviesCountBadge.textContent = "0 Movies";
+      if (seriesCountBadge) seriesCountBadge.textContent = "0 Series";
+      return;
+    }
+    const rawShowsMap = /* @__PURE__ */ new Map();
+    const standaloneList = [];
+    const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
+    videos.forEach((v) => {
+      const sInfo = _extractSeriesInfo(v.filename);
+      if (sInfo.isSeries) {
+        const key = sInfo.canonicalTitle.toLowerCase();
+        if (!rawShowsMap.has(key)) {
+          rawShowsMap.set(key, {
+            canonicalTitle: sInfo.canonicalTitle,
+            episodes: []
+          });
+        }
+        rawShowsMap.get(key).episodes.push({ ...v, ...sInfo });
+      } else {
+        standaloneList.push({ ...v, ...sInfo });
+      }
+    });
+    const mergedShowsMap = /* @__PURE__ */ new Map();
+    const rawKeys = Array.from(rawShowsMap.keys()).sort((a, b) => b.length - a.length);
+    rawKeys.forEach((key) => {
+      const showData = rawShowsMap.get(key);
+      if (!showData) return;
+      let mergedIntoExisting = false;
+      for (const [existingKey, existingData] of mergedShowsMap.entries()) {
+        if (existingKey === key || existingKey.includes(key) || key.includes(existingKey)) {
+          existingData.episodes.push(...showData.episodes);
+          if (showData.canonicalTitle.length > existingData.canonicalTitle.length) {
+            existingData.canonicalTitle = showData.canonicalTitle;
+          }
+          mergedIntoExisting = true;
+          break;
+        }
+      }
+      if (!mergedIntoExisting) {
+        mergedShowsMap.set(key, showData);
+      }
+    });
+    const validShows = [];
+    mergedShowsMap.forEach((show) => {
+      if (show.episodes.length > 1) {
+        const seasonsMap = /* @__PURE__ */ new Map();
+        show.episodes.forEach((ep) => {
+          const sLabel = ep.seasonLabel || "Season 1";
+          if (!seasonsMap.has(sLabel)) {
+            seasonsMap.set(sLabel, []);
+          }
+          seasonsMap.get(sLabel).push(ep);
+        });
+        seasonsMap.forEach((eps) => {
+          eps.sort((a, b) => a.filename.localeCompare(b.filename, void 0, { numeric: true }));
+        });
+        const sortedSeasonKeys = Array.from(seasonsMap.keys()).sort((a, b) => {
+          const numA = parseInt(a.replace(/\D/g, "")) || 1;
+          const numB = parseInt(b.replace(/\D/g, "")) || 1;
+          return numA - numB;
+        });
+        const totalBytes = show.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
+        const leadThumb = show.episodes.find((e) => e.has_thumb)?.thumb_url;
+        validShows.push({
+          showTitle: show.canonicalTitle,
+          totalEpisodes: show.episodes.length,
+          totalBytes,
+          leadThumb,
+          seasonsMap,
+          seasonKeys: sortedSeasonKeys,
+          activeSeason: sortedSeasonKeys[0] || "Season 1"
+        });
+      } else {
+        standaloneList.push(...show.episodes);
+      }
+    });
+    if (moviesCountBadge) moviesCountBadge.textContent = `${standaloneList.length} Movies`;
+    if (seriesCountBadge) seriesCountBadge.textContent = `${validShows.length} Shows`;
+    if (seriesPane && seriesList) {
+      if (validShows.length === 0) {
+        seriesPane.classList.add("hidden");
+      } else {
+        seriesPane.classList.remove("hidden");
+        validShows.forEach((show, showIdx) => {
+          let currentSeason = show.activeSeason;
+          const showCard = document.createElement("div");
+          showCard.className = "series-showcase-card";
+          const hasMultipleSeasons = show.seasonKeys.length > 1;
+          showCard.innerHTML = `
           <div class="series-showcase-hero">
             <div class="series-showcase-poster">
-              ${d.leadThumb?`<img src="${d.leadThumb}" class="series-poster-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'series-thumb-fallback\\'>\u{1F3AC}</div>'">`:'<div class="series-thumb-fallback">\u{1F3AC}</div>'}
+              ${show.leadThumb ? `<img src="${show.leadThumb}" class="series-poster-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'series-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="series-thumb-fallback">\u{1F3AC}</div>`}
             </div>
             <div class="series-showcase-info">
               <div class="series-showcase-tags">
-                <span class="series-tag-pill active-season-tag" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid rgba(0, 206, 201, 0.4);">${p(f)}</span>
-                ${m?`<span class="series-tag-pill" style="background: rgba(108, 92, 231, 0.2); color: var(--accent-primary); border: 1px solid rgba(108, 92, 231, 0.4);">${d.seasonKeys.length} Seasons</span>`:""}
-                <span class="series-tag-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border: 1px solid rgba(255, 121, 63, 0.4);">${d.totalEpisodes} Episodes Total</span>
-                <span style="font-size: 0.68rem; color: var(--text-muted);">${x(d.totalBytes)}</span>
+                <span class="series-tag-pill active-season-tag" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid rgba(0, 206, 201, 0.4);">${escapeHtml(currentSeason)}</span>
+                ${hasMultipleSeasons ? `<span class="series-tag-pill" style="background: rgba(108, 92, 231, 0.2); color: var(--accent-primary); border: 1px solid rgba(108, 92, 231, 0.4);">${show.seasonKeys.length} Seasons</span>` : ""}
+                <span class="series-tag-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border: 1px solid rgba(255, 121, 63, 0.4);">${show.totalEpisodes} Episodes Total</span>
+                <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(show.totalBytes)}</span>
               </div>
-              <h4 class="series-showcase-title" title="${p(d.showTitle)}">${p(d.showTitle)}</h4>
+              <h4 class="series-showcase-title" title="${escapeHtml(show.showTitle)}">${escapeHtml(show.showTitle)}</h4>
               <div class="series-showcase-actions">
                 <button class="series-btn-binge btn-binge-all" type="button" title="Play full active season sequentially in VLC">
-                  <span>\u25B6</span><span class="binge-btn-label">Binge ${p(f)}</span>
+                  <span>\u25B6</span><span class="binge-btn-label">Binge ${escapeHtml(currentSeason)}</span>
                 </button>
                 <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 5px 9px; font-size: 0.74rem;" title="Download Season .m3u playlist">
                   <span>\u{1F4E5}</span><span>Playlist</span>
@@ -293,31 +3040,47 @@
             </div>
           </div>
 
-          ${m?`
+          ${hasMultipleSeasons ? `
             <div class="series-season-tabs">
-              ${d.seasonKeys.map(E=>{let _=d.seasonsMap.get(E)||[];return`
-                  <button class="series-season-tab ${E===f?"active":""}" type="button" data-season="${p(E)}">
-                    ${p(E)} (${_.length} EPs)
+              ${show.seasonKeys.map((sKey) => {
+            const sEps = show.seasonsMap.get(sKey) || [];
+            const isActive = sKey === currentSeason;
+            return `
+                  <button class="series-season-tab ${isActive ? "active" : ""}" type="button" data-season="${escapeHtml(sKey)}">
+                    ${escapeHtml(sKey)} (${sEps.length} EPs)
                   </button>
-                `}).join("")}
+                `;
+          }).join("")}
             </div>
-          `:""}
+          ` : ""}
 
           <div class="series-episode-drawer">
-            <div class="series-episode-track" id="episodeTrack_${g}">
+            <div class="series-episode-track" id="episodeTrack_${showIdx}">
               <!-- Rendered via updateSeasonTrack -->
             </div>
           </div>
-        `;let C=E=>{f=E;let _=c.querySelector(`#episodeTrack_${g}`),L=c.querySelector(".active-season-tag"),B=c.querySelector(".binge-btn-label");L&&(L.textContent=E),B&&(B.textContent=`Binge ${E}`);let N=d.seasonsMap.get(E)||[];_&&(_.innerHTML=N.map((I,Y)=>{let F=I.duration?Q(I.duration):"";return`
-                <div class="series-ep-card" data-ep-idx="${Y}">
+        `;
+          const updateSeasonTrack = (seasonName) => {
+            currentSeason = seasonName;
+            const track = showCard.querySelector(`#episodeTrack_${showIdx}`);
+            const seasonTag = showCard.querySelector(".active-season-tag");
+            const bingeLabel = showCard.querySelector(".binge-btn-label");
+            if (seasonTag) seasonTag.textContent = seasonName;
+            if (bingeLabel) bingeLabel.textContent = `Binge ${seasonName}`;
+            const episodes = show.seasonsMap.get(seasonName) || [];
+            if (track) {
+              track.innerHTML = episodes.map((ep, epIdx) => {
+                const dur = ep.duration ? _formatDuration(ep.duration) : "";
+                return `
+                <div class="series-ep-card" data-ep-idx="${epIdx}">
                   <div class="series-ep-thumb" title="Hover to preview frames, Click to stream in VLC">
-                    ${I.has_thumb?`<img src="${I.thumb_url}" class="ep-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'series-thumb-fallback\\'>\u{1F3AC}</div>'">`:'<div class="series-thumb-fallback">\u{1F3AC}</div>'}
-                    <span class="series-ep-badge">${p(I.epLabel)}</span>
-                    ${F?`<span class="video-duration-pill">${F}</span>`:""}
+                    ${ep.has_thumb ? `<img src="${ep.thumb_url}" class="ep-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'series-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="series-thumb-fallback">\u{1F3AC}</div>`}
+                    <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
+                    ${dur ? `<span class="video-duration-pill">${dur}</span>` : ""}
                   </div>
                   <div class="series-ep-meta">
-                    <span class="series-ep-title" title="${p(I.cleanTitle)}">${p(I.cleanTitle)}</span>
-                    <span style="font-size: 0.68rem; color: var(--text-muted);">${x(I.file_size)}</span>
+                    <span class="series-ep-title" title="${escapeHtml(ep.cleanTitle)}">${escapeHtml(ep.cleanTitle)}</span>
+                    <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(ep.file_size)}</span>
                   </div>
                   <div class="series-ep-actions">
                     <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.7rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
@@ -328,25 +3091,129 @@
                     </button>
                   </div>
                 </div>
-              `}).join(""),_.querySelectorAll(".series-ep-card").forEach((I,Y)=>{let F=N[Y],V=I.querySelector(".series-ep-thumb"),ue=I.querySelector(".btn-ep-vlc"),he=I.querySelector(".btn-ep-fdm");V&&$e(V,F),V&&V.addEventListener("click",()=>q(F,"auto",I)),ue&&ue.addEventListener("click",()=>q(F,"auto",I)),he&&he.addEventListener("click",()=>Te(F))}))};C(f),c.querySelectorAll(".series-season-tab").forEach(E=>{E.addEventListener("click",_=>{_.stopPropagation();let L=E.getAttribute("data-season");if(c.querySelectorAll(".series-season-tab").forEach(B=>B.classList.remove("active")),E.classList.add("active"),C(L),!c.classList.contains("expanded")){c.classList.add("expanded");let B=c.querySelector(".ep-toggle-label");B&&(B.textContent="\u25B4 Hide")}})});let v=c.querySelector(".btn-toggle-episodes");v&&v.addEventListener("click",E=>{E.stopPropagation(),c.classList.toggle("expanded");let _=c.classList.contains("expanded"),L=v.querySelector(".ep-toggle-label");L&&(L.textContent=_?"\u25B4 Hide":"\u25BE Episodes")});let b=c.querySelector(".btn-binge-all");b&&b.addEventListener("click",E=>{E.stopPropagation(),b.classList.add("playing-pulse"),setTimeout(()=>b.classList.remove("playing-pulse"),1200);let _=d.seasonsMap.get(f)||[];y(`\u{1F37F} Launching ${d.showTitle} (${f} \u2022 ${_.length} Episodes) in VLC...`,"info"),fetch("/api/media/vlc/play_batch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:`${d.showTitle} - ${f}`,items:_})}).then(L=>L.json()).then(L=>{L.launched&&y(`\u{1F3AC} Streaming ${d.showTitle} (${f}) in VLC Player!`,"success")}).catch(L=>y(`Playback error: ${L.message}`,"error"))});let T=c.querySelector(".btn-binge-playlist");T&&T.addEventListener("click",async E=>{E.stopPropagation();let _=d.seasonsMap.get(f)||[];try{let B=await(await fetch("/api/media/vlc/batch_playlist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:`${d.showTitle}_${f}`,items:_})})).blob(),N=window.URL.createObjectURL(B),I=document.createElement("a");I.href=N,I.download=`${d.showTitle}_${f}.m3u`,document.body.appendChild(I),I.click(),I.remove(),y(`\u{1F4E5} Downloaded ${d.showTitle} season playlist`,"success")}catch(L){y(`Error creating playlist: ${L.message}`,"error")}}),n.appendChild(c)}))),r.length===0&&validSeriesGroups.length>0){e.innerHTML=`
+              `;
+              }).join("");
+              track.querySelectorAll(".series-ep-card").forEach((epCard, idx) => {
+                const ep = episodes[idx];
+                const epThumb = epCard.querySelector(".series-ep-thumb");
+                const epVlc = epCard.querySelector(".btn-ep-vlc");
+                const epFdm = epCard.querySelector(".btn-ep-fdm");
+                if (epThumb) _attachHoverScrubber(epThumb, ep);
+                if (epThumb) epThumb.addEventListener("click", () => playInVlc(ep, "auto", epCard));
+                if (epVlc) epVlc.addEventListener("click", () => playInVlc(ep, "auto", epCard));
+                if (epFdm) epFdm.addEventListener("click", () => triggerFdm(ep));
+              });
+            }
+          };
+          updateSeasonTrack(currentSeason);
+          showCard.querySelectorAll(".series-season-tab").forEach((tabBtn) => {
+            tabBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              const sName = tabBtn.getAttribute("data-season");
+              showCard.querySelectorAll(".series-season-tab").forEach((t) => t.classList.remove("active"));
+              tabBtn.classList.add("active");
+              updateSeasonTrack(sName);
+              if (!showCard.classList.contains("expanded")) {
+                showCard.classList.add("expanded");
+                const lbl = showCard.querySelector(".ep-toggle-label");
+                if (lbl) lbl.textContent = "\u25B4 Hide";
+              }
+            });
+          });
+          const toggleBtn = showCard.querySelector(".btn-toggle-episodes");
+          if (toggleBtn) {
+            toggleBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              showCard.classList.toggle("expanded");
+              const isExp = showCard.classList.contains("expanded");
+              const lbl = toggleBtn.querySelector(".ep-toggle-label");
+              if (lbl) lbl.textContent = isExp ? "\u25B4 Hide" : "\u25BE Episodes";
+            });
+          }
+          const bingeBtn = showCard.querySelector(".btn-binge-all");
+          if (bingeBtn) {
+            bingeBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              bingeBtn.classList.add("playing-pulse");
+              setTimeout(() => bingeBtn.classList.remove("playing-pulse"), 1200);
+              const eps = show.seasonsMap.get(currentSeason) || [];
+              showToast2(`\u{1F37F} Launching ${show.showTitle} (${currentSeason} \u2022 ${eps.length} Episodes) in VLC...`, "info");
+              fetch("/api/media/vlc/play_batch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  title: `${show.showTitle} - ${currentSeason}`,
+                  items: eps
+                })
+              }).then((res) => res.json()).then((data) => {
+                if (data.launched) {
+                  showToast2(`\u{1F3AC} Streaming ${show.showTitle} (${currentSeason}) in VLC Player!`, "success");
+                }
+              }).catch((err) => showToast2(`Playback error: ${err.message}`, "error"));
+            });
+          }
+          const playlistBtn = showCard.querySelector(".btn-binge-playlist");
+          if (playlistBtn) {
+            playlistBtn.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              const eps = show.seasonsMap.get(currentSeason) || [];
+              try {
+                const res = await fetch("/api/media/vlc/batch_playlist", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    title: `${show.showTitle}_${currentSeason}`,
+                    items: eps
+                  })
+                });
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${show.showTitle}_${currentSeason}.m3u`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                showToast2(`\u{1F4E5} Downloaded ${show.showTitle} season playlist`, "success");
+              } catch (err) {
+                showToast2(`Error creating playlist: ${err.message}`, "error");
+              }
+            });
+          }
+          seriesList.appendChild(showCard);
+        });
+      }
+    }
+    if (standaloneList.length === 0 && validSeriesGroups.length > 0) {
+      moviesGrid.innerHTML = `
       <div class="cinema-empty" style="padding: 32px 12px;">
         <span style="font-size: 1.8rem; margin-bottom: 6px;">\u{1F4FA}</span>
         <p style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">All videos are TV series</p>
         <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Browse seasons in the TV Series tab on the right</p>
       </div>
-    `;return}r.forEach((d,g)=>{let f=document.createElement("div");f.className="cinema-hub-card",f.id=`videoCard_${g}`;let c=O(d.filename)||d.filename,m=d.duration?Q(d.duration):"",C=d.is_mkv||/\.(mkv|avi|ts|flv|wmv|vob)$/i.test(d.filename);f.innerHTML=`
+    `;
+      return;
+    }
+    standaloneList.forEach((v, idx) => {
+      const card = document.createElement("div");
+      card.className = "cinema-hub-card";
+      card.id = `videoCard_${idx}`;
+      const cleanTitle = cleanFileName(v.filename) || v.filename;
+      const durationStr = v.duration ? _formatDuration(v.duration) : "";
+      const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+      card.innerHTML = `
       <div class="cinema-hub-thumb" title="Hover to preview frames, Click to stream in VLC">
-        ${d.has_thumb?`<img src="${d.thumb_url}" class="video-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">`:'<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>'}
-        ${m?`<span class="video-duration-pill">${m}</span>`:""}
+        ${v.has_thumb ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
+        ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ""}
       </div>
       <div class="cinema-hub-meta">
-        <span class="cinema-hub-title" title="${p(c)}">${p(c)}</span>
+        <span class="cinema-hub-title" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
         <div class="cinema-hub-sub">
-          <span>${x(d.file_size)}</span>
+          <span>${formatBytes(v.file_size)}</span>
           <span>\u2022</span>
-          <span style="color: ${C?"#ff793f":"var(--accent-secondary)"}; font-weight: 600;">${C?"MKV":"MP4"}</span>
+          <span style="color: ${isMkv ? "#ff793f" : "var(--accent-secondary)"}; font-weight: 600;">${isMkv ? "MKV" : "MP4"}</span>
           <span>\u2022</span>
-          <span>${d.date?new Date(d.date*1e3).toLocaleDateString():"Cloud"}</span>
+          <span>${v.date ? new Date(v.date * 1e3).toLocaleDateString() : "Cloud"}</span>
         </div>
       </div>
       <div class="cinema-hub-card-actions">
@@ -363,25 +3230,1043 @@
           <span>\u{1F4E5}</span>
         </button>
       </div>
-    `;let v=f.querySelector(".cinema-hub-thumb"),b=f.querySelector(".btn-card-vlc");v&&$e(v,d),v&&v.addEventListener("click",()=>q(d,"auto",f)),b&&b.addEventListener("click",()=>q(d,"auto",f));let T=f.querySelector(".btn-card-fdm");T&&T.addEventListener("click",()=>Te(d));let E=f.querySelector(".btn-card-copy");E&&E.addEventListener("click",()=>{let L=`${window.location.origin}${d.stream_url}`;navigator.clipboard.writeText(L).then(()=>{y("\u{1F4CB} Stream URL copied to clipboard!","success")})});let _=f.querySelector(".btn-card-m3u");_&&_.addEventListener("click",()=>{let L=`/api/media/vlc/playlist/${encodeURIComponent(d.chat_id)}/${d.message_id}/${encodeURIComponent(d.filename)}.m3u`,B=document.createElement("a");B.href=L,B.download=`${d.filename}.m3u`,document.body.appendChild(B),B.click(),B.remove(),y("\u{1F4E5} Downloaded VLC .m3u playlist","success")}),e.appendChild(f)})}function Oe(i){if(!i){J(k);return}let e=k.filter(t=>t.filename.toLowerCase().includes(i));J(e)}async function q(i,e="auto",t=null){t&&(t.classList.add("playing-pulse"),setTimeout(()=>t.classList.remove("playing-pulse"),1200)),y(`\u{1F3AC} Launching "${i.filename}" in VLC Player...`,"info");try{let a=await(await fetch("/api/media/vlc/play",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:i.chat_id,message_id:i.message_id,filename:i.filename,stream_url:i.stream_url,player:e})})).json();if(a.launched){let s=`\u{1F3AC} Streaming "${i.filename}" in VLC!`;a.resume_seconds>0&&(s+=` (Resumed at ${Q(a.resume_seconds)})`),a.has_subtitles&&(s+=" \u{1F4DD} Subtitles auto-loaded!"),y(s,"success"),setTimeout(()=>X(),1500)}else if(a.playlist_url){let s=document.createElement("a");s.href=a.playlist_url,s.download=`${i.filename}.m3u`,document.body.appendChild(s),s.click(),s.remove(),y("\u{1F4E5} VLC not detected locally. Downloaded playlist!","info")}}catch(n){y(`Player launch error: ${n.message}`,"warning")}}async function X(){let i=document.getElementById("continueWatchingSection"),e=document.getElementById("continueWatchingCount"),t=document.getElementById("continueWatchingCarousel");if(!(!i||!t))try{let n=await fetch("/api/media/continue_watching");if(!n.ok)return;let a=await n.json();if(!Array.isArray(a)||a.length===0){i.style.display="none";return}i.style.display="block",e&&(e.textContent=`${a.length} In Progress`),t.innerHTML="",a.forEach(s=>{let o=document.createElement("div");o.className="continue-card glass-panel";let r=Math.min(100,Math.max(2,Math.round(s.progress_percent||0))),u=Math.max(0,(s.duration_seconds||0)-(s.last_position_seconds||0)),l=Math.max(1,Math.round(u/60)),h=l>60?`${Math.floor(l/60)}h ${l%60}m left`:`${l}m left`,w=Q(s.last_position_seconds),d=s.thumbnail_url||`/api/media/preview/${encodeURIComponent(s.chat_id)}/${s.message_id}/0`;o.innerHTML=`
+    `;
+      const thumbEl = card.querySelector(".cinema-hub-thumb");
+      const vlcBtn = card.querySelector(".btn-card-vlc");
+      if (thumbEl) _attachHoverScrubber(thumbEl, v);
+      if (thumbEl) thumbEl.addEventListener("click", () => playInVlc(v, "auto", card));
+      if (vlcBtn) vlcBtn.addEventListener("click", () => playInVlc(v, "auto", card));
+      const fdmBtn = card.querySelector(".btn-card-fdm");
+      if (fdmBtn) {
+        fdmBtn.addEventListener("click", () => triggerFdm(v));
+      }
+      const copyBtn = card.querySelector(".btn-card-copy");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", () => {
+          const fullUrl = `${window.location.origin}${v.stream_url}`;
+          navigator.clipboard.writeText(fullUrl).then(() => {
+            showToast2("\u{1F4CB} Stream URL copied to clipboard!", "success");
+          });
+        });
+      }
+      const m3uBtn = card.querySelector(".btn-card-m3u");
+      if (m3uBtn) {
+        m3uBtn.addEventListener("click", () => {
+          const url = `/api/media/vlc/playlist/${encodeURIComponent(v.chat_id)}/${v.message_id}/${encodeURIComponent(v.filename)}.m3u`;
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${v.filename}.m3u`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          showToast2("\u{1F4E5} Downloaded VLC .m3u playlist", "success");
+        });
+      }
+      moviesGrid.appendChild(card);
+    });
+  }
+  function _filterCinemaGrid(query) {
+    if (!query) {
+      renderCinemaGrid(_cinemaVideos);
+      return;
+    }
+    const filtered = _cinemaVideos.filter((v) => v.filename.toLowerCase().includes(query));
+    renderCinemaGrid(filtered);
+  }
+  async function playInVlc(v, playerType = "auto", element = null) {
+    if (element) {
+      element.classList.add("playing-pulse");
+      setTimeout(() => element.classList.remove("playing-pulse"), 1200);
+    }
+    showToast2(`\u{1F3AC} Launching "${v.filename}" in VLC Player...`, "info");
+    try {
+      const resp = await fetch("/api/media/vlc/play", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: v.chat_id,
+          message_id: v.message_id,
+          filename: v.filename,
+          stream_url: v.stream_url,
+          player: playerType
+        })
+      });
+      const data = await resp.json();
+      if (data.launched) {
+        let msg = `\u{1F3AC} Streaming "${v.filename}" in VLC!`;
+        if (data.resume_seconds > 0) {
+          msg += ` (Resumed at ${_formatDuration(data.resume_seconds)})`;
+        }
+        if (data.has_subtitles) {
+          msg += ` \u{1F4DD} Subtitles auto-loaded!`;
+        }
+        showToast2(msg, "success");
+        setTimeout(() => loadContinueWatching(), 1500);
+      } else if (data.playlist_url) {
+        const a = document.createElement("a");
+        a.href = data.playlist_url;
+        a.download = `${v.filename}.m3u`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast2(`\u{1F4E5} VLC not detected locally. Downloaded playlist!`, "info");
+      }
+    } catch (e) {
+      showToast2(`Player launch error: ${e.message}`, "warning");
+    }
+  }
+  async function loadContinueWatching() {
+    const section = document.getElementById("continueWatchingSection");
+    const countBadge = document.getElementById("continueWatchingCount");
+    const carousel = document.getElementById("continueWatchingCarousel");
+    if (!section || !carousel) return;
+    try {
+      const resp = await fetch("/api/media/continue_watching");
+      if (!resp.ok) return;
+      const items = await resp.json();
+      if (!Array.isArray(items) || items.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+      section.style.display = "block";
+      if (countBadge) countBadge.textContent = `${items.length} In Progress`;
+      carousel.innerHTML = "";
+      items.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "continue-card glass-panel";
+        const progressPct = Math.min(100, Math.max(2, Math.round(item.progress_percent || 0)));
+        const remSec = Math.max(0, (item.duration_seconds || 0) - (item.last_position_seconds || 0));
+        const remMins = Math.max(1, Math.round(remSec / 60));
+        const remLabel = remMins > 60 ? `${Math.floor(remMins / 60)}h ${remMins % 60}m left` : `${remMins}m left`;
+        const resumePos = _formatDuration(item.last_position_seconds);
+        const thumbUrl = item.thumbnail_url || `/api/media/preview/${encodeURIComponent(item.chat_id)}/${item.message_id}/0`;
+        card.innerHTML = `
         <div class="continue-thumb-wrap">
-          <img class="continue-thumb-img" src="${d}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <img class="continue-thumb-img" src="${thumbUrl}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
           <div class="continue-thumb-fallback" style="display: none;">\u{1F37F}</div>
-          <div class="continue-rem-badge">${h}</div>
+          <div class="continue-rem-badge">${remLabel}</div>
           <button class="continue-dismiss-btn" title="Remove from Continue Watching" type="button">\u2715</button>
           <div class="continue-progress-track">
-            <div class="continue-progress-bar" style="width: ${r}%;"></div>
+            <div class="continue-progress-bar" style="width: ${progressPct}%;"></div>
           </div>
         </div>
         <div class="continue-info">
-          <div class="continue-title" title="${p(s.display_title||s.filename)}">
-            ${p(s.display_title||s.filename)}
+          <div class="continue-title" title="${escapeHtml(item.display_title || item.filename)}">
+            ${escapeHtml(item.display_title || item.filename)}
           </div>
           <div class="continue-actions">
             <button class="btn-primary btn-continue-resume" type="button">
-              <span>\u25B6</span><span>Resume at ${w}</span>
+              <span>\u25B6</span><span>Resume at ${resumePos}</span>
             </button>
           </div>
         </div>
-      `;let g=o.querySelector(".btn-continue-resume"),f=o.querySelector(".continue-thumb-wrap"),c={chat_id:s.chat_id,message_id:s.message_id,filename:s.filename,stream_url:`/dl/${s.chat_id}/${s.message_id}/${encodeURIComponent(s.filename)}`};g&&g.addEventListener("click",()=>q(c,"auto",o)),f&&f.addEventListener("click",C=>{C.target.classList.contains("continue-dismiss-btn")||q(c,"auto",o)});let m=o.querySelector(".continue-dismiss-btn");m&&m.addEventListener("click",async C=>{C.stopPropagation(),o.style.opacity="0",o.style.transform="scale(0.9)",setTimeout(()=>o.remove(),250);try{await fetch(`/api/media/continue_watching/${encodeURIComponent(s.chat_id)}/${s.message_id}`,{method:"DELETE"}),X()}catch{}}),t.appendChild(o)})}catch(n){console.debug("Continue watching load notice:",n)}}async function Te(i){try{let t=await(await fetch(`/api/proxy/trigger?chat_id=${encodeURIComponent(i.chat_id)}&message_id=${i.message_id}`,{method:"POST"})).json();t.success?y(`\u{1F680} Dispatched "${i.filename}" to ${t.manager.toUpperCase()}`,"success"):y("\u26A0\uFE0F Could not auto-launch manager. Copied stream link.","warning")}catch(e){y(`Download trigger error: ${e.message}`,"error")}}function Q(i){if(!i||isNaN(i)||i<=0)return"00:00";let e=Math.floor(i),t=Math.floor(e/3600),n=Math.floor(e%3600/60),a=e%60;return t>0?`${t}:${n.toString().padStart(2,"0")}:${a.toString().padStart(2,"0")}`:`${n.toString().padStart(2,"0")}:${a.toString().padStart(2,"0")}`}var le=class{constructor(){this.phone="",this.phoneCodeHash="",this.modal=null,this.stepPhone=null,this.stepCode=null,this.step2FA=null,this.stepSuccess=null,window._authUI=this}init(){this.modal=document.getElementById("authModal"),this.stepPhone=document.getElementById("authStepPhone"),this.stepCode=document.getElementById("authStepCode"),this.step2FA=document.getElementById("authStep2FA"),this.stepSuccess=document.getElementById("authStepSuccess");let e=document.getElementById("authStatusBadge");e&&e.addEventListener("click",l=>{l.preventDefault(),this.openAuthModal()});let t=document.getElementById("authUserName");t&&t.addEventListener("click",l=>{l.preventDefault(),this.openAuthModal()});let n=document.getElementById("btnCloseAuthModal");n&&n.addEventListener("click",l=>{l.preventDefault(),this.closeAuthModal()}),this.modal&&this.modal.addEventListener("click",l=>{l.target===this.modal&&this.closeAuthModal()});let a=document.getElementById("formSendCode");a&&a.addEventListener("submit",async l=>{l.preventDefault(),await this.handleSendCode()});let s=document.getElementById("formVerifyCode");s&&s.addEventListener("submit",async l=>{l.preventDefault(),await this.handleVerifyCode()});let o=document.getElementById("btnBackToPhone");o&&o.addEventListener("click",()=>{this.showStep("phone")});let r=document.getElementById("formVerify2FA");r&&r.addEventListener("submit",async l=>{l.preventDefault(),await this.handleVerify2FA()});let u=document.getElementById("btnLogoutTelegram");u&&u.addEventListener("click",async()=>{await this.handleLogout()}),this.checkStatus()}async checkStatus(){try{let t=await(await fetch("/api/auth/status")).json();return this.updateHeaderBadge(t),t}catch(e){return console.debug("Auth status check error:",e),{authenticated:!1}}}updateHeaderBadge(e){let t=document.getElementById("authStatusBadge"),n=document.getElementById("authUserName");if(t)if(e&&e.authenticated){t.classList.add("authorized");let a=e.first_name||e.username||"Authorized";n&&(n.textContent=a),t.title=`@${e.username||""} (${e.phone||""}) - Connected`}else t.classList.remove("authorized"),n&&(n.textContent="Connect Telegram"),t.title="Click to log in to Telegram MTProto"}async openAuthModal(){if(this.modal=document.getElementById("authModal"),this.stepPhone=document.getElementById("authStepPhone"),this.stepCode=document.getElementById("authStepCode"),this.step2FA=document.getElementById("authStep2FA"),this.stepSuccess=document.getElementById("authStepSuccess"),!this.modal)return;this.modal.classList.add("open"),this.modal.classList.add("active");let e=await this.checkStatus();if(e&&e.authenticated){let t=document.getElementById("authSuccessName"),n=document.getElementById("authSuccessUsername");t&&(t.textContent=`${e.first_name||""} ${e.last_name||""}`.trim()||"Telegram User"),n&&(n.textContent=e.username?`@${e.username}`:e.phone||""),this.showStep("success")}else this.showStep("phone")}closeAuthModal(){this.modal=document.getElementById("authModal"),this.modal&&(this.modal.classList.remove("open"),this.modal.classList.remove("active"))}showStep(e){this.stepPhone&&(this.stepPhone.style.display=e==="phone"?"block":"none"),this.stepCode&&(this.stepCode.style.display=e==="code"?"block":"none"),this.step2FA&&(this.step2FA.style.display=e==="2fa"?"block":"none"),this.stepSuccess&&(this.stepSuccess.style.display=e==="success"?"block":"none")}async handleSendCode(){let e=document.getElementById("authPhoneInput"),t=document.getElementById("authPhoneError"),n=document.getElementById("btnSubmitPhone");if(!e)return;let a=e.value.trim();if(a){t&&(t.style.display="none"),n&&(n.disabled=!0,n.innerHTML='<div class="spinner" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 6px;"></div> Sending Code...');try{let s=await fetch("/api/auth/send-code",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:a})}),o=await s.json();if(!s.ok)throw new Error(o.detail||"Failed to send Telegram verification code");this.phone=a,this.phoneCodeHash=o.phone_code_hash;let r=document.getElementById("authTargetPhoneText");r&&(r.textContent=a);let u=document.getElementById("authCodeInput");u&&(u.value="",setTimeout(()=>u.focus(),150)),this.showStep("code")}catch(s){t&&(t.textContent=s.message,t.style.display="block")}finally{n&&(n.disabled=!1,n.innerHTML="<span>Send Verification Code \u2794</span>")}}}async handleVerifyCode(){let e=document.getElementById("authCodeInput"),t=document.getElementById("authCodeError"),n=document.getElementById("btnSubmitCode");if(!e)return;let a=e.value.trim().replace(/\D/g,"");if(a){t&&(t.style.display="none"),n&&(n.disabled=!0,n.innerHTML='<div class="spinner" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 6px;"></div> Verifying...');try{let s=await fetch("/api/auth/sign-in",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:this.phone,code:a,phone_code_hash:this.phoneCodeHash})}),o=await s.json();if(!s.ok)throw new Error(o.detail||"Incorrect or expired code");if(o.status==="2fa_required"){let r=document.getElementById("auth2FAPasswordInput");r&&(r.value="",setTimeout(()=>r.focus(),150)),this.showStep("2fa")}else o.status==="authorized"&&this.onAuthSuccess(o.user)}catch(s){t&&(t.textContent=s.message,t.style.display="block")}finally{n&&(n.disabled=!1,n.innerHTML="<span>Verify & Sign In \u2713</span>")}}}async handleVerify2FA(){let e=document.getElementById("auth2FAPasswordInput"),t=document.getElementById("auth2FAError"),n=document.getElementById("btnSubmit2FA");if(!e)return;let a=e.value;if(a){t&&(t.style.display="none"),n&&(n.disabled=!0,n.innerHTML='<div class="spinner" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 6px;"></div> Verifying Password...');try{let s=await fetch("/api/auth/2fa",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:a})}),o=await s.json();if(!s.ok)throw new Error(o.detail||"Incorrect 2FA password");o.status==="authorized"&&this.onAuthSuccess(o.user)}catch(s){t&&(t.textContent=s.message,t.style.display="block")}finally{n&&(n.disabled=!1,n.innerHTML="<span>Submit Password & Connect \u2794</span>")}}}onAuthSuccess(e){this.updateHeaderBadge({authenticated:!0,...e});let t=document.getElementById("authSuccessName"),n=document.getElementById("authSuccessUsername");t&&(t.textContent=e?`${e.first_name||""} ${e.last_name||""}`.trim()||e.name:"Telegram User"),n&&(n.textContent=e&&e.username?`@${e.username}`:e?e.phone:""),this.showStep("success"),window._app&&typeof window._app.refreshChats=="function"&&window._app.refreshChats()}async handleLogout(){try{await fetch("/api/auth/logout",{method:"POST"}),this.updateHeaderBadge({authenticated:!1}),this.showStep("phone")}catch(e){console.warn("Logout error:",e)}}},de=new le;async function Me(){return de.checkStatus()}function He(){let i=document.getElementById("dropzone"),e=document.getElementById("fileInput"),t=document.getElementById("folderInput"),n=document.getElementById("btnBrowseFiles"),a=document.getElementById("btnBrowseFolder");if(n&&e&&n.addEventListener("click",s=>{s.stopPropagation(),e.click()}),a&&t&&a.addEventListener("click",s=>{s.stopPropagation(),t.click()}),i&&e&&i.addEventListener("click",s=>{a&&(a===s.target||a.contains(s.target))||e.click()}),e&&e.addEventListener("change",s=>{s.target.files&&s.target.files.length>0&&(S.addFiles(s.target.files),e.value="")}),t&&t.addEventListener("change",s=>{s.target.files&&s.target.files.length>0&&(S.addFiles(s.target.files),t.value="")}),i){let s=0;["dragenter","dragover","dragleave","drop"].forEach(o=>{i.addEventListener(o,r=>{r.preventDefault(),r.stopPropagation()})}),i.addEventListener("dragenter",()=>{s++,i.classList.add("drag-active")}),i.addEventListener("dragleave",()=>{s--,s<=0&&(s=0,i.classList.remove("drag-active"))}),i.addEventListener("drop",o=>{s=0,i.classList.remove("drag-active");let r=o.dataTransfer;r&&r.files&&r.files.length>0&&S.addFiles(r.files)})}}var K=null;function Ue(){window._app={pause:i=>S.pause(i),resume:i=>S.resume(i),cancel:i=>S.cancel(i),remove:i=>S.remove(i),startNow:i=>S.startNow(i),schedule:(i,e)=>S.scheduleTask(i,e),updateFilename:(i,e)=>S.updateTaskConfig(i,{customFilename:e}),updateCaption:(i,e)=>S.updateTaskConfig(i,{caption:e}),updateSendAs:(i,e)=>S.updateTaskConfig(i,{sendAs:e}),clearHistory:async()=>{confirm("Are you sure you want to clear all history?")&&(await fetch("/api/history/clear",{method:"DELETE"}),U(),y("History cleared","success"))},refreshChats:()=>{A.fetchChats(!0),y("Refreshing chat list...","info")}},window._openScheduleModal=function(i){K=i;let e=document.getElementById("scheduleModal");if(e){e.classList.add("open","active");let t=document.getElementById("scheduleCustomInput");if(t){let n=new Date(Date.now()+36e5);n.setMinutes(n.getMinutes()-n.getTimezoneOffset()),t.value=n.toISOString().slice(0,16)}}},window._closeScheduleModal=function(){K=null;let i=document.getElementById("scheduleModal");i&&i.classList.remove("open","active")},window._openNightModal=function(){let i=document.getElementById("nightModeModal");i&&(i.classList.add("open","active"),fetch("/api/settings/night_mode").then(e=>e.json()).then(e=>{let t=document.getElementById("nightModeToggleCheck"),n=document.getElementById("nightStartTime"),a=document.getElementById("nightEndTime");t&&(t.checked=!!e.enabled),n&&e.start_time&&(n.value=e.start_time),a&&e.end_time&&(a.value=e.end_time)}).catch(()=>{}))},window._closeNightModal=function(){let i=document.getElementById("nightModeModal");i&&i.classList.remove("open","active")},window._openCustomSpeedModal=function(){let i=document.getElementById("customSpeedModal");if(i){i.classList.add("open","active");let e=document.getElementById("customSpeedInput");e&&e.focus()}},window._closeCustomSpeedModal=function(){let i=document.getElementById("customSpeedModal");i&&i.classList.remove("open","active")}}function ke(){console.log("Initializing TG Power Suite Frontend...");try{Ue()}catch(c){console.error("Hooks setup error:",c)}try{He()}catch(c){console.error("Drag & Drop setup error:",c)}try{j.init()}catch(c){console.error("Tab controller error:",c)}try{Le.init()}catch(c){console.error("Theme manager error:",c)}try{M.init()}catch(c){console.error("Socket manager error:",c)}try{Se.init()}catch(c){console.error("Watchdog error:",c)}try{A.init(c=>{console.log("Selected destination chat:",c)})}catch(c){console.error("Chat picker error:",c)}try{de.init()}catch(c){console.error("Auth UI error:",c)}try{_e.init(M.socket,j)}catch(c){console.error("Sniffer UI error:",c)}try{Ie.init(j)}catch(c){console.error("Settings UI error:",c)}try{Ce()}catch(c){console.error("History Controls error:",c)}try{Be()}catch(c){console.error("Cinema Controller error:",c)}let i=document.getElementById("btnBatchPause"),e=document.getElementById("btnBatchResume"),t=document.getElementById("btnBatchClear"),n=document.getElementById("btnBatchCancel"),a=document.getElementById("speedLimitSelect"),s=document.getElementById("btnToggleNightQueue"),o=document.getElementById("nightModeStateLabel");a&&(fetch("/api/settings/speed_limit").then(c=>c.json()).then(c=>{if(c.limit_mb_s!==void 0){let m=String(c.limit_mb_s);Array.from(a.options).find(v=>v.value===m)?a.value=m:c.limit_mb_s>0&&(a.value="custom",a.options[a.options.length-1].text=`\u2699\uFE0F ${c.limit_mb_s} MB/s`)}}).catch(()=>{}),a.addEventListener("change",()=>{let c=a.value;if(c==="custom")window._openCustomSpeedModal();else{let m=parseFloat(c)||0;S.setSpeedLimit(m),m>0?y(`\u26A1 Upload speed capped at ${m} MB/s`,"info"):y("\u26A1 Upload speed set to Unlimited (Gigabit/Fiber)","success")}}));let r=document.getElementById("btnApplyCustomSpeed");r&&r.addEventListener("click",()=>{let c=document.getElementById("customSpeedInput"),m=parseFloat(c?.value)||0;S.setSpeedLimit(m),a&&(m>0?(a.value="custom",a.options[a.options.length-1].text=`\u2699\uFE0F ${m} MB/s`,y(`\u26A1 Custom speed limit applied: ${m} MB/s`,"info")):(a.value="0",y("\u26A1 Custom speed set to Unlimited","success"))),window._closeCustomSpeedModal()});function u(c){o&&(o.textContent=c.enabled?`${c.start_time}-${c.end_time}`:"Off"),s&&s.classList.toggle("active",!!c.enabled)}fetch("/api/settings/night_mode").then(c=>c.json()).then(c=>u(c)).catch(()=>{}),s&&s.addEventListener("click",()=>{window._openNightModal()});let l=document.getElementById("btnSaveNightMode");l&&l.addEventListener("click",async()=>{let c=document.getElementById("nightModeToggleCheck"),m=document.getElementById("nightStartTime"),C=document.getElementById("nightEndTime"),v=c?c.checked:!1,b=m?m.value:"01:00",T=C?C.value:"06:00";await S.setNightMode({enabled:v,start_time:b,end_time:T}),u({enabled:v,start_time:b,end_time:T}),window._closeNightModal(),y(v?`\u{1F319} Night Mode Active (${b} - ${T})`:"\u2600\uFE0F Night Mode Disabled","info")});let h=null,w=document.querySelectorAll("#scheduleModal .btn-time-preset");w.forEach(c=>{c.addEventListener("click",()=>{w.forEach(b=>b.classList.remove("active")),c.classList.add("active");let m=c.getAttribute("data-preset"),C=new Date;if(m==="30m")h=(Date.now()+1800*1e3)/1e3;else if(m==="1h")h=(Date.now()+3600*1e3)/1e3;else if(m==="2h")h=(Date.now()+2*3600*1e3)/1e3;else if(m==="4h")h=(Date.now()+4*3600*1e3)/1e3;else if(m==="tonight"){let b=new Date;b.getHours()>=2&&b.setDate(b.getDate()+1),b.setHours(2,0,0,0),h=b.getTime()/1e3}else if(m==="morning"){let b=new Date;b.getHours()>=8&&b.setDate(b.getDate()+1),b.setHours(8,0,0,0),h=b.getTime()/1e3}let v=document.getElementById("scheduleCustomInput");if(v&&h){let b=new Date(h*1e3);b.setMinutes(b.getMinutes()-b.getTimezoneOffset()),v.value=b.toISOString().slice(0,16)}})});let d=document.getElementById("btnConfirmSchedule");d&&d.addEventListener("click",()=>{let c=document.getElementById("scheduleCustomInput");if(c&&c.value){let m=new Date(c.value).getTime()/1e3;m>Date.now()/1e3&&(h=m)}if(!h||h<=Date.now()/1e3){y("Please select a valid future time","warning");return}if(K){S.scheduleTask(K,h);let m=new Date(h*1e3);y(`\u23F0 Upload scheduled for ${m.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`,"success")}window._closeScheduleModal()}),i&&i.addEventListener("click",()=>{S.pauseAll(),y("All active uploads paused","info")}),e&&e.addEventListener("click",()=>{S.resumeAll(),y("Resuming uploads...","info")}),t&&t.addEventListener("click",()=>{S.clearCompleted(),y("Completed tasks cleared","info")}),n&&n.addEventListener("click",()=>{confirm("Cancel and stop all active uploads in the queue?")&&(S.cancelAll(),y("All uploads cancelled","warning"))}),S.onQueueChange(c=>{we(c);let m=document.getElementById("tabUploaderBadge");m&&(m.textContent=c.length)}),M.onProgress(c=>{S.handleSocketProgress(c),c.status==="completed"&&U()}),M.onQueueSnapshot(c=>{S.syncWithSnapshot(c)}),fetch("/api/tasks").then(c=>c.json()).then(c=>{Array.isArray(c)&&S.syncWithSnapshot(c)}).catch(c=>console.debug("Could not pre-fetch tasks:",c)),Me(),U(),setInterval(()=>{Me(),U()},3e4),"serviceWorker"in navigator&&window.addEventListener("load",()=>{navigator.serviceWorker.register("/sw.js").then(c=>{console.log("TG Power Suite PWA Service Worker active:",c.scope)}).catch(c=>{console.debug("Service Worker notice:",c)})});let g=null,f=document.getElementById("btnPwaInstall");window.addEventListener("beforeinstallprompt",c=>{c.preventDefault(),g=c,f&&(f.style.display="inline-flex")}),f&&f.addEventListener("click",async()=>{if(!g){y("App is already installed or your browser handles installation in the address bar (\u2795)","info");return}g.prompt();let{outcome:c}=await g.userChoice;c==="accepted"&&(f.style.display="none",y("TG Power Suite installed to your desktop!","success")),g=null}),qe(),ze(),window.addEventListener("appinstalled",()=>{f&&(f.style.display="none"),y("Welcome to TG Power Suite Desktop App!","success")})}function qe(){let i=document.getElementById("chkWatcherEnabled"),e=document.getElementById("chkDeleteAfterUpload"),t=document.getElementById("setWatchDir"),n=document.getElementById("setWatchChat"),a=document.getElementById("btnWatcherScanNow"),s=document.getElementById("btnResetWatchDir"),o=document.getElementById("watcherSyncedBadge"),r=()=>{fetch("/api/watcher/status").then(l=>l.json()).then(l=>{i&&(i.checked=!!l.enabled),e&&(e.checked=!!l.delete_after_upload),t&&!t.value&&(t.value=l.watch_dir||""),n&&!n.value&&(n.value=l.target_chat||"me"),o&&(o.textContent=`${l.synced_files_count||0} Files Synced`)}).catch(()=>{})};r();let u=()=>{fetch("/api/watcher/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:i?i.checked:!1,delete_after_upload:e?e.checked:!1,watch_dir:t?t.value.trim():null,target_chat:n?n.value.trim():"me"})}).then(l=>l.json()).then(l=>{l.config&&o&&(o.textContent=`${l.config.synced_files_count||0} Files Synced`)}).catch(()=>{})};i&&i.addEventListener("change",()=>{u(),y(i.checked?"\u{1F4C1} Auto-Directory Watcher active: Monitoring local sync folder":"\u{1F4C1} Auto-Directory Watcher paused","info")}),e&&e.addEventListener("change",()=>{u(),y(e.checked?"\u{1F5D1}\uFE0F Auto-delete enabled: Files will be deleted after verified upload":"\u{1F4C1} Keeping local files intact after upload","info")}),t&&t.addEventListener("change",u),n&&n.addEventListener("change",u),s&&t&&s.addEventListener("click",()=>{t.value="~/Downloads/Telegram_Sync",u(),y("Reset watch directory to default","info")}),a&&a.addEventListener("click",async()=>{a.disabled=!0,a.textContent="\u23F3 Scanning...";try{let h=await(await fetch("/api/watcher/scan_now",{method:"POST"})).json();h.enqueued_count>0?y(`\u{1F4C1} Enqueued ${h.enqueued_count} new file(s) for upload!`,"success"):y("\u{1F4C1} Folder scan complete: All files are up to date.","info"),r()}catch{y("Could not scan watch directory","warning")}finally{a.disabled=!1,a.textContent="\u{1F504} Sync Now"}})}function ze(){let i=document.getElementById("floodWaitBanner"),e=document.getElementById("floodWaitSeconds"),t=document.getElementById("floodWaitDesc");i&&setInterval(async()=>{try{let n=await fetch("/api/governor/status");if(!n.ok)return;let a=await n.json();a.is_cooling_down&&a.cooldown_seconds_remaining>0?(i.style.display="block",e&&(e.textContent=`${a.cooldown_seconds_remaining}s`),t&&(t.innerHTML=`Telegram FloodWait: Paused transfers safely \u2022 Auto-resuming in <span id="floodWaitSeconds" class="flood-countdown">${a.cooldown_seconds_remaining}s</span>...`)):i.style.display="none"}catch{}},2e3)}document.readyState==="loading"?document.addEventListener("DOMContentLoaded",ke):ke();})();
-//# sourceMappingURL=app.bundle.js.map
+      `;
+        const resumeBtn = card.querySelector(".btn-continue-resume");
+        const thumbWrap = card.querySelector(".continue-thumb-wrap");
+        const videoObj = {
+          chat_id: item.chat_id,
+          message_id: item.message_id,
+          filename: item.filename,
+          stream_url: `/dl/${item.chat_id}/${item.message_id}/${encodeURIComponent(item.filename)}`
+        };
+        if (resumeBtn) resumeBtn.addEventListener("click", () => playInVlc(videoObj, "auto", card));
+        if (thumbWrap) thumbWrap.addEventListener("click", (e) => {
+          if (!e.target.classList.contains("continue-dismiss-btn")) {
+            playInVlc(videoObj, "auto", card);
+          }
+        });
+        const dismissBtn = card.querySelector(".continue-dismiss-btn");
+        if (dismissBtn) {
+          dismissBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            card.style.opacity = "0";
+            card.style.transform = "scale(0.9)";
+            setTimeout(() => card.remove(), 250);
+            try {
+              await fetch(`/api/media/continue_watching/${encodeURIComponent(item.chat_id)}/${item.message_id}`, { method: "DELETE" });
+              loadContinueWatching();
+            } catch (err) {
+            }
+          });
+        }
+        carousel.appendChild(card);
+      });
+    } catch (e) {
+      console.debug("Continue watching load notice:", e);
+    }
+  }
+  async function triggerFdm(v) {
+    try {
+      const resp = await fetch(`/api/proxy/trigger?chat_id=${encodeURIComponent(v.chat_id)}&message_id=${v.message_id}`, { method: "POST" });
+      const data = await resp.json();
+      if (data.success) {
+        showToast2(`\u{1F680} Dispatched "${v.filename}" to ${data.manager.toUpperCase()}`, "success");
+      } else {
+        showToast2(`\u26A0\uFE0F Could not auto-launch manager. Copied stream link.`, "warning");
+      }
+    } catch (err) {
+      showToast2(`Download trigger error: ${err.message}`, "error");
+    }
+  }
+  function _formatDuration(seconds) {
+    if (!seconds || isNaN(seconds) || seconds <= 0) return "00:00";
+    const sec = Math.floor(seconds);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor(sec % 3600 / 60);
+    const s = sec % 60;
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    }
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
+
+  // frontend/js/auth-ui.js
+  var AuthUI = class {
+    constructor() {
+      this.phone = "";
+      this.phoneCodeHash = "";
+      this.modal = null;
+      this.stepPhone = null;
+      this.stepCode = null;
+      this.step2FA = null;
+      this.stepSuccess = null;
+      window._authUI = this;
+    }
+    init() {
+      this.modal = document.getElementById("authModal");
+      this.stepPhone = document.getElementById("authStepPhone");
+      this.stepCode = document.getElementById("authStepCode");
+      this.step2FA = document.getElementById("authStep2FA");
+      this.stepSuccess = document.getElementById("authStepSuccess");
+      const authStatusBadge = document.getElementById("authStatusBadge");
+      if (authStatusBadge) {
+        authStatusBadge.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.openAuthModal();
+        });
+      }
+      const authUserName = document.getElementById("authUserName");
+      if (authUserName) {
+        authUserName.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.openAuthModal();
+        });
+      }
+      const btnClose = document.getElementById("btnCloseAuthModal");
+      if (btnClose) {
+        btnClose.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.closeAuthModal();
+        });
+      }
+      if (this.modal) {
+        this.modal.addEventListener("click", (e) => {
+          if (e.target === this.modal) this.closeAuthModal();
+        });
+      }
+      const formSendCode = document.getElementById("formSendCode");
+      if (formSendCode) {
+        formSendCode.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          await this.handleSendCode();
+        });
+      }
+      const formVerifyCode = document.getElementById("formVerifyCode");
+      if (formVerifyCode) {
+        formVerifyCode.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          await this.handleVerifyCode();
+        });
+      }
+      const btnBackToPhone = document.getElementById("btnBackToPhone");
+      if (btnBackToPhone) {
+        btnBackToPhone.addEventListener("click", () => {
+          this.showStep("phone");
+        });
+      }
+      const formVerify2FA = document.getElementById("formVerify2FA");
+      if (formVerify2FA) {
+        formVerify2FA.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          await this.handleVerify2FA();
+        });
+      }
+      const btnLogout = document.getElementById("btnLogoutTelegram");
+      if (btnLogout) {
+        btnLogout.addEventListener("click", async () => {
+          await this.handleLogout();
+        });
+      }
+      this.checkStatus();
+    }
+    async checkStatus() {
+      try {
+        const resp = await fetch("/api/auth/status");
+        const data = await resp.json();
+        this.updateHeaderBadge(data);
+        return data;
+      } catch (e) {
+        console.debug("Auth status check error:", e);
+        return { authenticated: false };
+      }
+    }
+    updateHeaderBadge(data) {
+      const badge = document.getElementById("authStatusBadge");
+      const userText = document.getElementById("authUserName");
+      if (!badge) return;
+      if (data && data.authenticated) {
+        badge.classList.add("authorized");
+        const name = data.first_name || data.username || "Authorized";
+        if (userText) userText.textContent = name;
+        badge.title = `@${data.username || ""} (${data.phone || ""}) - Connected`;
+      } else {
+        badge.classList.remove("authorized");
+        if (userText) userText.textContent = "Connect Telegram";
+        badge.title = "Click to log in to Telegram MTProto";
+      }
+    }
+    async openAuthModal() {
+      this.modal = document.getElementById("authModal");
+      this.stepPhone = document.getElementById("authStepPhone");
+      this.stepCode = document.getElementById("authStepCode");
+      this.step2FA = document.getElementById("authStep2FA");
+      this.stepSuccess = document.getElementById("authStepSuccess");
+      if (!this.modal) return;
+      this.modal.classList.add("open");
+      this.modal.classList.add("active");
+      const status = await this.checkStatus();
+      if (status && status.authenticated) {
+        const nameEl = document.getElementById("authSuccessName");
+        const usernameEl = document.getElementById("authSuccessUsername");
+        if (nameEl) nameEl.textContent = `${status.first_name || ""} ${status.last_name || ""}`.trim() || "Telegram User";
+        if (usernameEl) usernameEl.textContent = status.username ? `@${status.username}` : status.phone || "";
+        this.showStep("success");
+      } else {
+        this.showStep("phone");
+      }
+    }
+    closeAuthModal() {
+      this.modal = document.getElementById("authModal");
+      if (this.modal) {
+        this.modal.classList.remove("open");
+        this.modal.classList.remove("active");
+      }
+    }
+    showStep(stepName) {
+      if (this.stepPhone) this.stepPhone.style.display = stepName === "phone" ? "block" : "none";
+      if (this.stepCode) this.stepCode.style.display = stepName === "code" ? "block" : "none";
+      if (this.step2FA) this.step2FA.style.display = stepName === "2fa" ? "block" : "none";
+      if (this.stepSuccess) this.stepSuccess.style.display = stepName === "success" ? "block" : "none";
+    }
+    async handleSendCode() {
+      const phoneInput = document.getElementById("authPhoneInput");
+      const errBox = document.getElementById("authPhoneError");
+      const btnSubmit = document.getElementById("btnSubmitPhone");
+      if (!phoneInput) return;
+      const phone = phoneInput.value.trim();
+      if (!phone) return;
+      if (errBox) errBox.style.display = "none";
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `<div class="spinner" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 6px;"></div> Sending Code...`;
+      }
+      try {
+        const resp = await fetch("/api/auth/send-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.detail || "Failed to send Telegram verification code");
+        }
+        this.phone = phone;
+        this.phoneCodeHash = data.phone_code_hash;
+        const targetText = document.getElementById("authTargetPhoneText");
+        if (targetText) targetText.textContent = phone;
+        const codeInput = document.getElementById("authCodeInput");
+        if (codeInput) {
+          codeInput.value = "";
+          setTimeout(() => codeInput.focus(), 150);
+        }
+        this.showStep("code");
+      } catch (err) {
+        if (errBox) {
+          errBox.textContent = err.message;
+          errBox.style.display = "block";
+        }
+      } finally {
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = `<span>Send Verification Code \u2794</span>`;
+        }
+      }
+    }
+    async handleVerifyCode() {
+      const codeInput = document.getElementById("authCodeInput");
+      const errBox = document.getElementById("authCodeError");
+      const btnSubmit = document.getElementById("btnSubmitCode");
+      if (!codeInput) return;
+      const code = codeInput.value.trim().replace(/\D/g, "");
+      if (!code) return;
+      if (errBox) errBox.style.display = "none";
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `<div class="spinner" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 6px;"></div> Verifying...`;
+      }
+      try {
+        const resp = await fetch("/api/auth/sign-in", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: this.phone,
+            code,
+            phone_code_hash: this.phoneCodeHash
+          })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.detail || "Incorrect or expired code");
+        }
+        if (data.status === "2fa_required") {
+          const passInput = document.getElementById("auth2FAPasswordInput");
+          if (passInput) {
+            passInput.value = "";
+            setTimeout(() => passInput.focus(), 150);
+          }
+          this.showStep("2fa");
+        } else if (data.status === "authorized") {
+          this.onAuthSuccess(data.user);
+        }
+      } catch (err) {
+        if (errBox) {
+          errBox.textContent = err.message;
+          errBox.style.display = "block";
+        }
+      } finally {
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = `<span>Verify & Sign In \u2713</span>`;
+        }
+      }
+    }
+    async handleVerify2FA() {
+      const passInput = document.getElementById("auth2FAPasswordInput");
+      const errBox = document.getElementById("auth2FAError");
+      const btnSubmit = document.getElementById("btnSubmit2FA");
+      if (!passInput) return;
+      const password = passInput.value;
+      if (!password) return;
+      if (errBox) errBox.style.display = "none";
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `<div class="spinner" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 6px;"></div> Verifying Password...`;
+      }
+      try {
+        const resp = await fetch("/api/auth/2fa", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.detail || "Incorrect 2FA password");
+        }
+        if (data.status === "authorized") {
+          this.onAuthSuccess(data.user);
+        }
+      } catch (err) {
+        if (errBox) {
+          errBox.textContent = err.message;
+          errBox.style.display = "block";
+        }
+      } finally {
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = `<span>Submit Password & Connect \u2794</span>`;
+        }
+      }
+    }
+    onAuthSuccess(user) {
+      this.updateHeaderBadge({ authenticated: true, ...user });
+      const nameEl = document.getElementById("authSuccessName");
+      const usernameEl = document.getElementById("authSuccessUsername");
+      if (nameEl) nameEl.textContent = user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.name : "Telegram User";
+      if (usernameEl) usernameEl.textContent = user && user.username ? `@${user.username}` : user ? user.phone : "";
+      this.showStep("success");
+      if (window._app && typeof window._app.refreshChats === "function") {
+        window._app.refreshChats();
+      }
+    }
+    async handleLogout() {
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+        this.updateHeaderBadge({ authenticated: false });
+        this.showStep("phone");
+      } catch (e) {
+        console.warn("Logout error:", e);
+      }
+    }
+  };
+  var authUI = new AuthUI();
+
+  // frontend/js/app.js
+  async function checkAuthStatus() {
+    return authUI.checkStatus();
+  }
+  function setupDragAndDrop() {
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const folderInput = document.getElementById("folderInput");
+    const btnBrowseFiles = document.getElementById("btnBrowseFiles");
+    const btnBrowseFolder = document.getElementById("btnBrowseFolder");
+    if (btnBrowseFiles && fileInput) {
+      btnBrowseFiles.addEventListener("click", (e) => {
+        e.stopPropagation();
+        fileInput.click();
+      });
+    }
+    if (btnBrowseFolder && folderInput) {
+      btnBrowseFolder.addEventListener("click", (e) => {
+        e.stopPropagation();
+        folderInput.click();
+      });
+    }
+    if (dropzone && fileInput) {
+      dropzone.addEventListener("click", (e) => {
+        if (btnBrowseFolder && (btnBrowseFolder === e.target || btnBrowseFolder.contains(e.target))) {
+          return;
+        }
+        fileInput.click();
+      });
+    }
+    if (fileInput) {
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          uploader.addFiles(e.target.files);
+          fileInput.value = "";
+        }
+      });
+    }
+    if (folderInput) {
+      folderInput.addEventListener("change", (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          uploader.addFiles(e.target.files);
+          folderInput.value = "";
+        }
+      });
+    }
+    if (dropzone) {
+      let dragCounter = 0;
+      ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      });
+      dropzone.addEventListener("dragenter", () => {
+        dragCounter++;
+        dropzone.classList.add("drag-active");
+      });
+      dropzone.addEventListener("dragleave", () => {
+        dragCounter--;
+        if (dragCounter <= 0) {
+          dragCounter = 0;
+          dropzone.classList.remove("drag-active");
+        }
+      });
+      dropzone.addEventListener("drop", (e) => {
+        dragCounter = 0;
+        dropzone.classList.remove("drag-active");
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length > 0) {
+          uploader.addFiles(dt.files);
+        }
+      });
+    }
+  }
+  var _targetScheduleTaskId = null;
+  function setupGlobalHooks() {
+    window._app = {
+      pause: (id) => uploader.pause(id),
+      resume: (id) => uploader.resume(id),
+      cancel: (id) => uploader.cancel(id),
+      remove: (id) => uploader.remove(id),
+      startNow: (id) => uploader.startNow(id),
+      schedule: (id, ts) => uploader.scheduleTask(id, ts),
+      updateFilename: (id, val) => uploader.updateTaskConfig(id, { customFilename: val }),
+      updateCaption: (id, val) => uploader.updateTaskConfig(id, { caption: val }),
+      updateSendAs: (id, val) => uploader.updateTaskConfig(id, { sendAs: val }),
+      clearHistory: async () => {
+        if (confirm("Are you sure you want to clear all history?")) {
+          await fetch("/api/history/clear", { method: "DELETE" });
+          loadHistory();
+          showToast2("History cleared", "success");
+        }
+      },
+      refreshChats: () => {
+        chatPicker.fetchChats(true);
+        showToast2("Refreshing chat list...", "info");
+      }
+    };
+    window._openScheduleModal = function(taskId) {
+      _targetScheduleTaskId = taskId;
+      const modal = document.getElementById("scheduleModal");
+      if (modal) {
+        modal.classList.add("open", "active");
+        const input = document.getElementById("scheduleCustomInput");
+        if (input) {
+          const defaultDate = new Date(Date.now() + 3600 * 1e3);
+          defaultDate.setMinutes(defaultDate.getMinutes() - defaultDate.getTimezoneOffset());
+          input.value = defaultDate.toISOString().slice(0, 16);
+        }
+      }
+    };
+    window._closeScheduleModal = function() {
+      _targetScheduleTaskId = null;
+      const modal = document.getElementById("scheduleModal");
+      if (modal) modal.classList.remove("open", "active");
+    };
+    window._openNightModal = function() {
+      const modal = document.getElementById("nightModeModal");
+      if (modal) {
+        modal.classList.add("open", "active");
+        fetch("/api/settings/night_mode").then((r) => r.json()).then((data) => {
+          const check = document.getElementById("nightModeToggleCheck");
+          const startIn = document.getElementById("nightStartTime");
+          const endIn = document.getElementById("nightEndTime");
+          if (check) check.checked = Boolean(data.enabled);
+          if (startIn && data.start_time) startIn.value = data.start_time;
+          if (endIn && data.end_time) endIn.value = data.end_time;
+        }).catch(() => {
+        });
+      }
+    };
+    window._closeNightModal = function() {
+      const modal = document.getElementById("nightModeModal");
+      if (modal) modal.classList.remove("open", "active");
+    };
+    window._openCustomSpeedModal = function() {
+      const modal = document.getElementById("customSpeedModal");
+      if (modal) {
+        modal.classList.add("open", "active");
+        const input = document.getElementById("customSpeedInput");
+        if (input) input.focus();
+      }
+    };
+    window._closeCustomSpeedModal = function() {
+      const modal = document.getElementById("customSpeedModal");
+      if (modal) modal.classList.remove("open", "active");
+    };
+  }
+  function initApp() {
+    console.log("Initializing TG Power Suite Frontend...");
+    try {
+      setupGlobalHooks();
+    } catch (e) {
+      console.error("Hooks setup error:", e);
+    }
+    try {
+      setupDragAndDrop();
+    } catch (e) {
+      console.error("Drag & Drop setup error:", e);
+    }
+    try {
+      tabController.init();
+    } catch (e) {
+      console.error("Tab controller error:", e);
+    }
+    try {
+      themeManager.init();
+    } catch (e) {
+      console.error("Theme manager error:", e);
+    }
+    try {
+      socketManager.init();
+    } catch (e) {
+      console.error("Socket manager error:", e);
+    }
+    try {
+      networkWatchdog.init();
+    } catch (e) {
+      console.error("Watchdog error:", e);
+    }
+    try {
+      chatPicker.init((selectedChat) => {
+        console.log("Selected destination chat:", selectedChat);
+      });
+    } catch (e) {
+      console.error("Chat picker error:", e);
+    }
+    try {
+      authUI.init();
+    } catch (e) {
+      console.error("Auth UI error:", e);
+    }
+    try {
+      snifferUI.init(socketManager.socket, tabController);
+    } catch (e) {
+      console.error("Sniffer UI error:", e);
+    }
+    try {
+      settingsUI.init(tabController);
+    } catch (e) {
+      console.error("Settings UI error:", e);
+    }
+    try {
+      initHistoryControls();
+    } catch (e) {
+      console.error("History Controls error:", e);
+    }
+    try {
+      initCinema();
+    } catch (e) {
+      console.error("Cinema Controller error:", e);
+    }
+    const btnBatchPause = document.getElementById("btnBatchPause");
+    const btnBatchResume = document.getElementById("btnBatchResume");
+    const btnBatchClear = document.getElementById("btnBatchClear");
+    const btnBatchCancel = document.getElementById("btnBatchCancel");
+    const speedLimitSelect = document.getElementById("speedLimitSelect");
+    const btnToggleNightQueue = document.getElementById("btnToggleNightQueue");
+    const nightModeStateLabel = document.getElementById("nightModeStateLabel");
+    if (speedLimitSelect) {
+      fetch("/api/settings/speed_limit").then((r) => r.json()).then((data) => {
+        if (data.limit_mb_s !== void 0) {
+          const valStr = String(data.limit_mb_s);
+          const matchOption = Array.from(speedLimitSelect.options).find((opt) => opt.value === valStr);
+          if (matchOption) {
+            speedLimitSelect.value = valStr;
+          } else if (data.limit_mb_s > 0) {
+            speedLimitSelect.value = "custom";
+            speedLimitSelect.options[speedLimitSelect.options.length - 1].text = `\u2699\uFE0F ${data.limit_mb_s} MB/s`;
+          }
+        }
+      }).catch(() => {
+      });
+      speedLimitSelect.addEventListener("change", () => {
+        const val = speedLimitSelect.value;
+        if (val === "custom") {
+          window._openCustomSpeedModal();
+        } else {
+          const mb = parseFloat(val) || 0;
+          uploader.setSpeedLimit(mb);
+          if (mb > 0) {
+            showToast2(`\u26A1 Upload speed capped at ${mb} MB/s`, "info");
+          } else {
+            showToast2("\u26A1 Upload speed set to Unlimited (Gigabit/Fiber)", "success");
+          }
+        }
+      });
+    }
+    const btnApplyCustomSpeed = document.getElementById("btnApplyCustomSpeed");
+    if (btnApplyCustomSpeed) {
+      btnApplyCustomSpeed.addEventListener("click", () => {
+        const input = document.getElementById("customSpeedInput");
+        const val = parseFloat(input?.value) || 0;
+        uploader.setSpeedLimit(val);
+        if (speedLimitSelect) {
+          if (val > 0) {
+            speedLimitSelect.value = "custom";
+            speedLimitSelect.options[speedLimitSelect.options.length - 1].text = `\u2699\uFE0F ${val} MB/s`;
+            showToast2(`\u26A1 Custom speed limit applied: ${val} MB/s`, "info");
+          } else {
+            speedLimitSelect.value = "0";
+            showToast2("\u26A1 Custom speed set to Unlimited", "success");
+          }
+        }
+        window._closeCustomSpeedModal();
+      });
+    }
+    function syncNightModeUi(data) {
+      if (nightModeStateLabel) {
+        nightModeStateLabel.textContent = data.enabled ? `${data.start_time}-${data.end_time}` : "Off";
+      }
+      if (btnToggleNightQueue) {
+        btnToggleNightQueue.classList.toggle("active", Boolean(data.enabled));
+      }
+    }
+    fetch("/api/settings/night_mode").then((r) => r.json()).then((data) => syncNightModeUi(data)).catch(() => {
+    });
+    if (btnToggleNightQueue) {
+      btnToggleNightQueue.addEventListener("click", () => {
+        window._openNightModal();
+      });
+    }
+    const btnSaveNightMode = document.getElementById("btnSaveNightMode");
+    if (btnSaveNightMode) {
+      btnSaveNightMode.addEventListener("click", async () => {
+        const check = document.getElementById("nightModeToggleCheck");
+        const startIn = document.getElementById("nightStartTime");
+        const endIn = document.getElementById("nightEndTime");
+        const enabled = check ? check.checked : false;
+        const start_time = startIn ? startIn.value : "01:00";
+        const end_time = endIn ? endIn.value : "06:00";
+        await uploader.setNightMode({ enabled, start_time, end_time });
+        syncNightModeUi({ enabled, start_time, end_time });
+        window._closeNightModal();
+        showToast2(enabled ? `\u{1F319} Night Mode Active (${start_time} - ${end_time})` : "\u2600\uFE0F Night Mode Disabled", "info");
+      });
+    }
+    let _selectedScheduleTimestamp = null;
+    const presetButtons = document.querySelectorAll("#scheduleModal .btn-time-preset");
+    presetButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        presetButtons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const preset = btn.getAttribute("data-preset");
+        const now = /* @__PURE__ */ new Date();
+        if (preset === "30m") {
+          _selectedScheduleTimestamp = (Date.now() + 30 * 60 * 1e3) / 1e3;
+        } else if (preset === "1h") {
+          _selectedScheduleTimestamp = (Date.now() + 60 * 60 * 1e3) / 1e3;
+        } else if (preset === "2h") {
+          _selectedScheduleTimestamp = (Date.now() + 2 * 3600 * 1e3) / 1e3;
+        } else if (preset === "4h") {
+          _selectedScheduleTimestamp = (Date.now() + 4 * 3600 * 1e3) / 1e3;
+        } else if (preset === "tonight") {
+          const target = /* @__PURE__ */ new Date();
+          if (target.getHours() >= 2) target.setDate(target.getDate() + 1);
+          target.setHours(2, 0, 0, 0);
+          _selectedScheduleTimestamp = target.getTime() / 1e3;
+        } else if (preset === "morning") {
+          const target = /* @__PURE__ */ new Date();
+          if (target.getHours() >= 8) target.setDate(target.getDate() + 1);
+          target.setHours(8, 0, 0, 0);
+          _selectedScheduleTimestamp = target.getTime() / 1e3;
+        }
+        const input = document.getElementById("scheduleCustomInput");
+        if (input && _selectedScheduleTimestamp) {
+          const d = new Date(_selectedScheduleTimestamp * 1e3);
+          d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+          input.value = d.toISOString().slice(0, 16);
+        }
+      });
+    });
+    const btnConfirmSchedule = document.getElementById("btnConfirmSchedule");
+    if (btnConfirmSchedule) {
+      btnConfirmSchedule.addEventListener("click", () => {
+        const input = document.getElementById("scheduleCustomInput");
+        if (input && input.value) {
+          const parsed = new Date(input.value).getTime() / 1e3;
+          if (parsed > Date.now() / 1e3) {
+            _selectedScheduleTimestamp = parsed;
+          }
+        }
+        if (!_selectedScheduleTimestamp || _selectedScheduleTimestamp <= Date.now() / 1e3) {
+          showToast2("Please select a valid future time", "warning");
+          return;
+        }
+        if (_targetScheduleTaskId) {
+          uploader.scheduleTask(_targetScheduleTaskId, _selectedScheduleTimestamp);
+          const dt = new Date(_selectedScheduleTimestamp * 1e3);
+          showToast2(`\u23F0 Upload scheduled for ${dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`, "success");
+        }
+        window._closeScheduleModal();
+      });
+    }
+    if (btnBatchPause) {
+      btnBatchPause.addEventListener("click", () => {
+        uploader.pauseAll();
+        showToast2("All active uploads paused", "info");
+      });
+    }
+    if (btnBatchResume) {
+      btnBatchResume.addEventListener("click", () => {
+        uploader.resumeAll();
+        showToast2("Resuming uploads...", "info");
+      });
+    }
+    if (btnBatchClear) {
+      btnBatchClear.addEventListener("click", () => {
+        uploader.clearCompleted();
+        showToast2("Completed tasks cleared", "info");
+      });
+    }
+    if (btnBatchCancel) {
+      btnBatchCancel.addEventListener("click", () => {
+        if (confirm("Cancel and stop all active uploads in the queue?")) {
+          uploader.cancelAll();
+          showToast2("All uploads cancelled", "warning");
+        }
+      });
+    }
+    uploader.onQueueChange((queue) => {
+      renderQueue(queue);
+      const tabUploaderBadge = document.getElementById("tabUploaderBadge");
+      if (tabUploaderBadge) {
+        tabUploaderBadge.textContent = queue.length;
+      }
+    });
+    socketManager.onProgress((data) => {
+      uploader.handleSocketProgress(data);
+      if (data.status === "completed") {
+        loadHistory();
+      }
+    });
+    socketManager.onQueueSnapshot((tasks) => {
+      uploader.syncWithSnapshot(tasks);
+    });
+    fetch("/api/tasks").then((res) => res.json()).then((tasks) => {
+      if (Array.isArray(tasks)) {
+        uploader.syncWithSnapshot(tasks);
+      }
+    }).catch((err) => console.debug("Could not pre-fetch tasks:", err));
+    checkAuthStatus();
+    loadHistory();
+    setInterval(() => {
+      checkAuthStatus();
+      loadHistory();
+    }, 3e4);
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister();
+        }
+      });
+    }
+    let deferredInstallPrompt = null;
+    const btnPwaInstall = document.getElementById("btnPwaInstall");
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (btnPwaInstall) {
+        btnPwaInstall.style.display = "inline-flex";
+      }
+    });
+    if (btnPwaInstall) {
+      btnPwaInstall.addEventListener("click", async () => {
+        if (!deferredInstallPrompt) {
+          showToast2("App is already installed or your browser handles installation in the address bar (\u2795)", "info");
+          return;
+        }
+        deferredInstallPrompt.prompt();
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === "accepted") {
+          btnPwaInstall.style.display = "none";
+          showToast2("TG Power Suite installed to your desktop!", "success");
+        }
+        deferredInstallPrompt = null;
+      });
+    }
+    _initWatcherControls();
+    _initFloodWaitMonitor();
+    window.addEventListener("appinstalled", () => {
+      if (btnPwaInstall) btnPwaInstall.style.display = "none";
+      showToast2("Welcome to TG Power Suite Desktop App!", "success");
+    });
+  }
+  function _initWatcherControls() {
+    const chkEnabled = document.getElementById("chkWatcherEnabled");
+    const chkDelete = document.getElementById("chkDeleteAfterUpload");
+    const txtWatchDir = document.getElementById("setWatchDir");
+    const txtWatchChat = document.getElementById("setWatchChat");
+    const btnScanNow = document.getElementById("btnWatcherScanNow");
+    const btnResetDir = document.getElementById("btnResetWatchDir");
+    const badgeSynced = document.getElementById("watcherSyncedBadge");
+    const _loadWatcherStatus = () => {
+      fetch("/api/watcher/status").then((r) => r.json()).then((data) => {
+        if (chkEnabled) chkEnabled.checked = Boolean(data.enabled);
+        if (chkDelete) chkDelete.checked = Boolean(data.delete_after_upload);
+        if (txtWatchDir && !txtWatchDir.value) txtWatchDir.value = data.watch_dir || "";
+        if (txtWatchChat && !txtWatchChat.value) txtWatchChat.value = data.target_chat || "me";
+        if (badgeSynced) badgeSynced.textContent = `${data.synced_files_count || 0} Files Synced`;
+      }).catch(() => {
+      });
+    };
+    _loadWatcherStatus();
+    const _saveWatcherConfig = () => {
+      fetch("/api/watcher/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: chkEnabled ? chkEnabled.checked : false,
+          delete_after_upload: chkDelete ? chkDelete.checked : false,
+          watch_dir: txtWatchDir ? txtWatchDir.value.trim() : null,
+          target_chat: txtWatchChat ? txtWatchChat.value.trim() : "me"
+        })
+      }).then((r) => r.json()).then((data) => {
+        if (data.config && badgeSynced) {
+          badgeSynced.textContent = `${data.config.synced_files_count || 0} Files Synced`;
+        }
+      }).catch(() => {
+      });
+    };
+    if (chkEnabled) {
+      chkEnabled.addEventListener("change", () => {
+        _saveWatcherConfig();
+        showToast2(
+          chkEnabled.checked ? "\u{1F4C1} Auto-Directory Watcher active: Monitoring local sync folder" : "\u{1F4C1} Auto-Directory Watcher paused",
+          "info"
+        );
+      });
+    }
+    if (chkDelete) {
+      chkDelete.addEventListener("change", () => {
+        _saveWatcherConfig();
+        showToast2(
+          chkDelete.checked ? "\u{1F5D1}\uFE0F Auto-delete enabled: Files will be deleted after verified upload" : "\u{1F4C1} Keeping local files intact after upload",
+          "info"
+        );
+      });
+    }
+    if (txtWatchDir) txtWatchDir.addEventListener("change", _saveWatcherConfig);
+    if (txtWatchChat) txtWatchChat.addEventListener("change", _saveWatcherConfig);
+    if (btnResetDir && txtWatchDir) {
+      btnResetDir.addEventListener("click", () => {
+        txtWatchDir.value = "~/Downloads/Telegram_Sync";
+        _saveWatcherConfig();
+        showToast2("Reset watch directory to default", "info");
+      });
+    }
+    if (btnScanNow) {
+      btnScanNow.addEventListener("click", async () => {
+        btnScanNow.disabled = true;
+        btnScanNow.textContent = "\u23F3 Scanning...";
+        try {
+          const resp = await fetch("/api/watcher/scan_now", { method: "POST" });
+          const data = await resp.json();
+          if (data.enqueued_count > 0) {
+            showToast2(`\u{1F4C1} Enqueued ${data.enqueued_count} new file(s) for upload!`, "success");
+          } else {
+            showToast2("\u{1F4C1} Folder scan complete: All files are up to date.", "info");
+          }
+          _loadWatcherStatus();
+        } catch (e) {
+          showToast2("Could not scan watch directory", "warning");
+        } finally {
+          btnScanNow.disabled = false;
+          btnScanNow.textContent = "\u{1F504} Sync Now";
+        }
+      });
+    }
+  }
+  function _initFloodWaitMonitor() {
+    const banner = document.getElementById("floodWaitBanner");
+    const secEl = document.getElementById("floodWaitSeconds");
+    const descEl = document.getElementById("floodWaitDesc");
+    if (!banner) return;
+    setInterval(async () => {
+      try {
+        const resp = await fetch("/api/governor/status");
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.is_cooling_down && data.cooldown_seconds_remaining > 0) {
+          banner.style.display = "block";
+          if (secEl) secEl.textContent = `${data.cooldown_seconds_remaining}s`;
+          if (descEl) {
+            descEl.innerHTML = `Telegram FloodWait: Paused transfers safely \u2022 Auto-resuming in <span id="floodWaitSeconds" class="flood-countdown">${data.cooldown_seconds_remaining}s</span>...`;
+          }
+        } else {
+          banner.style.display = "none";
+        }
+      } catch (e) {
+      }
+    }, 2e3);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initApp);
+  } else {
+    initApp();
+  }
+})();

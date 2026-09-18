@@ -21,6 +21,7 @@ class ChatPicker {
     this.onSelectCallback = null;
     this.storageKey = 'tg_selected_chat';
     this.isLoading = false;
+    window._chatPicker = this;
   }
 
   init(onSelect) {
@@ -124,13 +125,27 @@ class ChatPicker {
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch chats');
       this.chats = await res.json();
-
-      // If user had Saved Messages, update the ID with the real user ID if needed
-      if (this.selectedChat && this.selectedChat.type === 'saved_messages' && this.chats.length > 0) {
-        this.selectedChat = this.chats[0];
+      const hasSaved = this.chats.some(c => c.type === 'saved_messages' || c.id === 'me');
+      if (!hasSaved) {
+        this.chats.unshift({
+          id: 'me',
+          name: 'Saved Messages (Personal Cloud)',
+          type: 'saved_messages',
+          unread_count: 0,
+          pinned: true
+        });
       }
 
-      if (this.modal && this.modal.classList.contains('open')) {
+      // Re-sync metadata for currently selected chat from newly fetched list
+      if (this.selectedChat) {
+        const matching = this.chats.find(c => String(c.id) === String(this.selectedChat.id));
+        if (matching) {
+          this.selectedChat = matching;
+          this.updateTriggerUI(matching);
+        }
+      }
+
+      if (this.modal && (this.modal.classList.contains('open') || this.modal.classList.contains('active'))) {
         this.renderList(this.searchInput ? this.searchInput.value : '');
       }
     } catch (e) {
@@ -141,9 +156,14 @@ class ChatPicker {
   }
 
   open(customCallback = null) {
-    this.customCallback = customCallback;
+    if (customCallback !== null && customCallback !== undefined) {
+      this.customCallback = customCallback;
+    }
+    if (!this.modal) this.modal = document.getElementById('chatModal');
+    if (!this.searchInput) this.searchInput = document.getElementById('chatSearchInput');
+    if (!this.listContainer) this.listContainer = document.getElementById('chatListContainer');
     if (!this.modal) return;
-    this.modal.classList.add('open');
+    this.modal.classList.add('open', 'active');
     if (this.searchInput) {
       this.searchInput.value = '';
       setTimeout(() => {
@@ -160,6 +180,7 @@ class ChatPicker {
   }
 
   renderLoading() {
+    if (!this.listContainer) this.listContainer = document.getElementById('chatListContainer');
     if (!this.listContainer) return;
     this.listContainer.innerHTML = `
       <div style="padding: 32px; text-align: center; color: var(--text-muted);">
@@ -171,8 +192,9 @@ class ChatPicker {
 
   close() {
     this.customCallback = null;
+    if (!this.modal) this.modal = document.getElementById('chatModal');
     if (!this.modal) return;
-    this.modal.classList.remove('open');
+    this.modal.classList.remove('open', 'active');
   }
 
   renderList(filter = '') {

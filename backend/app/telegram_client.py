@@ -128,7 +128,8 @@ class TelegramClientManager:
         try:
             if cls._client is not None and cls._client.is_connected() and cls._cached_me:
                 return True
-            if not SESSION_FILE_PATH.exists():
+            session_file = SESSION_FILE_PATH.with_suffix(".session") if not str(SESSION_FILE_PATH).endswith(".session") else SESSION_FILE_PATH
+            if not session_file.exists() and not SESSION_FILE_PATH.exists():
                 return False
             client = await cls.get_client()
             return await client.is_user_authorized()
