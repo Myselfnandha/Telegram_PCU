@@ -218,167 +218,51 @@ class FastStreamEngine:
         window_size: int = 8,
     ) -> AsyncGenerator[bytes, None]:
         """
-        High-throughput parallel MTProto streaming engine with bounded lookahead window.
-        Uses 1MB aligned GetFileRequests, borrowed DC senders, and in-order concurrent worker prefetching.
+        Reliable single-connection MTProto streaming engine.
+        Uses Telethon's iter_download for steady throughput without connection storms.
         Populates session.memory_slices for zero-latency backward seeking.
         """
         if length <= 0:
             return
 
-        file_info = None
-        try:
-            file_info = utils._get_file_info(message.media)
-        except Exception:
-            file_info = None
-
-        if not file_info or not getattr(file_info, "location", None):
-            # Fallback to standard iter_download if media structure is unconventional or mocked
-            chunk_unit = 512 * 1024
-            bytes_written = 0
-            async for chunk in client.iter_download(
-                message.media, offset=start, request_size=chunk_unit, chunk_size=chunk_unit
-            ):
-                if chunk:
-                    remaining = length - bytes_written
-                    if len(chunk) > remaining:
-                        chunk = chunk[:remaining]
-                    yield chunk
-                    bytes_written += len(chunk)
-                    if bytes_written >= length:
-                        break
-            return
-
-        sender, is_exported = await self._acquire_sender(client, file_info.dc_id)
-        file_loc = file_info.location
-
-        align_unit = 1024 * 1024  # 1MB MTProto max request limit
-        aligned_start = start - (start % align_unit)
-        discard_bytes = start - aligned_start
-        total_chunks = math.ceil((length + discard_bytes) / align_unit)
-
-        if total_chunks == 0:
-            await self._release_sender(client, sender, is_exported)
-            return
-
-        loop = asyncio.get_running_loop()
-        results: Dict[int, asyncio.Future] = {i: loop.create_future() for i in range(total_chunks)}
-        next_fetch_idx = 0
-        current_consumed_idx = 0
-        window_event = asyncio.Event()
-        window_event.set()
-        idx_lock = asyncio.Lock()
-
-        # Bounded worker pool: prefetch up to `window_size` chunks ahead of current consumer
-        async def prefetch_worker():
-            nonlocal next_fetch_idx
-            while True:
-                # 1. Wait if window is full WITHOUT holding lock (with safety timeout to prevent deadlock)
-                wait_loops = 0
-                while next_fetch_idx - current_consumed_idx >= window_size:
-                    window_event.clear()
-                    try:
-                        await asyncio.wait_for(window_event.wait(), timeout=5.0)
-                    except asyncio.TimeoutError:
-                        wait_loops += 1
-                        if wait_loops > 3:
-                            return  # Prevent infinite deadlock
-                        window_event.set()  # Self-heal: force re-check
-
-                # 2. Acquire chunk index atomically
-                async with idx_lock:
-                    if next_fetch_idx >= total_chunks:
-                        return
-                    if next_fetch_idx - current_consumed_idx >= window_size:
-                        continue
-                    my_idx = next_fetch_idx
-                    next_fetch_idx += 1
-
-                chunk_offset = aligned_start + my_idx * align_unit
-                data = b""
-                try:
-                    data = await self._fetch_single_chunk(client, sender, file_loc, chunk_offset, align_unit)
-                except Exception as e:
-                    logger.debug(f"Chunk {my_idx} fetch error: {e}")
-
-                # 3. If primary MTProto fetch returned empty, retrieve full 1MB slice via iter_download fallback
-                if not data:
-                    try:
-                        fallback_chunks = []
-                        f_len = 0
-                        async for c in client.iter_download(
-                            message.media, offset=chunk_offset, request_size=512 * 1024, chunk_size=512 * 1024
-                        ):
-                            if c:
-                                fallback_chunks.append(c)
-                                f_len += len(c)
-                                if f_len >= align_unit:
-                                    break
-                        if fallback_chunks:
-                            data = b"".join(fallback_chunks)[:align_unit]
-                    except Exception as fe:
-                        logger.debug(f"Chunk {my_idx} fallback download error: {fe}")
-
-                # 4. Cache in session memory for zero-latency backward seek
-                if data and session:
-                    s_idx = chunk_offset // SLICE_SIZE
-                    session.store_slice(s_idx, data)
-
-                if my_idx in results and not results[my_idx].done():
-                    results[my_idx].set_result(data)
-
-        worker_count = min(max_workers, total_chunks)
-        workers = [asyncio.create_task(prefetch_worker()) for _ in range(worker_count)]
-
+        chunk_unit = 512 * 1024  # 512KB — sweet spot for throughput vs latency
         bytes_written = 0
+        curr_offset = start
+
         try:
-            for idx in range(total_chunks):
-                current_consumed_idx = idx
-                window_event.set()  # Wake prefetch workers to advance window
+            async for raw_chunk in client.iter_download(
+                message.media,
+                offset=start,
+                request_size=chunk_unit,
+                chunk_size=chunk_unit,
+            ):
+                if not raw_chunk:
+                    continue
 
-                # Consumer-side timeout: don't hang forever if worker crashed
-                try:
-                    chunk = await asyncio.wait_for(results[idx], timeout=15.0)
-                except asyncio.TimeoutError:
-                    logger.warning(f"Consumer timeout on chunk {idx}/{total_chunks}, attempting direct fetch")
-                    # Emergency direct fetch for this chunk
-                    chunk_offset = aligned_start + idx * align_unit
-                    try:
-                        chunk = await self._fetch_single_chunk(client, sender, file_loc, chunk_offset, align_unit)
-                    except Exception:
-                        chunk = b""
-                    # If still empty, try iter_download as last resort
-                    if not chunk:
-                        try:
-                            fb = []
-                            async for c in client.iter_download(
-                                message.media, offset=chunk_offset, request_size=512*1024, chunk_size=512*1024
-                            ):
-                                if c:
-                                    fb.append(c)
-                                    if sum(len(x) for x in fb) >= align_unit:
-                                        break
-                            if fb:
-                                chunk = b"".join(fb)[:align_unit]
-                        except Exception:
-                            chunk = b""
-
-                results.pop(idx, None)  # Free consumed future from memory
-
-                if idx == 0 and discard_bytes > 0:
-                    chunk = chunk[discard_bytes:]
                 remaining = length - bytes_written
-                if len(chunk) > remaining:
-                    chunk = chunk[:remaining]
-                if chunk:
-                    yield chunk
-                    bytes_written += len(chunk)
+                if len(raw_chunk) > remaining:
+                    raw_chunk = raw_chunk[:remaining]
+
+                # Cache in session memory for zero-latency backward seek
+                if session and raw_chunk:
+                    s_idx = curr_offset // SLICE_SIZE
+                    if curr_offset % SLICE_SIZE == 0 and len(raw_chunk) >= SLICE_SIZE:
+                        session.store_slice(s_idx, raw_chunk[:SLICE_SIZE])
+
+                yield raw_chunk
+                bytes_written += len(raw_chunk)
+                curr_offset += len(raw_chunk)
+
                 if bytes_written >= length:
                     break
-        finally:
-            for w in workers:
-                w.cancel()
-            await asyncio.gather(*workers, return_exceptions=True)
-            await self._release_sender(client, sender, is_exported)
+
+        except errors.FloodWaitError as fwe:
+            rate_governor.report_flood_wait(fwe.seconds, reason="Stream FloodWait")
+        except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError) as ce:
+            logger.warning(f"Stream connection reset at {bytes_written}/{length}: {ce}")
+        except Exception as e:
+            logger.debug(f"Stream notice at {bytes_written}/{length}: {e}")
+
 
     async def _download_range_bytes(
         self, client, message, offset: int, length: int
