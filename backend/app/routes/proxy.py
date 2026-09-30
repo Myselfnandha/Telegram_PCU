@@ -356,10 +356,14 @@ async def handle_proxy_download(
                     bytes_sent += len(chunk)
                     if bytes_sent >= length:
                         break
+
+                if bytes_sent < length:
+                    raise asyncio.CancelledError()
             except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
-                pass
+                raise
             except Exception as fe:
                 logger.debug(f"Stream playback notice at {bytes_sent}/{length}: {fe}")
+                raise asyncio.CancelledError()
             finally:
                 producer_cancelled.set()
                 if not prod_task.done():
@@ -464,10 +468,14 @@ async def handle_proxy_download(
                 if bytes_written >= length:
                     break
 
+            if bytes_written < length:
+                raise asyncio.CancelledError()
         except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError):
             logger.debug(f"Client disconnected during streaming of {clean_name}")
+            raise
         except Exception as err:
             logger.warning(f"Error during streaming download: {err}")
+            raise asyncio.CancelledError()
         finally:
             if not prod_task.done():
                 prod_task.cancel()
