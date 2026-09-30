@@ -290,30 +290,33 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 2. For media players (VLC, MPV, Web browser): Route through FastStreamEngine (64MB bidirectional ring-buffer + bounded parallel pipelining)
+    # 2. For media players (VLC, MPV, Web browser): Direct iter_download pipe — zero caching during playback
     if not is_dm:
-        async def fast_streamer():
+        async def direct_streamer():
+            bytes_sent = 0
             try:
-                async for chunk in fast_stream_engine.stream_byte_range(
-                    client=client,
-                    message=message,
-                    chat_id=str(clean_chat_id),
-                    message_id=message_id,
-                    file_size=file_size,
-                    filename=clean_name,
-                    start_byte=start,
-                    end_byte=end,
+                async for chunk in client.iter_download(
+                    message.media,
+                    offset=start,
+                    request_size=512 * 1024,
+                    chunk_size=512 * 1024,
                 ):
-                    if chunk:
-                        yield chunk
-                        await asyncio.sleep(0)
+                    if not chunk:
+                        continue
+                    remaining = length - bytes_sent
+                    if len(chunk) > remaining:
+                        chunk = chunk[:remaining]
+                    yield chunk
+                    bytes_sent += len(chunk)
+                    if bytes_sent >= length:
+                        break
             except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
                 pass
             except Exception as fe:
-                logger.debug(f"Fast stream playback notice: {fe}")
+                logger.debug(f"Stream playback notice at {bytes_sent}/{length}: {fe}")
 
         return StreamingResponse(
-            fast_streamer(),
+            direct_streamer(),
             status_code=status_code,
             headers=headers
         )
