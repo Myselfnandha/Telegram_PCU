@@ -290,16 +290,24 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 2. For media players (VLC, MPV, Web browser): Direct iter_download pipe — zero caching during playback
+    # 2. For media players (VLC, MPV, Web browser): Direct pipe with adaptive chunk sizing
     if not is_dm:
+        # Adaptive chunk size: small for fast first-byte (headers/seeks), larger for sustained playback
+        if length <= 1024 * 1024:
+            chunk_size = 64 * 1024   # 64KB: ultra-fast header probes & moov atom reads
+        elif length <= 8 * 1024 * 1024:
+            chunk_size = 128 * 1024  # 128KB: fast seek response
+        else:
+            chunk_size = 256 * 1024  # 256KB: sustained streaming throughput
+
         async def direct_streamer():
             bytes_sent = 0
             try:
                 async for chunk in client.iter_download(
                     message.media,
                     offset=start,
-                    request_size=512 * 1024,
-                    chunk_size=512 * 1024,
+                    request_size=chunk_size,
+                    chunk_size=chunk_size,
                 ):
                     if not chunk:
                         continue
