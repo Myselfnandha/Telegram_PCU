@@ -2,6 +2,7 @@ import asyncio
 import logging
 from typing import Optional, Dict, Any
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from telethon.errors import (
     SessionPasswordNeededError,
     PhoneNumberInvalidError,
@@ -13,10 +14,13 @@ from app.config import (
     API_HASH,
     BOT_TOKEN,
     SESSION_DIR,
-    SESSION_FILE_PATH
+    SESSION_FILE_PATH,
+    SESSION_STRING,
+    update_session_string_in_env
 )
 
 logger = logging.getLogger("telegram_client")
+logging.getLogger("telethon.network").setLevel(logging.ERROR)
 
 class TelegramClientManager:
     _instance: Optional["TelegramClientManager"] = None
@@ -39,24 +43,16 @@ class TelegramClientManager:
                         logger.warning("TG_API_ID or TG_API_HASH is not set. Telethon client cannot start.")
                         raise ValueError("TG_API_ID and TG_API_HASH must be configured in environment variables.")
 
-                    logger.info(f"Initializing Telethon user client with session: {SESSION_FILE_PATH}")
-                    # Enforce strict Linux file permissions on session directory (0o700) and files (0o600)
-                    try:
-                        if SESSION_DIR.exists():
-                            SESSION_DIR.chmod(0o700)
-                        for sf in SESSION_DIR.glob("*.session*"):
-                            sf.chmod(0o600)
-                    except Exception as perm_err:
-                        logger.debug(f"Could not apply session chmod: {perm_err}")
-
+                    logger.info("Initializing Telethon user client with StringSession...")
+                    session_target = StringSession(SESSION_STRING) if SESSION_STRING else str(SESSION_FILE_PATH)
                     cls._client = TelegramClient(
-                        str(SESSION_FILE_PATH),
+                        session_target,
                         API_ID,
                         API_HASH,
                         connection_retries=None,  # Infinite retries so network drops never permanently kill client
                         retry_delay=3,
                         auto_reconnect=True,
-                        timeout=15
+                        timeout=15  # 15s: must be below VLC's HTTP timeout (~10-15s) to fail fast
                     )
 
                 if not cls._client.is_connected():
@@ -68,6 +64,12 @@ class TelegramClientManager:
 
                 cls._is_ready = await cls._client.is_user_authorized()
                 if cls._is_ready:
+                    # Sync and persist active string session if not already stored
+                    if isinstance(cls._client.session, StringSession):
+                        current_str = cls._client.session.save()
+                        if current_str and current_str != SESSION_STRING:
+                            update_session_string_in_env(current_str)
+
                     me = await cls._client.get_me()
                     full_name = f"{getattr(me, 'first_name', '') or ''} {getattr(me, 'last_name', '') or ''}".strip()
                     cls._cached_me = {
@@ -129,7 +131,7 @@ class TelegramClientManager:
             if cls._client is not None and cls._client.is_connected() and cls._cached_me:
                 return True
             session_file = SESSION_FILE_PATH.with_suffix(".session") if not str(SESSION_FILE_PATH).endswith(".session") else SESSION_FILE_PATH
-            if not session_file.exists() and not SESSION_FILE_PATH.exists():
+            if not SESSION_STRING and not session_file.exists() and not SESSION_FILE_PATH.exists():
                 return False
             client = await cls.get_client()
             return await client.is_user_authorized()
@@ -185,6 +187,10 @@ class TelegramClientManager:
         client = await cls.get_client()
         try:
             await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
+            if isinstance(client.session, StringSession):
+                new_str = client.session.save()
+                if new_str:
+                    update_session_string_in_env(new_str)
             cls._cached_me = None
             me_info = await cls.get_me_info()
             cls._is_ready = True
@@ -197,6 +203,10 @@ class TelegramClientManager:
         """Completes sign-in with 2FA password."""
         client = await cls.get_client()
         await client.sign_in(password=password)
+        if isinstance(client.session, StringSession):
+            new_str = client.session.save()
+            if new_str:
+                update_session_string_in_env(new_str)
         cls._cached_me = None
         me_info = await cls.get_me_info()
         cls._is_ready = True
@@ -215,9 +225,11 @@ class TelegramClientManager:
             cls._client = None
             cls._cached_me = None
             cls._is_ready = False
-            session_file = SESSION_FILE_PATH.with_suffix(".session")
-            if session_file.exists():
-                session_file.unlink(missing_ok=True)
+            update_session_string_in_env("")
+            for ext in (".session", ".session.bak", ".session-wal", ".session-shm"):
+                sf = SESSION_FILE_PATH.with_suffix(ext)
+                if sf.exists():
+                    sf.unlink(missing_ok=True)
             return {"status": "logged_out"}
 
     @classmethod
