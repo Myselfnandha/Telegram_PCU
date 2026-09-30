@@ -39,6 +39,8 @@ tempfile.tempdir = str(TEMP_UPLOAD_DIR)
 
 # Database
 DB_PATH = DATA_DIR / "history.db"
+SUITE_DB_PATH = DATA_DIR / "tg_power_suite.db"
+DISPATCH_PACING_SECS = float(os.getenv("DISPATCH_PACING_SECS", "1.5"))
 
 # Telegram API Config
 API_ID_RAW = os.getenv("TG_API_ID", os.getenv("API_ID", "0"))
@@ -52,6 +54,33 @@ PHONE_NUMBER = os.getenv("TG_PHONE", os.getenv("PHONE_NUMBER", "")).strip()
 BOT_TOKEN = os.getenv("TG_BOT_TOKEN", os.getenv("BOT_TOKEN", "")).strip()
 SESSION_NAME = os.getenv("TG_SESSION_NAME", "tg_suite_user_session").strip()
 SESSION_FILE_PATH = SESSION_DIR / SESSION_NAME
+SESSION_STRING = os.getenv("TG_SESSION_STRING", "").strip()
+AUTO_SAVE_STREAM = os.getenv("TG_AUTO_SAVE_STREAM", "false").lower() in ("1", "true", "yes")
+DEFAULT_SUBTITLE_LANG = os.getenv("DEFAULT_SUBTITLE_LANG", "eng,tam,hin").strip()
+
+def update_session_string_in_env(session_string: str) -> None:
+    """Updates TG_SESSION_STRING in backend/.env file and in runtime environment."""
+    os.environ["TG_SESSION_STRING"] = session_string
+    target_env = ENV_FILE if ENV_FILE.exists() else (BACKEND_DIR / ".env")
+    try:
+        lines = []
+        found = False
+        if target_env.exists():
+            with open(target_env, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("TG_SESSION_STRING="):
+                        lines.append(f"TG_SESSION_STRING={session_string}\n")
+                        found = True
+                    else:
+                        lines.append(line)
+        if not found:
+            lines.append(f"TG_SESSION_STRING={session_string}\n")
+        with open(target_env, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception as e:
+        import logging
+        logging.getLogger("config").warning(f"Could not persist TG_SESSION_STRING to {target_env}: {e}")
+
 
 # Upload Thresholds & Chunking
 # 2 GB hard limit for Telegram MTProto

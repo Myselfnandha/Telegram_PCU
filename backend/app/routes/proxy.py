@@ -31,23 +31,33 @@ from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_v
 class StreamSlidingBuffer:
     """
     Sliding In-Memory Ring Buffer for real-time MTProto streams.
-    Holds up to 48MB of recent continuous video stream chunks in memory.
-    When small seeks (e.g. 5s forward or backward) occur, serves the target
-    chunks INSTANTANEOUSLY with 0ms latency directly from RAM without MTProto round-trips!
+    Holds up to 32MB of recent continuous video stream chunks in memory + first 2MB header.
+    When small seeks (e.g. 5-30s forward or backward) or header re-reads occur,
+    serves the target chunks INSTANTANEOUSLY with 0ms latency directly from RAM without MTProto round-trips!
     """
     def __init__(self):
         self._buffers: Dict[Tuple[str, int], dict] = {}
+        self._headers: Dict[Tuple[str, int], bytearray] = {}
 
     def push(self, chat_id: str, message_id: int, offset: int, data: bytes):
         key = (str(chat_id), message_id)
+        # Store initial header (first 2MB) for instant 0ms header/index replays
+        if offset < 2 * 1024 * 1024:
+            if key not in self._headers:
+                self._headers[key] = bytearray()
+            h = self._headers[key]
+            if offset == len(h) and len(h) < 2 * 1024 * 1024:
+                take = min(len(data), 2 * 1024 * 1024 - len(h))
+                h.extend(data[:take])
+
         if key not in self._buffers:
             self._buffers[key] = {"start": offset, "data": bytearray(), "last_active": time.time()}
         buf = self._buffers[key]
         buf_end = buf["start"] + len(buf["data"])
         if offset == buf_end:
             buf["data"].extend(data)
-            if len(buf["data"]) > 48 * 1024 * 1024:
-                trim = len(buf["data"]) - 48 * 1024 * 1024
+            if len(buf["data"]) > 32 * 1024 * 1024:
+                trim = len(buf["data"]) - 32 * 1024 * 1024
                 buf["data"] = buf["data"][trim:]
                 buf["start"] += trim
         else:
@@ -57,6 +67,14 @@ class StreamSlidingBuffer:
 
     def get_slice(self, chat_id: str, message_id: int, start: int, length: int) -> Optional[bytes]:
         key = (str(chat_id), message_id)
+        # Check header cache first
+        if key in self._headers and start < len(self._headers[key]):
+            h = self._headers[key]
+            available = len(h) - start
+            read_len = min(length, available)
+            if read_len > 0:
+                return bytes(h[start:start + read_len])
+
         if key not in self._buffers:
             return None
         buf = self._buffers[key]
@@ -77,51 +95,8 @@ _ACTIVE_PREFETCH_TASKS: Dict[Tuple[str, int], asyncio.Task] = {}
 
 
 async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id: int, file_size: int, filename: str, start_block: int = 0):
-    """
-    Background worker that continuously downloads all subsequent non-watched 10MB chunk blocks
-    into local discrete block parts until the entire video is cached on local disk.
-    Waits for initial stream playback to start before beginning background downloads.
-    """
-    await asyncio.sleep(2.0)  # Prioritize initial player buffer and instant startup
-    total_blocks = (file_size + BLOCK_SIZE - 1) // BLOCK_SIZE
-    try:
-        sequence = list(range(start_block, total_blocks)) + list(range(0, start_block))
-
-        for block_idx in sequence:
-            block_start = block_idx * BLOCK_SIZE
-            block_end = min(file_size - 1, (block_idx + 1) * BLOCK_SIZE - 1)
-            block_len = block_end - block_start + 1
-
-            if stream_cache_service.has_block(chat_id, message_id, block_idx, block_len):
-                continue
-
-            chunks = []
-            block_chunks = (block_len + 512 * 1024 - 1) // (512 * 1024)
-            async for raw in client.iter_download(
-                message.media,
-                offset=block_start,
-                limit=block_chunks,
-                request_size=512 * 1024,
-                chunk_size=512 * 1024,
-            ):
-                if raw:
-                    chunks.append(raw)
-
-            block_bytes = b"".join(chunks)[:block_len]
-            if len(block_bytes) == block_len:
-                stream_cache_service.save_block(chat_id, message_id, block_idx, block_bytes)
-                logger.debug(f"[Continuous Prefetcher] Cached block {block_idx}/{total_blocks-1} for {filename}")
-
-            await asyncio.sleep(0.04)  # Prioritize active playback stream
-
-        # Merge blocks if all are present
-        stream_cache_service.merge_blocks_if_complete(chat_id, message_id, file_size, filename)
-    except asyncio.CancelledError:
-        pass
-    except Exception as e:
-        logger.debug(f"Continuous prefetcher notice for {filename}: {e}")
-    finally:
-        _ACTIVE_PREFETCH_TASKS.pop((str(chat_id), message_id), None)
+    """Disabled during playback: pure streaming without background disk downloading."""
+    return
 
 
 def compute_dynamic_align_unit(file_size: int, start: int, length: int, user_agent: str = "") -> int:
@@ -180,6 +155,8 @@ async def handle_proxy_download(
 
     message = sniffer_service._message_cache.get((clean_chat_id, message_id))
     if not message:
+        message = sniffer_service._message_cache.get((str(clean_chat_id), message_id))
+    if not message:
         try:
             message = await client.get_messages(clean_chat_id, ids=message_id)
         except Exception as e:
@@ -192,6 +169,9 @@ async def handle_proxy_download(
 
     if not message or not message.media or not hasattr(message, "file") or not message.file:
         raise HTTPException(status_code=404, detail="Message not found or contains no media.")
+
+    sniffer_service._message_cache[(clean_chat_id, message_id)] = message
+    sniffer_service._message_cache[(str(clean_chat_id), message_id)] = message
 
     file_size = int(message.file.size)
     raw_name = message.file.name if message.file.name else f"tg_media_{message_id}.bin"
@@ -290,30 +270,88 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 2. For media players (VLC, MPV, Web browser): Direct pipe with adaptive chunk sizing
+    # 2. For media players (VLC, MPV, Web browser): Zero-Disk High-Speed Prefetch Streamer with RAM Ring Buffer
     if not is_dm:
-        # Adaptive chunk size: small for fast first-byte (headers/seeks), larger for sustained playback
-        if length <= 1024 * 1024:
-            chunk_size = 64 * 1024   # 64KB: ultra-fast header probes & moov atom reads
-        elif length <= 8 * 1024 * 1024:
-            chunk_size = 128 * 1024  # 128KB: fast seek response
-        else:
-            chunk_size = 256 * 1024  # 256KB: sustained streaming throughput
+        media_key = (str(chat_id), message_id)
 
-        async def direct_streamer():
-            bytes_sent = 0
+        # 2a. Check RAM Sliding Ring Buffer & Header Cache first (<0.01ms instant response!)
+        cached_slice = _SLIDING_STREAM_BUFFER.get_slice(str(chat_id), message_id, start, length)
+        if cached_slice and len(cached_slice) == length:
+            async def ram_streamer():
+                yield cached_slice
+            return StreamingResponse(ram_streamer(), status_code=status_code, headers=headers)
+
+        # Cancel any previous in-flight producer task for this media (frees MTProto connection instantly on seek)
+        if media_key in _ACTIVE_STREAM_PRODUCERS:
+            old_prod = _ACTIVE_STREAM_PRODUCERS.pop(media_key, None)
+            if old_prod and not old_prod.done():
+                old_prod.cancel()
+
+        chunk_unit = 512 * 1024  # 512KB — optimal MTProto throughput and low latency
+        aligned_start = (start // 4096) * 4096
+        discard_front = start - aligned_start
+
+        chunk_queue: asyncio.Queue = asyncio.Queue(maxsize=3)
+        producer_cancelled = asyncio.Event()
+
+        async def _direct_producer():
+            curr_pos = aligned_start
+            it = client.iter_download(
+                message.media,
+                offset=aligned_start,
+                request_size=chunk_unit,
+                chunk_size=chunk_unit,
+            )
             try:
-                async for chunk in client.iter_download(
-                    message.media,
-                    offset=start,
-                    request_size=chunk_size,
-                    chunk_size=chunk_size,
-                ):
-                    if not chunk:
-                        continue
+                async for raw in it:
+                    if producer_cancelled.is_set():
+                        break
+                    if raw:
+                        _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_pos, raw)
+                        curr_pos += len(raw)
+                        await chunk_queue.put(raw)
+            except asyncio.CancelledError:
+                pass
+            except errors.FloodWaitError as fwe:
+                rate_governor.report_flood_wait(fwe.seconds, reason=f"Streaming FloodWait on chat {chat_id}, msg {message_id}")
+            except Exception as pe:
+                logger.debug(f"Direct stream producer notice: {pe}")
+            finally:
+                try:
+                    await it.close()
+                except Exception:
+                    pass
+                await chunk_queue.put(None)
+
+        prod_task = asyncio.create_task(_direct_producer())
+        _ACTIVE_STREAM_PRODUCERS[media_key] = prod_task
+
+        async def prefetch_streamer():
+            bytes_sent = 0
+            discard_left = discard_front
+            try:
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(chunk_queue.get(), timeout=20.0)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Stream consumer timeout after 20s for {clean_name}")
+                        break
+
+                    if chunk is None:
+                        break
+
+                    # Strip unaligned front bytes from the first chunk
+                    if discard_left > 0:
+                        if len(chunk) <= discard_left:
+                            discard_left -= len(chunk)
+                            continue
+                        chunk = chunk[discard_left:]
+                        discard_left = 0
+
                     remaining = length - bytes_sent
                     if len(chunk) > remaining:
                         chunk = chunk[:remaining]
+
                     yield chunk
                     bytes_sent += len(chunk)
                     if bytes_sent >= length:
@@ -322,9 +360,15 @@ async def handle_proxy_download(
                 pass
             except Exception as fe:
                 logger.debug(f"Stream playback notice at {bytes_sent}/{length}: {fe}")
+            finally:
+                producer_cancelled.set()
+                if not prod_task.done():
+                    prod_task.cancel()
+                if _ACTIVE_STREAM_PRODUCERS.get(media_key) is prod_task:
+                    _ACTIVE_STREAM_PRODUCERS.pop(media_key, None)
 
         return StreamingResponse(
-            direct_streamer(),
+            prefetch_streamer(),
             status_code=status_code,
             headers=headers
         )
@@ -362,20 +406,10 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 4. Direct High-Throughput MTProto Stream with Async Queue
-    cache_path = stream_cache_service.get_cache_path(str(chat_id), message_id, clean_name)
-    part_path = cache_path.with_suffix(".part")
-
+    # 4. Direct High-Throughput MTProto Stream with Async Queue (Pure Stream - Zero Disk Writes)
     async def stream_generator():
         bytes_written = 0
-        cache_f = None
-        if start == 0 and not cache_path.exists():
-            try:
-                cache_f = open(part_path, "wb")
-            except Exception:
-                pass
-
-        chunk_queue = asyncio.Queue(maxsize=16)
+        chunk_queue = asyncio.Queue(maxsize=8)
         producer_done = asyncio.Event()
 
         async def _mtproto_producer():
@@ -418,17 +452,11 @@ async def handle_proxy_download(
                     logger.warning(f"Stream consumer timeout after 20s for {clean_name}, ending stream at {bytes_written}/{length} bytes")
                     break
                 if chunk is None:
-                    break  # Clean EOF — no null-byte padding (corrupts video container)
+                    break
 
                 remaining = length - bytes_written
                 if len(chunk) > remaining:
                     chunk = chunk[:remaining]
-
-                if cache_f:
-                    try:
-                        cache_f.write(chunk)
-                    except Exception:
-                        pass
 
                 yield chunk
                 bytes_written += len(chunk)
@@ -436,12 +464,6 @@ async def handle_proxy_download(
                 if bytes_written >= length:
                     break
 
-            if cache_f:
-                cache_f.close()
-                cache_f = None
-                if bytes_written == file_size:
-                    part_path.rename(cache_path)
-                    stream_cache_service.evict_if_needed()
         except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError):
             logger.debug(f"Client disconnected during streaming of {clean_name}")
         except Exception as err:
@@ -450,11 +472,6 @@ async def handle_proxy_download(
             if not prod_task.done():
                 prod_task.cancel()
             _ACTIVE_STREAM_PRODUCERS.pop(media_key, None)
-            if cache_f:
-                try:
-                    cache_f.close()
-                except Exception:
-                    pass
 
     return StreamingResponse(
         stream_generator(),
@@ -1431,12 +1448,10 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
                     "--sub-track=0",
                     "--avcodec-threads=0",
                     "--avcodec-hw=auto",
-                    "--network-caching=250",
-                    "--file-caching=250",
-                    "--live-caching=250",
-                    "--sout-mux-caching=250",
-                    "--clock-jitter=0",
-                    "--clock-synchro=0",
+                    "--network-caching=1000",
+                    "--file-caching=1000",
+                    "--live-caching=1000",
+                    "--sout-mux-caching=1000",
                     "--subsdec-encoding=UTF-8"
                 ]
                 if sub_file and sub_file.exists():
