@@ -108,6 +108,15 @@ class StreamCacheManager:
                 "size": total_file_size,
                 "completed": True
             }
+
+            # Automatically trigger offline stream saver if enabled
+            try:
+                from app.services.stream_saver import stream_saver_service
+                if stream_saver_service.is_enabled and filename:
+                    stream_saver_service.save_completed_stream(str(chat_id), message_id, total_file_size, filename)
+            except Exception as se:
+                logger.debug(f"Offline stream saver notice: {se}")
+
             return target_path
         except Exception as me:
             logger.warning(f"Error assembling stream blocks: {me}")

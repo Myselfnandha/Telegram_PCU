@@ -66,22 +66,55 @@ class StreamSaverService:
             target_dir.mkdir(parents=True, exist_ok=True)
             return target_dir / clean_fn
 
+    def _sync_subtitles_to_library(self, filename: str, target_dir: Path):
+        """Copies any cached subtitles (.srt) to the media directory for instant playback in offline media players."""
+        try:
+            cached_sub = subtitle_service.get_cached_subtitle(filename)
+            if cached_sub and cached_sub.exists():
+                dest_sub = target_dir / f"{os.path.splitext(filename)[0]}.srt"
+                if not dest_sub.exists():
+                    shutil.copy2(cached_sub, dest_sub)
+                    logger.info(f"📝 Synced subtitle to offline library: {dest_sub.name}")
+        except Exception as e:
+            logger.debug(f"Subtitle sync notice: {e}")
+
     def save_completed_stream(self, chat_id: str, message_id: int, total_file_size: int, filename: str) -> Optional[Path]:
         """
         Checks if stream is complete and saves an organized copy into the local library.
+        Supports both direct cache hardlink/copy and block assembly.
         """
         if not self._enabled:
             return None
 
+        target_file = self.get_organized_path(filename)
+        target_dir = target_file.parent
+
+        # 1. If complete cached file was already assembled by stream_cache_service
+        cached_file = stream_cache_service.get_cached_file(str(chat_id), message_id)
+        if cached_file and cached_file.exists() and cached_file.stat().st_size == total_file_size:
+            if not (target_file.exists() and target_file.stat().st_size == total_file_size):
+                try:
+                    # Attempt zero-duplication hardlink first; fallback to copy
+                    try:
+                        os.link(cached_file, target_file)
+                    except Exception:
+                        shutil.copy2(cached_file, target_file)
+                    logger.info(f"🎬 Saved offline copy to library: {target_file}")
+                except Exception as e:
+                    logger.warning(f"Could not link/copy cached file to library: {e}")
+                    return None
+            self._sync_subtitles_to_library(filename, target_dir)
+            return target_file
+
+        # 2. Check if all discrete 10MB blocks exist on disk
         total_blocks = (total_file_size + BLOCK_SIZE - 1) // BLOCK_SIZE
-        # Check if all blocks exist on disk
         for i in range(total_blocks):
             expected = min(BLOCK_SIZE, total_file_size - (i * BLOCK_SIZE))
             if not stream_cache_service.has_block(str(chat_id), message_id, i, expected):
                 return None
 
-        target_file = self.get_organized_path(filename)
         if target_file.exists() and target_file.stat().st_size == total_file_size:
+            self._sync_subtitles_to_library(filename, target_dir)
             return target_file
 
         tmp_target = target_file.with_suffix(".saving")
@@ -93,6 +126,7 @@ class StreamSaverService:
                         shutil.copyfileobj(bf, out_f, length=1024 * 1024)
             tmp_target.rename(target_file)
             logger.info(f"🎬 Saved offline copy to library: {target_file}")
+            self._sync_subtitles_to_library(filename, target_dir)
             return target_file
         except Exception as e:
             logger.warning(f"Could not save offline stream to library: {e}")

@@ -39,7 +39,8 @@ backend/data/*.pid
 *.sqlite3
 *.log
 *.pid
-
+ZeroGravity
+*ZeroGravity
 # Temporary Buffers & Download Directories
 backend/temp_uploads/*
 !backend/temp_uploads/.gitkeep
@@ -56,3 +57,5 @@ Thumbs.db
 *.swp
 *.swo
 *~
+backend/data
+*backend/data

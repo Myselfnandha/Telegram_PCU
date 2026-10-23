@@ -395,6 +395,24 @@ class StreamSlidingBuffer:
         except Exception as e:
             logger.debug(f"Media prewarm notice: {e}")
 
+    def get_stats(self) -> Dict[str, Any]:
+        """Returns real-time RAM buffer metrics for telemetry and diagnostics."""
+        total_header_bytes = sum(len(b) for b in self._headers.values())
+        total_tail_bytes = sum(len(b) for b in self._tails.values())
+        total_seg_bytes = sum(
+            sum(len(seg.get("data", b"")) for seg in segs)
+            for segs in self._segments.values()
+        )
+        total_bytes = total_header_bytes + total_tail_bytes + total_seg_bytes
+        return {
+            "active_streams_count": len(self._buffers),
+            "total_buffered_bytes": total_bytes,
+            "total_buffered_mb": round(total_bytes / (1024 * 1024), 2),
+            "headers_cached_count": len(self._headers),
+            "tails_cached_count": len(self._tails),
+            "max_buffer_bytes": self._max_buffer_bytes
+        }
+
     def clear(self):
         """Clear all cached entries."""
         self._buffers.clear()

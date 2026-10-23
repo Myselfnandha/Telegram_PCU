@@ -1154,16 +1154,24 @@ async def trigger_proxy_download(chat_id: Union[int, str], message_id: int, mana
 
 
 @router.get("/api/media/cache/status")
+@router.get("/api/media/cache_status")
 async def get_stream_cache_status():
     """Returns local stream cache usage statistics."""
     return stream_cache_service.get_cache_stats()
 
 
 @router.post("/api/media/cache/clear")
+@router.post("/api/media/cache_clear")
 async def clear_stream_cache():
     """Clears all local cached media chunks."""
     cleared = stream_cache_service.clear_cache()
     return {"success": True, "cleared_files": cleared}
+
+
+@router.get("/api/media/buffer/stats")
+async def get_stream_buffer_stats():
+    """Returns real-time RAM sliding buffer telemetry."""
+    return _SLIDING_STREAM_BUFFER.get_stats()
 
 
 

@@ -983,6 +983,71 @@ def test_tgweb_router_registered_in_fastapi():
     assert tgweb_router in routers
 
 
+def test_stream_buffer_get_stats():
+    """Verifies that StreamSlidingBuffer provides real-time telemetry metrics."""
+    from app.services.stream_buffer import StreamSlidingBuffer
+    buf = StreamSlidingBuffer()
+    buf.push("chat_stat", 555, 0, b"X" * 1024)
+    stats = buf.get_stats()
+    assert stats["active_streams_count"] == 1
+    assert stats["total_buffered_bytes"] >= 1024
+    assert stats["max_buffer_bytes"] > 0
+
+
+@pytest.mark.asyncio
+async def test_stream_saver_organizes_offline_media_and_subtitles(tmp_path):
+    """Verifies that stream_saver_service links completed media and copies subtitles."""
+    from app.services.stream_saver import StreamSaverService
+    from app.services.stream_cache import stream_cache_service
+    from app.services.subtitle_service import SUBTITLES_DIR
+
+    saver = StreamSaverService()
+    saver._library_dir = tmp_path / "Videos" / "Telegram_Cinema"
+    saver.set_enabled(True)
+
+    # 1. Prepare simulated completed cache file
+    fake_cache_file = tmp_path / "123_456_Interstellar.2014.1080p.mp4"
+    dummy_data = b"MOVIE_DATA_" * 100
+    fake_cache_file.write_bytes(dummy_data)
+    file_size = len(dummy_data)
+
+    # Mock stream_cache_service.get_cached_file to return our fake cache file
+    with patch.object(stream_cache_service, "get_cached_file", return_value=fake_cache_file):
+        # Create a mock subtitle file in SUBTITLES_DIR
+        sub_file = SUBTITLES_DIR / "Interstellar_2014_1080p.eng.srt"
+        sub_file.write_text("1\n00:00:01,000 --> 00:00:02,000\nInterstellar\n")
+
+        try:
+            saved_path = saver.save_completed_stream("123", 456, file_size, "Interstellar.2014.1080p.mp4")
+            assert saved_path is not None
+            assert saved_path.exists()
+            assert saved_path.stat().st_size == file_size
+            # Verify it is organized under Movies folder
+            assert "Movies" in str(saved_path)
+            # Verify subtitle was copied alongside
+            expected_sub = saved_path.parent / "Interstellar.2014.1080p.srt"
+            assert expected_sub.exists()
+        finally:
+            sub_file.unlink(missing_ok=True)
+
+
+@pytest.mark.asyncio
+async def test_cache_status_and_buffer_stats_routes():
+    """Verifies that cache status and buffer stats routes return valid JSON responses."""
+    from app.routes.proxy import get_stream_cache_status, get_stream_buffer_stats, clear_stream_cache
+    
+    status = await get_stream_cache_status()
+    assert isinstance(status, dict)
+    assert "file_count" in status
+
+    buf_stats = await get_stream_buffer_stats()
+    assert isinstance(buf_stats, dict)
+    assert "total_buffered_bytes" in buf_stats
+
+    cleared = await clear_stream_cache()
+    assert cleared["success"] is True
+
+
 
 
 

@@ -10,6 +10,7 @@ import {
   Activity,
   CheckCircle2,
   Clock,
+  FolderDown,
   HardDrive,
   Languages,
   Laptop,
@@ -49,6 +50,7 @@ export const SettingsView: React.FC = () => {
   });
   const [cacheStatus, setCacheStatus] = useState<{ total_mb?: number; size_mb?: number; file_count?: number } | null>(null);
   const [networkInfo, setNetworkInfo] = useState<{ local_ip?: string; port?: number; latency_ms?: number } | null>(null);
+  const [offlineSaver, setOfflineSaver] = useState<boolean>(false);
   const [clearingCache, setClearingCache] = useState(false);
   const [pinging, setPinging] = useState(false);
   const [pingResult, setPingResult] = useState<number | null>(null);
@@ -67,10 +69,34 @@ export const SettingsView: React.FC = () => {
     } catch {}
   };
 
+  const loadOfflineSaver = async () => {
+    try {
+      const res = await api.getOfflineSaverStatus();
+      setOfflineSaver(Boolean(res?.enabled));
+    } catch {}
+  };
+
   useEffect(() => {
     loadCacheStatus();
     loadNetworkInfo();
+    loadOfflineSaver();
   }, []);
+
+  const handleToggleOfflineSaver = async (enabled: boolean) => {
+    setOfflineSaver(enabled);
+    try {
+      await api.toggleOfflineSaver(enabled);
+      addToast({
+        type: 'success',
+        title: 'Offline Cinema Organizer',
+        message: enabled
+          ? 'Completed streams will automatically save to ~/Videos/Telegram_Cinema'
+          : 'Offline stream saving disabled.',
+      });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Error', message: err.message });
+    }
+  };
 
   const handlePlayerChange = (player: 'vlc' | 'web') => {
     setPreferredPlayer(player);
@@ -455,6 +481,34 @@ export const SettingsView: React.FC = () => {
               <Trash2 className="w-3.5 h-3.5 text-destructive" />
               <span>{clearingCache ? 'Clearing...' : 'Flush Cache'}</span>
             </Button>
+          </div>
+        </div>
+
+        {/* Offline Cinema Library Organizer Card */}
+        <div className="p-5 rounded-2xl border border-border/70 bg-card/85 backdrop-blur-md shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FolderDown className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-semibold text-foreground">Offline Cinema Organizer</h2>
+            </div>
+            <Switch
+              checked={offlineSaver}
+              onCheckedChange={handleToggleOfflineSaver}
+              className="cursor-pointer"
+            />
+          </div>
+
+          <div className="space-y-2 text-xs">
+            <p className="text-muted-foreground leading-relaxed">
+              Automatically saves fully streamed videos into your organized offline library at{' '}
+              <span className="font-mono text-foreground font-medium">~/Videos/Telegram_Cinema/</span>.
+            </p>
+            <div className="p-2.5 rounded-lg bg-accent/30 space-y-1 font-mono text-[11px] text-muted-foreground">
+              <div className="text-foreground font-semibold">Automatic Structure:</div>
+              <div>• Movies: <span className="text-emerald-400">Movies/Title (Year)/Title.mp4</span></div>
+              <div>• TV Series: <span className="text-emerald-400">TV_Shows/Title/Season XX/Episode.mp4</span></div>
+              <div>• Subtitles: <span className="text-emerald-400">Auto-synced .srt tracks side-by-side</span></div>
+            </div>
           </div>
         </div>
       </div>
