@@ -69,10 +69,12 @@ export class SettingsUI {
     if (tabController) {
       tabController.onTabSwitch("settings", () => {
         this.loadSettings();
+        if (this.reloadNetwork) this.reloadNetwork();
       });
     }
 
     this.loadSettings();
+    this.initNetworkSettings();
   }
 
   async loadSettings() {
@@ -113,6 +115,121 @@ export class SettingsUI {
       }
     } catch (err) {
       showToast(`Error saving settings: ${err.message}`, "error");
+    }
+  }
+
+  async initNetworkSettings() {
+    const lanIpBadge = document.getElementById("lanIpBadge");
+    const netLanUrlInput = document.getElementById("netLanUrlInput");
+    const netLanQrImg = document.getElementById("netLanQrImg");
+    const btnCopyLanUrl = document.getElementById("btnCopyLanUrl");
+
+    const cloudflareStatusPill = document.getElementById("cloudflareStatusPill");
+    const netTunnelUrlInput = document.getElementById("netTunnelUrlInput");
+    const btnCopyTunnelUrl = document.getElementById("btnCopyTunnelUrl");
+    const btnToggleTunnel = document.getElementById("btnToggleTunnel");
+    const tunnelErrorMsg = document.getElementById("tunnelErrorMsg");
+
+    const updateNetworkUI = (netInfo) => {
+      if (!netInfo) return;
+      if (lanIpBadge) lanIpBadge.textContent = `LAN: ${netInfo.lan_ip || '127.0.0.1'}`;
+      if (netLanUrlInput) netLanUrlInput.value = netInfo.default_url || `http://${netInfo.lan_ip}:8088`;
+      if (netLanQrImg) netLanQrImg.src = `/api/system/qrcode?text=${encodeURIComponent(netInfo.default_url || `http://${netInfo.lan_ip}:8088`)}`;
+
+      const tunnel = netInfo.tunnel || {};
+      if (tunnel.status === "running" && tunnel.public_url) {
+        if (cloudflareStatusPill) {
+          cloudflareStatusPill.textContent = "Active (Online)";
+          cloudflareStatusPill.style.background = "rgba(16, 185, 129, 0.15)";
+          cloudflareStatusPill.style.color = "#10b981";
+        }
+        if (netTunnelUrlInput) netTunnelUrlInput.value = tunnel.public_url;
+        if (btnCopyTunnelUrl) btnCopyTunnelUrl.disabled = false;
+        if (btnToggleTunnel) {
+          btnToggleTunnel.innerHTML = "<span>🛑 Stop Remote Tunnel</span>";
+          btnToggleTunnel.style.background = "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)";
+        }
+        if (tunnelErrorMsg) tunnelErrorMsg.style.display = "none";
+      } else {
+        if (cloudflareStatusPill) {
+          cloudflareStatusPill.textContent = "Stopped";
+          cloudflareStatusPill.style.background = "rgba(148, 163, 184, 0.15)";
+          cloudflareStatusPill.style.color = "#94a3b8";
+        }
+        if (netTunnelUrlInput) netTunnelUrlInput.value = "";
+        if (btnCopyTunnelUrl) btnCopyTunnelUrl.disabled = true;
+        if (btnToggleTunnel) {
+          btnToggleTunnel.innerHTML = "<span>⚡ Start Remote Tunnel</span>";
+          btnToggleTunnel.style.background = "linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)";
+        }
+      }
+    };
+
+    const fetchNetwork = async () => {
+      try {
+        const res = await fetch("/api/system/network");
+        if (res.ok) {
+          const netInfo = await res.json();
+          updateNetworkUI(netInfo);
+        }
+      } catch (e) {
+        console.debug("Network info load error:", e);
+      }
+    };
+
+    this.reloadNetwork = fetchNetwork;
+    await fetchNetwork();
+
+    if (btnCopyLanUrl && netLanUrlInput) {
+      btnCopyLanUrl.addEventListener("click", () => {
+        navigator.clipboard.writeText(netLanUrlInput.value).then(() => {
+          showToast("📋 LAN Wi-Fi URL copied to clipboard!", "success");
+        });
+      });
+    }
+
+    if (btnCopyTunnelUrl && netTunnelUrlInput) {
+      btnCopyTunnelUrl.addEventListener("click", () => {
+        if (netTunnelUrlInput.value) {
+          navigator.clipboard.writeText(netTunnelUrlInput.value).then(() => {
+            showToast("📋 Remote Cloudflare Tunnel URL copied!", "success");
+          });
+        }
+      });
+    }
+
+    if (btnToggleTunnel) {
+      btnToggleTunnel.addEventListener("click", async () => {
+        btnToggleTunnel.disabled = true;
+        const currentText = btnToggleTunnel.textContent;
+        const isRunning = currentText.includes("Stop");
+
+        try {
+          if (isRunning) {
+            btnToggleTunnel.innerHTML = "<span>Stopping tunnel...</span>";
+            await fetch("/api/system/tunnel/stop", { method: "POST" });
+            showToast("Remote Cloudflare tunnel stopped", "info");
+          } else {
+            btnToggleTunnel.innerHTML = "<span>Connecting to Cloudflare...</span>";
+            const startRes = await fetch("/api/system/tunnel/start", { method: "POST" });
+            const startData = await startRes.json();
+            if (startData.status === "running") {
+              showToast(`🌐 Cloudflare Tunnel Active: ${startData.public_url}`, "success");
+            } else if (startData.status === "error") {
+              if (tunnelErrorMsg) {
+                tunnelErrorMsg.textContent = startData.error || "Failed to start tunnel";
+                tunnelErrorMsg.style.display = "block";
+              }
+              showToast(`Tunnel error: ${startData.error}`, "error");
+            }
+          }
+          await fetchNetwork();
+        } catch (err) {
+          showToast(`Tunnel error: ${err.message}`, "error");
+        } finally {
+          btnToggleTunnel.disabled = false;
+        }
+      });
     }
   }
 }

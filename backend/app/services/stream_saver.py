@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 
 from app.services.subtitle_service import subtitle_service
 from app.services.stream_cache import stream_cache_service, BLOCK_SIZE
+from app.config import AUTO_SAVE_STREAM
 
 logger = logging.getLogger("stream_saver")
 
@@ -19,7 +20,7 @@ DEFAULT_LIBRARY_DIR = Path.home() / "Videos" / "Telegram_Cinema"
 
 class StreamSaverService:
     def __init__(self):
-        self._enabled = False
+        self._enabled = bool(AUTO_SAVE_STREAM)
         self._library_dir = DEFAULT_LIBRARY_DIR
         self._init_dirs()
 

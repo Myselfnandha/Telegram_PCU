@@ -33,17 +33,45 @@ from app.services.tray_service import start_tray_service, stop_tray_service
 PID_FILE = DATA_DIR / "tg_power_suite.pid"
 LOG_FILE = DATA_DIR / "tg_power_suite.log"
 
+class EndpointFilter(logging.Filter):
+    """Silences routine UI background polling pings from cluttering terminal logs."""
+    SILENT_PATHS = (
+        "/api/governor/status",
+        "/api/auth/status",
+        "/api/history",
+        "/api/system/network",
+        "/socket.io/",
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(path in msg for path in self.SILENT_PATHS)
+
 def setup_file_logging():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     root_logger = logging.getLogger()
-    handler = logging.handlers.RotatingFileHandler(
+    root_logger.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
+
+    # 1. Persistent Rotating File Handler
+    file_handler = logging.handlers.RotatingFileHandler(
         str(LOG_FILE),
-        maxBytes=5 * 1024 * 1024,
+        maxBytes=10 * 1024 * 1024,
         backupCount=3,
         encoding="utf-8"
     )
-    handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] %(message)s"))
-    root_logger.addHandler(handler)
+    file_handler.setFormatter(fmt)
+    root_logger.addHandler(file_handler)
+
+    # 2. Live Terminal Console Stream Handler (filtered)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(fmt)
+    root_logger.addHandler(console_handler)
+
+    # 3. Suppress polling noise from uvicorn HTTP access logger
+    logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
+    logging.getLogger("telethon.network").setLevel(logging.ERROR)
 
 def get_running_pid():
     """Returns PID of active process if alive, else None."""
@@ -122,6 +150,19 @@ def cli_stop():
     except Exception as e:
         print(f"  ❌ Error stopping process: {e}\n")
 
+def cli_restart(enable_tray: bool = False, daemon: bool = True):
+    print("  🔄 Restarting TG Power Suite...")
+    cli_stop()
+    time.sleep(1)
+    if daemon:
+        cmd = [sys.executable, str(Path(__file__).resolve()), "start", "--daemon"]
+        if enable_tray:
+            cmd.append("--tray")
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        print("  🚀 TG Power Suite restarted in background.\n")
+    else:
+        run_server(enable_tray=enable_tray)
+
 def cli_logs(follow: bool = False, lines: int = 50):
     if LOG_FILE.exists():
         if follow and sys.platform != "win32":
@@ -171,7 +212,7 @@ def run_server(enable_tray: bool = False):
             host=HOST,
             port=PORT,
             log_level="info",
-            access_log=False,
+            access_log=True,
             reload=False
         )
     finally:
@@ -191,6 +232,11 @@ def main():
     # stop
     subparsers.add_parser("stop", help="Stop running TG Power Suite server")
 
+    # restart
+    p_restart = subparsers.add_parser("restart", help="Restart TG Power Suite server")
+    p_restart.add_argument("--tray", action="store_true", help="Enable system tray icon")
+    p_restart.add_argument("--daemon", action="store_true", default=True, help="Run detached in background")
+
     # status
     subparsers.add_parser("status", help="Check running status")
 
@@ -203,6 +249,9 @@ def main():
 
     if args.command == "stop":
         cli_stop()
+    elif args.command == "restart":
+        tray_flag = getattr(args, "tray", False) or ("--tray" in sys.argv)
+        cli_restart(enable_tray=tray_flag, daemon=True)
     elif args.command == "status":
         cli_status()
     elif args.command == "logs":

@@ -1,0 +1,1152 @@
+import { showToast } from './ui.js';
+import { formatBytes, escapeHtml, cleanFileName } from './utils.js';
+import { chatPicker } from './chat-picker.js';
+import { socketManager } from './socket.js';
+
+let _cinemaVideos = [];
+let _currentChatId = 'me';
+let _currentChatName = 'Saved Messages (Personal Cloud)';
+
+export async function initCinema() {
+  const btnChooseChat = document.getElementById('btnCinemaChooseChat');
+  const videoSearch = document.getElementById('cinemaSearchInput');
+  const btnRefresh = document.getElementById('btnCinemaRefresh');
+  const btnToggleOfflineSaver = document.getElementById('btnToggleOfflineSaver');
+  const offlineSaverStateLabel = document.getElementById('offlineSaverStateLabel');
+
+  // Real-time video sync from backend MTProto cache
+  socketManager.onCinemaUpdate((data) => {
+    if (data && String(data.chat_id) === String(_currentChatId) && Array.isArray(data.videos)) {
+      _cinemaVideos = data.videos;
+      const countBadge = document.getElementById('cinemaVideoCount');
+      if (countBadge) countBadge.textContent = `${_cinemaVideos.length} Videos`;
+      const cacheKey = 'tg_cinema_cache_' + _currentChatId;
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(_cinemaVideos));
+      } catch (e) {}
+      renderCinemaGrid(_cinemaVideos);
+    }
+  });
+
+  // 1. Destination Bar & Watched Channels Setup
+  _initCinemaDestinationPicker();
+  window._openMobileVlcDialog = openMobileVlcModal;
+  window._closeMobileVlcModal = () => {
+    const modal = document.getElementById('mobileVlcModal');
+    if (modal) modal.classList.remove('open', 'active');
+  };
+  if (btnChooseChat) {
+    btnChooseChat.addEventListener('click', () => {
+      chatPicker.open((chat) => _onCinemaChatSelected(chat));
+    });
+  }
+  try {
+    await _loadCinemaWatchedChips();
+  } catch (chipErr) {
+    console.debug('Watched chips load deferred:', chipErr);
+  }
+
+  // 2. Offline Library Saver Toggle Setup
+  if (btnToggleOfflineSaver) {
+    fetch('/api/settings/offline_saver')
+      .then((r) => r.json())
+      .then((data) => {
+        if (offlineSaverStateLabel) offlineSaverStateLabel.textContent = data.enabled ? 'On' : 'Off';
+        btnToggleOfflineSaver.classList.toggle('active', Boolean(data.enabled));
+      })
+      .catch(() => {});
+
+    btnToggleOfflineSaver.addEventListener('click', async () => {
+      const isCurrentlyActive = btnToggleOfflineSaver.classList.contains('active');
+      const nextState = !isCurrentlyActive;
+      try {
+        const resp = await fetch('/api/settings/offline_saver', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: nextState })
+        });
+        const data = await resp.json();
+        if (offlineSaverStateLabel) offlineSaverStateLabel.textContent = data.enabled ? 'On' : 'Off';
+        btnToggleOfflineSaver.classList.toggle('active', Boolean(data.enabled));
+        showToast(
+          data.enabled
+            ? '💾 Stream-to-Disk Auto-Saver Active: Full videos will save to ~/Videos/Telegram_Cinema'
+            : '💾 Stream-to-Disk Auto-Saver Disabled',
+          'info'
+        );
+      } catch (e) {
+        showToast('Could not toggle offline saver', 'warning');
+      }
+    });
+  }
+
+  // 3. Load Continue Watching Row
+  loadContinueWatching();
+
+  // Change Destination button -> Opens Telegram Chat Modal
+  if (btnChooseChat) {
+    btnChooseChat.addEventListener('click', () => {
+      chatPicker.open((selectedChat) => {
+        _onCinemaChatSelected(selectedChat);
+      });
+    });
+  }
+
+  // Refresh (busts local cache and requests full fresh MTProto sync)
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      try {
+        localStorage.removeItem('tg_cinema_cache_' + _currentChatId);
+      } catch (e) {}
+      loadCinemaVideos(_currentChatId, true);
+      loadContinueWatching();
+    });
+  }
+
+  // Search Filter
+  if (videoSearch) {
+    videoSearch.addEventListener('input', (e) => {
+      _filterCinemaGrid(e.target.value.toLowerCase().trim());
+    });
+  }
+
+  // Initial Load: Only fetch if user is already on cinema tab
+  if (document.getElementById('tabPaneCinema')?.classList.contains('active')) {
+    loadCinemaVideos('me');
+  }
+}
+
+function _initCinemaDestinationPicker() {
+  const nameEl = document.getElementById('cinemaCurrentChatName');
+  const typeEl = document.getElementById('cinemaCurrentChatType');
+  const iconEl = document.getElementById('cinemaCurrentChatIcon');
+
+  if (nameEl) nameEl.textContent = 'Saved Messages (Personal Cloud)';
+  if (typeEl) {
+    typeEl.textContent = 'CLOUD';
+    typeEl.className = 'chat-type-tag';
+  }
+  if (iconEl) iconEl.innerHTML = '<span style="font-size: 1.15rem;">☁️</span>';
+}
+
+function _onCinemaChatSelected(chat) {
+  _currentChatId = chat.id;
+  _currentChatName = chat.name || 'Chat';
+  const nameEl = document.getElementById('cinemaCurrentChatName');
+  const typeEl = document.getElementById('cinemaCurrentChatType');
+  const iconEl = document.getElementById('cinemaCurrentChatIcon');
+
+  if (nameEl) nameEl.textContent = chat.name;
+  if (typeEl) {
+    typeEl.textContent = (chat.type || 'chat').toUpperCase();
+    typeEl.className = `chat-type-tag type-${chat.type || 'chat'}`;
+  }
+  if (iconEl) {
+    const icons = { saved_messages: '☁️', user: '👤', channel: '📢', supergroup: '👥', group: '👥', bot: '🤖' };
+    const defaultIcon = icons[chat.type] || '💬';
+    if (chat.type === 'saved_messages') {
+      iconEl.innerHTML = '☁️';
+    } else {
+      iconEl.innerHTML = `<img src="/api/chats/${encodeURIComponent(chat.id)}/avatar" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${defaultIcon}</span>'">`;
+    }
+  }
+
+  // Update active chip highlight
+  document.querySelectorAll('.cinema-chip').forEach((c) => {
+    const chipId = c.getAttribute('data-chat-id');
+    c.classList.toggle('active', chipId == chat.id);
+  });
+
+  loadCinemaVideos(_currentChatId);
+}
+window._cinemaOnChatSelected = _onCinemaChatSelected;
+
+async function _loadCinemaWatchedChips() {
+  const chipsContainer = document.getElementById('cinemaWatchedChips');
+  if (!chipsContainer) return;
+
+  chipsContainer.innerHTML = '';
+
+  try {
+    const resp = await fetch('/api/sniffer/status');
+    const data = await resp.json();
+    const channels = data.watched_channels || [];
+
+    if (channels.length === 0) {
+      chipsContainer.style.display = 'none';
+      return;
+    }
+
+    chipsContainer.style.display = 'flex';
+
+    channels.forEach((ch) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'cinema-chip' + (_currentChatId == ch.id ? ' active' : '');
+      chip.setAttribute('data-chat-id', ch.id);
+      const icon = ch.type === 'channel' ? '📢' : (ch.type === 'supergroup' || ch.type === 'group' ? '👥' : '💬');
+      chip.innerHTML = `
+        <img src="/api/chats/${encodeURIComponent(ch.id)}/avatar" alt="" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;" onerror="this.outerHTML='<span>${icon}</span>'">
+        <span>${escapeHtml(ch.name)}</span>
+      `;
+      chip.addEventListener('click', () => {
+        _onCinemaChatSelected({ id: ch.id, name: ch.name, type: ch.type });
+      });
+      chipsContainer.appendChild(chip);
+    });
+  } catch (err) {
+    console.debug('Could not load watched channels for chips:', err);
+    chipsContainer.style.display = 'none';
+  }
+}
+
+export async function loadCinemaVideos(chatId = 'me', forceRefresh = false) {
+  _currentChatId = chatId;
+  const grid = document.getElementById('cinemaVideoGrid');
+  const seriesPane = document.getElementById('cinemaSeriesPane');
+  const seriesList = document.getElementById('cinemaSeriesList');
+  const countBadge = document.getElementById('cinemaVideoCount');
+  const moviesCountBadge = document.getElementById('cinemaMoviesCount');
+  const seriesCountBadge = document.getElementById('cinemaSeriesCount');
+
+  // 1. Instant Cache Render (<1ms from localStorage)
+  const cacheKey = 'tg_cinema_cache_' + chatId;
+  let hasRenderedCached = false;
+
+  if (!forceRefresh) {
+    try {
+      const localCached = localStorage.getItem(cacheKey);
+      if (localCached) {
+        const cachedData = JSON.parse(localCached);
+        if (Array.isArray(cachedData) && cachedData.length > 0) {
+          _cinemaVideos = cachedData;
+          if (countBadge) countBadge.textContent = `${_cinemaVideos.length} Videos`;
+          renderCinemaGrid(_cinemaVideos);
+          hasRenderedCached = true;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 2. If no cached data, immediately clear previous channel items & show loading animations
+  if (!hasRenderedCached) {
+    _cinemaVideos = [];
+    if (countBadge) countBadge.textContent = 'Scanning...';
+    if (moviesCountBadge) moviesCountBadge.textContent = 'Loading...';
+    if (seriesCountBadge) seriesCountBadge.textContent = 'Loading...';
+
+    if (seriesPane) seriesPane.classList.remove('hidden');
+
+    if (grid) {
+      grid.innerHTML = `
+        <div class="cinema-loading-container" style="grid-column: 1 / -1; padding: 32px 16px; text-align: center;">
+          <div class="mtproto-pulse-loader">
+            <div class="pulse-ring"></div>
+            <div class="pulse-core">📡</div>
+          </div>
+          <h3 style="margin-top: 14px; font-size: 1.05rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Fetching video files from Telegram MTProto...</h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 6px;">Retrieving high-speed video stream catalog from Telegram cloud...</p>
+        </div>
+        <div class="cinema-skeleton-card"></div>
+        <div class="cinema-skeleton-card"></div>
+        <div class="cinema-skeleton-card"></div>
+        <div class="cinema-skeleton-card"></div>
+      `;
+    }
+
+    if (seriesList) {
+      seriesList.innerHTML = `
+        <div class="series-skeleton-card" style="padding: 16px;">
+          <div style="height: 16px; width: 60%; background: rgba(255,255,255,0.08); border-radius: 4px; margin-bottom: 12px;"></div>
+          <div style="height: 12px; width: 40%; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 16px;"></div>
+          <div style="display: flex; gap: 8px;">
+            <div style="height: 48px; width: 120px; background: rgba(255,255,255,0.04); border-radius: 6px;"></div>
+            <div style="height: 48px; width: 120px; background: rgba(255,255,255,0.04); border-radius: 6px;"></div>
+          </div>
+        </div>
+        <div class="series-skeleton-card" style="padding: 16px;">
+          <div style="height: 16px; width: 50%; background: rgba(255,255,255,0.08); border-radius: 4px; margin-bottom: 12px;"></div>
+          <div style="height: 12px; width: 35%; background: rgba(255,255,255,0.05); border-radius: 4px;"></div>
+        </div>
+      `;
+    }
+  }
+
+  try {
+    const url = forceRefresh
+      ? `/api/media/videos/${encodeURIComponent(chatId)}?force_refresh=true&limit=250`
+      : `/api/media/videos/${encodeURIComponent(chatId)}?limit=250`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    _cinemaVideos = data.videos || [];
+
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(_cinemaVideos));
+    } catch (e) {}
+
+    if (countBadge) {
+      countBadge.textContent = `${_cinemaVideos.length} Videos`;
+    }
+
+    renderCinemaGrid(_cinemaVideos);
+  } catch (err) {
+    if (!hasRenderedCached && grid) {
+      grid.innerHTML = `
+        <div class="cinema-empty">
+          <span style="font-size: 2.2rem; margin-bottom: 8px;">⚠️</span>
+          <p style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">Could not load video archive</p>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">${escapeHtml(err.message)}</p>
+          <button class="btn-secondary" style="margin-top: 14px; padding: 6px 14px; font-size: 0.8rem;" onclick="window._reloadCinema()">
+            🔄 Try Again
+          </button>
+        </div>
+      `;
+      if (seriesList) seriesList.innerHTML = '';
+      if (seriesPane) seriesPane.classList.add('hidden');
+    }
+  }
+}
+
+window._reloadCinema = () => loadCinemaVideos(_currentChatId, true);
+
+function _attachHoverScrubber(containerEl, videoItem) {
+  if (!containerEl || !videoItem) return;
+
+  let hoverTimer = null;
+  let currentFrame = 0;
+  const totalFrames = 5;
+
+  containerEl.addEventListener('mouseenter', () => {
+    let imgEl = containerEl.querySelector('img');
+    const originalSrc = imgEl ? imgEl.src : null;
+
+    currentFrame = 0;
+    hoverTimer = setInterval(() => {
+      currentFrame = (currentFrame + 1) % totalFrames;
+      const previewUrl = `/api/media/preview/${encodeURIComponent(videoItem.chat_id)}/${videoItem.message_id}/${currentFrame}`;
+      const nextImg = new Image();
+      nextImg.onload = () => {
+        if (hoverTimer) {
+          if (!imgEl) {
+            const fallback = containerEl.querySelector('.cinema-hub-thumb-fallback, .series-thumb-fallback');
+            if (fallback) fallback.style.display = 'none';
+            imgEl = document.createElement('img');
+            imgEl.className = 'video-thumb-img';
+            imgEl.alt = '';
+            containerEl.prepend(imgEl);
+          }
+          imgEl.src = previewUrl;
+          imgEl.style.display = 'block';
+        }
+      };
+      nextImg.src = previewUrl;
+    }, 420);
+
+    const onLeave = () => {
+      if (hoverTimer) {
+        clearInterval(hoverTimer);
+        hoverTimer = null;
+      }
+      containerEl.removeEventListener('mouseleave', onLeave);
+      if (imgEl && originalSrc) {
+        imgEl.src = originalSrc;
+      }
+    };
+    containerEl.addEventListener('mouseleave', onLeave);
+  });
+}
+
+function _extractSeriesInfo(filename) {
+  const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
+  const clean = cleanFileName(filename, channelContext) || filename;
+
+  // Match Season and Episode patterns (including multi-episode ranges like EP 25 28 or EP 25-28):
+  // e.g. S01E01, S1E1, S01 EP01, Season 1 Episode 2, EP01, Episode 01, Part 1
+  const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}(?:[\s\-]+\d{1,3})?|ep\s*\d{1,3}(?:[\s\-]+\d{1,3})?|episode\s*\d{1,3}(?:[\s\-]+\d{1,3})?|part\s*\d{1,2}))(.*)$/i;
+  const m = clean.match(regex);
+  if (m) {
+    let rawName = (m[1] || '').replace(/\.\w+$/, '').replace(/[._\-\(\)]+$/, '').trim();
+    if (!rawName) rawName = clean.replace(/\.\w+$/, '').trim();
+
+    // Canonical title: strip channel noise, domain signatures, watermarks, year, and empty brackets
+    let canonical = cleanFileName(rawName, channelContext)
+      .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
+      .replace(/[\(\)\[\]\{\}]/g, ' ')
+      .replace(/^(?:org|com|net|tv|hd|link|linkzz|official)\s+/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!canonical) canonical = 'TV Series';
+
+    const sSeason = (m[2] || 'S01').toUpperCase().replace(/\s+/g, ' ');
+    const sEp = (m[3] || 'EP01').toUpperCase().replace(/\s+/g, ' ');
+    const seasonNum = parseInt(sSeason.replace(/\D/g, '')) || 1;
+    const seasonLabel = `Season ${seasonNum}`;
+
+    const cleanedTitle = clean.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '').replace(/\s+/g, ' ').trim();
+
+    return {
+      isSeries: true,
+      canonicalTitle: canonical,
+      seasonNum: seasonNum,
+      seasonLabel: seasonLabel,
+      epLabel: sEp,
+      cleanTitle: cleanedTitle
+    };
+  }
+  const cleanedTitle = clean.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '').replace(/\s+/g, ' ').trim();
+  return { isSeries: false, cleanTitle: cleanedTitle };
+}
+
+export function renderCinemaGrid(videos) {
+  const moviesGrid = document.getElementById('cinemaVideoGrid');
+  const seriesPane = document.getElementById('cinemaSeriesPane');
+  const seriesList = document.getElementById('cinemaSeriesList');
+  const moviesCountBadge = document.getElementById('cinemaMoviesCount');
+  const seriesCountBadge = document.getElementById('cinemaSeriesCount');
+
+  if (!moviesGrid) return;
+
+  moviesGrid.innerHTML = '';
+  if (seriesList) seriesList.innerHTML = '';
+
+  if (videos.length === 0) {
+    if (seriesPane) seriesPane.classList.add('hidden');
+    moviesGrid.innerHTML = `
+      <div class="cinema-empty">
+        <span style="font-size: 2.4rem; margin-bottom: 8px;">🎬</span>
+        <p style="font-size: 1rem; font-weight: 600; color: var(--text-main);">No video files found</p>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">This channel does not contain any video documents or movies</p>
+      </div>
+    `;
+    if (moviesCountBadge) moviesCountBadge.textContent = '0 Movies';
+    if (seriesCountBadge) seriesCountBadge.textContent = '0 Series';
+    return;
+  }
+
+  // 1. Group TV series into Unified Show Bundles
+  const rawShowsMap = new Map();
+  const standaloneList = [];
+  const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
+
+  videos.forEach((v) => {
+    const sInfo = _extractSeriesInfo(v.filename);
+    if (sInfo.isSeries) {
+      const key = sInfo.canonicalTitle.toLowerCase();
+      if (!rawShowsMap.has(key)) {
+        rawShowsMap.set(key, {
+          canonicalTitle: sInfo.canonicalTitle,
+          episodes: []
+        });
+      }
+      rawShowsMap.get(key).episodes.push({ ...v, ...sInfo });
+    } else {
+      standaloneList.push({ ...v, ...sInfo });
+    }
+  });
+
+  // 2. Fuzzy merge shows sharing substring titles (e.g. "Lost in Space" vs "Space")
+  const mergedShowsMap = new Map();
+  const rawKeys = Array.from(rawShowsMap.keys()).sort((a, b) => b.length - a.length);
+
+  rawKeys.forEach((key) => {
+    const showData = rawShowsMap.get(key);
+    if (!showData) return;
+
+    let mergedIntoExisting = false;
+    for (const [existingKey, existingData] of mergedShowsMap.entries()) {
+      if (existingKey === key || existingKey.includes(key) || key.includes(existingKey)) {
+        existingData.episodes.push(...showData.episodes);
+        if (showData.canonicalTitle.length > existingData.canonicalTitle.length) {
+          existingData.canonicalTitle = showData.canonicalTitle;
+        }
+        mergedIntoExisting = true;
+        break;
+      }
+    }
+
+    if (!mergedIntoExisting) {
+      mergedShowsMap.set(key, showData);
+    }
+  });
+
+  // 3. Build Unified Shows with Multi-Season Maps
+  const validShows = [];
+  mergedShowsMap.forEach((show) => {
+    if (show.episodes.length > 1) {
+      const seasonsMap = new Map();
+      show.episodes.forEach((ep) => {
+        const sLabel = ep.seasonLabel || 'Season 1';
+        if (!seasonsMap.has(sLabel)) {
+          seasonsMap.set(sLabel, []);
+        }
+        seasonsMap.get(sLabel).push(ep);
+      });
+
+      // Sort episodes inside each season numerically
+      seasonsMap.forEach((eps) => {
+        eps.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }));
+      });
+
+      // Sort seasons numerically (Season 1, Season 2, Season 3...)
+      const sortedSeasonKeys = Array.from(seasonsMap.keys()).sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, '')) || 1;
+        const numB = parseInt(b.replace(/\D/g, '')) || 1;
+        return numA - numB;
+      });
+
+      const totalBytes = show.episodes.reduce((acc, curr) => acc + (curr.file_size || 0), 0);
+      const leadThumb = show.episodes.find((e) => e.has_thumb)?.thumb_url;
+
+      validShows.push({
+        showTitle: show.canonicalTitle,
+        totalEpisodes: show.episodes.length,
+        totalBytes: totalBytes,
+        leadThumb: leadThumb,
+        seasonsMap: seasonsMap,
+        seasonKeys: sortedSeasonKeys,
+        activeSeason: sortedSeasonKeys[0] || 'Season 1'
+      });
+    } else {
+      standaloneList.push(...show.episodes);
+    }
+  });
+
+  // Update Section Counters
+  if (moviesCountBadge) moviesCountBadge.textContent = `${standaloneList.length} Movies`;
+  if (seriesCountBadge) seriesCountBadge.textContent = `${validShows.length} Shows`;
+
+  // 4. Right Pane: Render Unified Show Showcase Cards
+  if (seriesPane && seriesList) {
+    if (validShows.length === 0) {
+      seriesPane.classList.add('hidden');
+    } else {
+      seriesPane.classList.remove('hidden');
+      validShows.forEach((show, showIdx) => {
+        let currentSeason = show.activeSeason;
+
+        const showCard = document.createElement('div');
+        showCard.className = 'series-showcase-card';
+
+        const hasMultipleSeasons = show.seasonKeys.length > 1;
+
+        showCard.innerHTML = `
+          <div class="series-showcase-hero">
+            <div class="series-showcase-poster">
+              ${show.leadThumb
+                ? `<img src="${show.leadThumb}" class="series-poster-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'series-thumb-fallback\\'>🎬</div>'">`
+                : `<div class="series-thumb-fallback">🎬</div>`
+              }
+            </div>
+            <div class="series-showcase-info">
+              <div class="series-showcase-tags">
+                <span class="series-tag-pill active-season-tag" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid rgba(0, 206, 201, 0.4);">${escapeHtml(currentSeason)}</span>
+                ${hasMultipleSeasons ? `<span class="series-tag-pill" style="background: rgba(14, 165, 233, 0.2); color: var(--accent-primary); border: 1px solid rgba(14, 165, 233, 0.4);">${show.seasonKeys.length} Seasons</span>` : ''}
+                <span class="series-tag-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border: 1px solid rgba(255, 121, 63, 0.4);">${show.totalEpisodes} Episodes Total</span>
+                <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(show.totalBytes)}</span>
+              </div>
+              <h4 class="series-showcase-title" title="${escapeHtml(show.showTitle)}">${escapeHtml(show.showTitle)}</h4>
+              <div class="series-showcase-actions">
+                <button class="series-btn-binge btn-binge-all" type="button" title="Play full active season sequentially in VLC">
+                  <span>▶</span><span class="binge-btn-label">Binge ${escapeHtml(currentSeason)}</span>
+                </button>
+                <button class="btn-secondary btn-binge-playlist" type="button" style="padding: 5px 9px; font-size: 0.74rem;" title="Download Season .m3u playlist">
+                  <span>📥</span><span>Playlist</span>
+                </button>
+                <button class="btn-secondary btn-toggle-episodes" type="button" style="padding: 5px 9px; font-size: 0.74rem; margin-left: auto;">
+                  <span class="ep-toggle-label">▾ Episodes</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          ${hasMultipleSeasons ? `
+            <div class="series-season-tabs">
+              ${show.seasonKeys.map((sKey) => {
+                const sEps = show.seasonsMap.get(sKey) || [];
+                const isActive = sKey === currentSeason;
+                return `
+                  <button class="series-season-tab ${isActive ? 'active' : ''}" type="button" data-season="${escapeHtml(sKey)}">
+                    ${escapeHtml(sKey)} (${sEps.length} EPs)
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          ` : ''}
+
+          <div class="series-episode-drawer">
+            <div class="series-episode-track" id="episodeTrack_${showIdx}">
+              <!-- Rendered via updateSeasonTrack -->
+            </div>
+          </div>
+        `;
+
+        // Function to update the episode track for a chosen season
+        const updateSeasonTrack = (seasonName) => {
+          currentSeason = seasonName;
+          const track = showCard.querySelector(`#episodeTrack_${showIdx}`);
+          const seasonTag = showCard.querySelector('.active-season-tag');
+          const bingeLabel = showCard.querySelector('.binge-btn-label');
+
+          if (seasonTag) seasonTag.textContent = seasonName;
+          if (bingeLabel) bingeLabel.textContent = `Binge ${seasonName}`;
+
+          const episodes = show.seasonsMap.get(seasonName) || [];
+          if (track) {
+            track.innerHTML = episodes.map((ep, epIdx) => {
+              const dur = ep.duration ? _formatDuration(ep.duration) : '';
+              return `
+                <div class="series-ep-card" data-ep-idx="${epIdx}">
+                  <div class="series-ep-thumb" title="Hover to preview frames, Click to stream in VLC">
+                    ${ep.has_thumb
+                      ? `<img src="${ep.thumb_url}" class="ep-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'series-thumb-fallback\\'>🎬</div>'">`
+                      : `<div class="series-thumb-fallback">🎬</div>`
+                    }
+                    <span class="series-ep-badge">${escapeHtml(ep.epLabel)}</span>
+                    ${dur ? `<span class="video-duration-pill">${dur}</span>` : ''}
+                  </div>
+                  <div class="series-ep-meta">
+                    <span class="series-ep-title" title="${escapeHtml(ep.cleanTitle)}">${escapeHtml(ep.cleanTitle)}</span>
+                    <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(ep.file_size)}</span>
+                  </div>
+                  <div class="series-ep-actions">
+                    <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.7rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
+                      <span>🎬</span><span>VLC</span>
+                    </button>
+                    <button class="btn-secondary btn-ep-mobile" type="button" title="Mobile VLC Streaming & QR" style="flex: 0.85; padding: 4px 6px; font-size: 0.7rem;">
+                      <span>📱</span><span>Mobile</span>
+                    </button>
+                    <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.7; padding: 4px 6px; font-size: 0.7rem;">
+                      <span>🚀</span>
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            // Attach Episode Actions & Hover Scrubber
+            track.querySelectorAll('.series-ep-card').forEach((epCard, idx) => {
+              const ep = episodes[idx];
+              const epThumb = epCard.querySelector('.series-ep-thumb');
+              const epVlc = epCard.querySelector('.btn-ep-vlc');
+              const epMobile = epCard.querySelector('.btn-ep-mobile');
+              const epFdm = epCard.querySelector('.btn-ep-fdm');
+              if (epThumb) _attachHoverScrubber(epThumb, ep);
+              if (epThumb) epThumb.addEventListener('click', () => playInVlc(ep, 'auto', epCard));
+              if (epVlc) epVlc.addEventListener('click', () => playInVlc(ep, 'auto', epCard));
+              if (epMobile) epMobile.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openMobileVlcModal(ep);
+              });
+              if (epFdm) epFdm.addEventListener('click', () => triggerFdm(ep));
+              epCard.addEventListener('mouseenter', () => {
+                fetch(`/api/media/subtitles/prefetch/${encodeURIComponent(ep.chat_id)}/${ep.message_id}`, { method: 'POST' }).catch(() => {});
+              }, { once: true });
+            });
+          }
+        };
+
+        // Initial Episode Track rendering
+        updateSeasonTrack(currentSeason);
+
+        // Season Tab Switchers
+        showCard.querySelectorAll('.series-season-tab').forEach((tabBtn) => {
+          tabBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const sName = tabBtn.getAttribute('data-season');
+            showCard.querySelectorAll('.series-season-tab').forEach((t) => t.classList.remove('active'));
+            tabBtn.classList.add('active');
+            updateSeasonTrack(sName);
+            if (!showCard.classList.contains('expanded')) {
+              showCard.classList.add('expanded');
+              const lbl = showCard.querySelector('.ep-toggle-label');
+              if (lbl) lbl.textContent = '▴ Hide';
+            }
+          });
+        });
+
+        // Toggle Episode Drawer
+        const toggleBtn = showCard.querySelector('.btn-toggle-episodes');
+        if (toggleBtn) {
+          toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showCard.classList.toggle('expanded');
+            const isExp = showCard.classList.contains('expanded');
+            const lbl = toggleBtn.querySelector('.ep-toggle-label');
+            if (lbl) lbl.textContent = isExp ? '▴ Hide' : '▾ Episodes';
+          });
+        }
+
+        // Binge Active Season Playback in VLC (with Toast & Ripple Animation)
+        const bingeBtn = showCard.querySelector('.btn-binge-all');
+        if (bingeBtn) {
+          bingeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            bingeBtn.classList.add('playing-pulse');
+            setTimeout(() => bingeBtn.classList.remove('playing-pulse'), 1200);
+
+            const eps = show.seasonsMap.get(currentSeason) || [];
+            showToast(`🍿 Launching ${show.showTitle} (${currentSeason} • ${eps.length} Episodes) in VLC...`, 'info');
+            fetch('/api/media/vlc/play_batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: `${show.showTitle} - ${currentSeason}`,
+                items: eps
+              })
+            })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.launched) {
+                showToast(`🎬 Streaming ${show.showTitle} (${currentSeason}) in VLC Player!`, 'success');
+              }
+            })
+            .catch((err) => showToast(`Playback error: ${err.message}`, 'error'));
+          });
+        }
+
+        // Download Complete Season M3U
+        const playlistBtn = showCard.querySelector('.btn-binge-playlist');
+        if (playlistBtn) {
+          playlistBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const eps = show.seasonsMap.get(currentSeason) || [];
+            try {
+              const res = await fetch('/api/media/vlc/batch_playlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: `${show.showTitle}_${currentSeason}`,
+                  items: eps
+                })
+              });
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${show.showTitle}_${currentSeason}.m3u`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              showToast(`📥 Downloaded ${show.showTitle} season playlist`, 'success');
+            } catch (err) {
+              showToast(`Error creating playlist: ${err.message}`, 'error');
+            }
+          });
+        }
+
+        seriesList.appendChild(showCard);
+      });
+    }
+  }
+
+  // 3. Left Pane: Render Standalone Movies & Videos
+  if (standaloneList.length === 0 && validShows.length > 0) {
+    moviesGrid.innerHTML = `
+      <div class="cinema-empty" style="padding: 32px 12px;">
+        <span style="font-size: 1.8rem; margin-bottom: 6px;">📺</span>
+        <p style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">All videos are TV series</p>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Browse seasons in the TV Series tab on the right</p>
+      </div>
+    `;
+    return;
+  }
+
+  standaloneList.forEach((v, idx) => {
+    const card = document.createElement('div');
+    card.className = 'cinema-hub-card';
+    card.id = `videoCard_${idx}`;
+
+    const cleanTitle = cleanFileName(v.filename) || v.filename;
+    const durationStr = v.duration ? _formatDuration(v.duration) : '';
+    const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+    let resPill = '';
+    if ((v.width && v.width >= 3800) || /4k|2160p|uhd/i.test(v.filename)) {
+      resPill = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">4K</span>';
+    } else if ((v.width && v.width >= 1800) || /1080p|fhd/i.test(v.filename)) {
+      resPill = '<span style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">1080p</span>';
+    } else if ((v.width && v.width >= 1200) || /720p/i.test(v.filename)) {
+      resPill = '<span style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">720p</span>';
+    }
+
+    card.innerHTML = `
+      <div class="cinema-hub-thumb" title="Hover to preview frames, Click to stream in VLC">
+        ${v.has_thumb
+          ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>🎬</div>'">`
+          : `<div class="cinema-hub-thumb-fallback">🎬</div>`
+        }
+        ${durationStr ? `<span class="video-duration-pill">${durationStr}</span>` : ''}
+      </div>
+      <div class="cinema-hub-meta">
+        <span class="cinema-hub-title" title="${escapeHtml(cleanTitle)}">${escapeHtml(cleanTitle)}</span>
+        <div class="cinema-hub-sub">
+          <span>${formatBytes(v.file_size)}</span>
+          <span>•</span>
+          <span style="color: ${isMkv ? '#38bdf8' : 'var(--accent-secondary)'}; font-weight: 600;">${isMkv ? 'MKV' : 'MP4'}</span>
+          ${resPill ? `<span>•</span>${resPill}` : ''}
+          <span>•</span>
+          <span>${v.date ? new Date(v.date * 1000).toLocaleDateString() : 'Cloud'}</span>
+          <span>•</span>
+          <span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;" title="Dual-track Subtitle Auto-Sync Active">CC</span>
+        </div>
+      </div>
+      <div class="cinema-hub-card-actions">
+        <button class="btn-primary btn-card-vlc" type="button" title="Stream in VLC Media Player" style="flex: 1.1; padding: 6px 8px; font-size: 0.78rem; background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%); border-color: rgba(14, 165, 233, 0.4);">
+          <span>🎬</span><span>VLC</span>
+        </button>
+        <button class="btn-secondary btn-card-mobile" type="button" title="Mobile VLC Streaming & QR" style="flex: 1.1; padding: 6px 8px; font-size: 0.78rem;">
+          <span>📱</span><span>Mobile</span>
+        </button>
+        <button class="btn-secondary btn-card-fdm" type="button" title="Push to Free Download Manager" style="flex: 0.75; padding: 6px 8px; font-size: 0.78rem;">
+          <span>🚀</span>
+        </button>
+        <button class="btn-secondary btn-card-copy" type="button" title="Copy HTTP Stream Link" style="flex: 0.65; padding: 6px 8px; font-size: 0.78rem;">
+          <span>📋</span>
+        </button>
+        <button class="btn-secondary btn-card-m3u" type="button" title="Download VLC .m3u Playlist" style="flex: 0.65; padding: 6px 8px; font-size: 0.78rem;">
+          <span>📥</span>
+        </button>
+      </div>
+    `;
+
+    // 1. Hover Scrubber & Play Click
+    const thumbEl = card.querySelector('.cinema-hub-thumb');
+    const vlcBtn = card.querySelector('.btn-card-vlc');
+    const mobileBtn = card.querySelector('.btn-card-mobile');
+    if (thumbEl) _attachHoverScrubber(thumbEl, v);
+    if (thumbEl) thumbEl.addEventListener('click', () => playInVlc(v, 'auto', card));
+    if (vlcBtn) vlcBtn.addEventListener('click', () => playInVlc(v, 'auto', card));
+    if (mobileBtn) {
+      mobileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMobileVlcModal(v);
+      });
+    }
+    card.addEventListener('mouseenter', () => {
+      fetch(`/api/media/subtitles/prefetch/${encodeURIComponent(v.chat_id)}/${v.message_id}`, { method: 'POST' }).catch(() => {});
+    }, { once: true });
+
+    // 2. Click FDM button -> Push to Download Manager
+    const fdmBtn = card.querySelector('.btn-card-fdm');
+    if (fdmBtn) {
+      fdmBtn.addEventListener('click', () => triggerFdm(v));
+    }
+
+    // 3. Click Copy button -> Copy Stream URL
+    const copyBtn = card.querySelector('.btn-card-copy');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const fullUrl = `${window.location.origin}${v.stream_url}`;
+        navigator.clipboard.writeText(fullUrl).then(() => {
+          showToast('📋 Stream URL copied to clipboard!', 'success');
+        });
+      });
+    }
+
+    // 4. Click M3U button -> Download Playlist
+    const m3uBtn = card.querySelector('.btn-card-m3u');
+    if (m3uBtn) {
+      m3uBtn.addEventListener('click', () => {
+        const url = `/api/media/vlc/playlist/${encodeURIComponent(v.chat_id)}/${v.message_id}/${encodeURIComponent(v.filename)}.m3u`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${v.filename}.m3u`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('📥 Downloaded VLC .m3u playlist', 'success');
+      });
+    }
+
+    moviesGrid.appendChild(card);
+  });
+}
+
+function _filterCinemaGrid(query) {
+  if (!query) {
+    renderCinemaGrid(_cinemaVideos);
+    return;
+  }
+  const filtered = _cinemaVideos.filter((v) => v.filename.toLowerCase().includes(query));
+  renderCinemaGrid(filtered);
+}
+
+export async function playInVlc(v, playerType = 'auto', element = null) {
+  if (element) {
+    element.classList.add('playing-pulse');
+    setTimeout(() => element.classList.remove('playing-pulse'), 1200);
+  }
+
+  showToast(`🎬 Launching "${v.filename}" in VLC Player...`, 'info');
+
+  try {
+    const resp = await fetch('/api/media/vlc/play', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: v.chat_id,
+        message_id: v.message_id,
+        filename: v.filename,
+        stream_url: v.stream_url,
+        player: playerType
+      })
+    });
+    const data = await resp.json();
+    if (data.launched) {
+      let msg = `🎬 Streaming "${v.filename}" in VLC!`;
+      if (data.resume_seconds > 0) {
+        msg += ` (Resumed at ${_formatDuration(data.resume_seconds)})`;
+      }
+      if (data.has_subtitles) {
+        msg += ` 📝 Subtitles auto-loaded!`;
+      }
+      showToast(msg, 'success');
+      setTimeout(() => loadContinueWatching(), 1500);
+    } else if (data.playlist_url) {
+      const a = document.createElement('a');
+      a.href = data.playlist_url;
+      a.download = `${v.filename}.m3u`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast(`📥 VLC not detected locally. Downloaded playlist!`, 'info');
+    }
+  } catch (e) {
+    showToast(`Player launch error: ${e.message}`, 'warning');
+  }
+}
+
+export async function loadContinueWatching() {
+  const section = document.getElementById('continueWatchingSection');
+  const countBadge = document.getElementById('continueWatchingCount');
+  const carousel = document.getElementById('continueWatchingCarousel');
+
+  if (!section || !carousel) return;
+
+  try {
+    const resp = await fetch('/api/media/continue_watching');
+    if (!resp.ok) return;
+    const rawItems = await resp.json();
+    const items = (Array.isArray(rawItems) ? rawItems : []).filter(
+      (item) => item && item.filename && item.filename !== 'thumb'
+    );
+
+    if (items.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    if (countBadge) countBadge.textContent = `${items.length} In Progress`;
+    carousel.innerHTML = '';
+
+    items.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = 'continue-card glass-panel';
+
+      const progressPct = Math.min(100, Math.max(2, Math.round(item.progress_percent || 0)));
+      const remSec = Math.max(0, (item.duration_seconds || 0) - (item.last_position_seconds || 0));
+      const remMins = Math.max(1, Math.round(remSec / 60));
+      const remLabel = remMins > 60 ? `${Math.floor(remMins / 60)}h ${remMins % 60}m left` : `${remMins}m left`;
+      const resumePos = _formatDuration(item.last_position_seconds);
+
+      const thumbUrl = item.thumbnail_url || `/api/media/preview/${encodeURIComponent(item.chat_id)}/${item.message_id}/0`;
+
+      card.innerHTML = `
+        <div class="continue-thumb-wrap">
+          <img class="continue-thumb-img" src="${thumbUrl}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="continue-thumb-fallback" style="display: none;">🍿</div>
+          <div class="continue-rem-badge">${remLabel}</div>
+          <button class="continue-dismiss-btn" title="Remove from Continue Watching" type="button">✕</button>
+          <div class="continue-progress-track">
+            <div class="continue-progress-bar" style="width: ${progressPct}%;"></div>
+          </div>
+        </div>
+        <div class="continue-info">
+          <div class="continue-title" title="${escapeHtml(item.display_title || item.filename)}">
+            ${escapeHtml(item.display_title || item.filename)}
+          </div>
+          <div class="continue-actions">
+            <button class="btn-primary btn-continue-resume" type="button">
+              <span>▶</span><span>Resume at ${resumePos}</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Click Resume
+      const resumeBtn = card.querySelector('.btn-continue-resume');
+      const thumbWrap = card.querySelector('.continue-thumb-wrap');
+      const videoObj = {
+        chat_id: item.chat_id,
+        message_id: item.message_id,
+        filename: item.filename,
+        stream_url: `/dl/${item.chat_id}/${item.message_id}/${encodeURIComponent(item.filename)}`
+      };
+
+      if (resumeBtn) resumeBtn.addEventListener('click', () => playInVlc(videoObj, 'auto', card));
+      if (thumbWrap) thumbWrap.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('continue-dismiss-btn')) {
+          playInVlc(videoObj, 'auto', card);
+        }
+      });
+
+      // Click Dismiss
+      const dismissBtn = card.querySelector('.continue-dismiss-btn');
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.9)';
+          setTimeout(() => card.remove(), 250);
+          try {
+            await fetch(`/api/media/continue_watching/${encodeURIComponent(item.chat_id)}/${item.message_id}`, { method: 'DELETE' });
+            loadContinueWatching();
+          } catch (err) {}
+        });
+      }
+
+      carousel.appendChild(card);
+    });
+  } catch (e) {
+    console.debug('Continue watching load notice:', e);
+  }
+}
+
+export async function triggerFdm(v) {
+  try {
+    const resp = await fetch(`/api/proxy/trigger?chat_id=${encodeURIComponent(v.chat_id)}&message_id=${v.message_id}`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      showToast(`🚀 Dispatched "${v.filename}" to ${data.manager.toUpperCase()}`, 'success');
+    } else {
+      showToast(`⚠️ Could not auto-launch manager. Copied stream link.`, 'warning');
+    }
+  } catch (err) {
+    showToast(`Download trigger error: ${err.message}`, 'error');
+  }
+}
+
+function _formatDuration(seconds) {
+  if (!seconds || isNaN(seconds) || seconds <= 0) return '00:00';
+  const sec = Math.floor(seconds);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+export async function openMobileVlcModal(v) {
+  const modal = document.getElementById('mobileVlcModal');
+  if (!modal) return;
+  modal.classList.add('open', 'active');
+
+  const filenameEl = document.getElementById('mobileVlcFilename');
+  const sizeBadge = document.getElementById('mobileVlcSizeBadge');
+  const codecBadge = document.getElementById('mobileVlcCodecBadge');
+  const subBadge = document.getElementById('mobileVlcSubBadge');
+  const hostBadge = document.getElementById('mobileVlcNetHost');
+  const tunnelStatusEl = document.getElementById('mobileVlcTunnelStatus');
+  const btnLaunchVlc = document.getElementById('btnMobileLaunchVlc');
+  const btnLaunchIntent = document.getElementById('btnMobileLaunchIntent');
+  const btnDownloadM3u = document.getElementById('btnMobileDownloadM3u');
+  const btnCopyLink = document.getElementById('btnMobileCopyLink');
+  const btnDownloadSrt = document.getElementById('btnMobileDownloadSrt');
+  const transmuxLink = document.getElementById('btnMobileTransmuxLink');
+  const qrImg = document.getElementById('mobileVlcQrImg');
+  const streamInput = document.getElementById('mobileVlcStreamUrlInput');
+
+  const rawName = v.cleanTitle || v.filename || 'Video';
+  if (filenameEl) filenameEl.textContent = rawName;
+  if (sizeBadge) sizeBadge.textContent = v.file_size ? formatBytes(v.file_size) : 'Cloud Media';
+  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename || '');
+  if (codecBadge) codecBadge.textContent = isMkv ? 'MKV Container' : 'MP4 Stream';
+
+  try {
+    const res = await fetch(`/api/media/mobile_info/${encodeURIComponent(v.chat_id)}/${v.message_id}?filename=${encodeURIComponent(v.filename || '')}`);
+    if (!res.ok) throw new Error('Failed to load mobile playback metadata');
+    const data = await res.json();
+
+    if (filenameEl) filenameEl.textContent = data.filename;
+    if (hostBadge) hostBadge.textContent = data.host;
+    if (streamInput) streamInput.value = data.stream_url;
+
+    if (tunnelStatusEl) {
+      if (data.host && data.host.includes('trycloudflare.com')) {
+        tunnelStatusEl.textContent = '● Remote Cellular Tunnel';
+        tunnelStatusEl.style.color = '#10b981';
+      } else {
+        tunnelStatusEl.textContent = '● Direct LAN Link';
+        tunnelStatusEl.style.color = '#38bdf8';
+      }
+    }
+
+    if (btnLaunchVlc) {
+      btnLaunchVlc.href = data.vlc_url;
+      btnLaunchVlc.onclick = () => {
+        showToast('🚀 Opening video in Mobile VLC Player...', 'info');
+      };
+    }
+
+    if (btnLaunchIntent) {
+      btnLaunchIntent.href = data.android_intent;
+      btnLaunchIntent.onclick = () => {
+        showToast('🤖 Opening via Android VLC App Intent...', 'info');
+      };
+    }
+
+    if (btnDownloadM3u) {
+      btnDownloadM3u.onclick = () => {
+        const a = document.createElement('a');
+        a.href = data.playlist_url;
+        a.download = `${data.filename}.m3u`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('📥 Downloaded VLC Playlist (.m3u)', 'success');
+      };
+    }
+
+    if (btnCopyLink) {
+      btnCopyLink.onclick = () => {
+        navigator.clipboard.writeText(data.stream_url).then(() => {
+          showToast('📋 Mobile stream link copied to clipboard!', 'success');
+        }).catch(() => {
+          showToast('Link: ' + data.stream_url, 'info');
+        });
+      };
+    }
+
+    if (btnDownloadSrt) {
+      if (data.has_subtitles && data.subtitles_url) {
+        btnDownloadSrt.style.display = 'flex';
+        btnDownloadSrt.onclick = () => {
+          const a = document.createElement('a');
+          a.href = data.subtitles_url;
+          a.download = `${data.filename.replace(/\.[^/.]+$/, '')}.srt`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          showToast('📥 Downloaded Subtitle (.srt)', 'success');
+        };
+      } else {
+        btnDownloadSrt.style.display = 'none';
+      }
+    }
+
+    if (transmuxLink) {
+      transmuxLink.href = data.transmux_url;
+    }
+
+    if (qrImg) {
+      qrImg.src = `/api/system/qrcode?text=${encodeURIComponent(data.stream_url)}`;
+    }
+  } catch (err) {
+    showToast(`Mobile stream notice: ${err.message}`, 'warning');
+  }
+}
+

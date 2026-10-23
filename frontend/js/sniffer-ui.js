@@ -254,12 +254,12 @@ export class SnifferUI {
     this.watchChannelListContainer.innerHTML = displayList.map(ch => {
       let icon = "📢";
       let typeLabel = "CHANNEL";
-      let avatarBg = "linear-gradient(135deg, #00cec9, #6c5ce7)";
+      let avatarBg = "linear-gradient(135deg, #06b6d4, #0284c7)";
 
       if (ch.type === "supergroup" || ch.type === "group") {
         icon = "👥";
         typeLabel = "GROUP";
-        avatarBg = "linear-gradient(135deg, #fd79a8, #6c5ce7)";
+        avatarBg = "linear-gradient(135deg, #0ea5e9, #10b981)";
       } else if (ch.type === "bot") {
         icon = "🤖";
         typeLabel = "BOT";

@@ -38,6 +38,12 @@ async def update_settings(req: SettingsUpdateRequest):
     """Update settings in .env file."""
     try:
         save_env_dict(req.settings)
+        # Immediately reload running sniffer configuration
+        try:
+            from app.services.sniffer_service import sniffer_service
+            sniffer_service.reload_config()
+        except Exception as se:
+            logger.warning(f"Could not reload sniffer config: {se}")
         return {
             "success": True,
             "message": "Settings successfully saved to .env",

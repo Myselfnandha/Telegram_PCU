@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00a8ec"/>
+      <stop offset="100%" stop-color="#0077b5"/>
+    </linearGradient>
+    <linearGradient id="badge" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  
+  <!-- Base Circle -->
+  <circle cx="128" cy="128" r="120" fill="url(#bg)" filter="url(#shadow)"/>
+  <circle cx="128" cy="128" r="114" fill="none" stroke="#67e8f9" stroke-width="3" stroke-opacity="0.4"/>
+  
+  <!-- Paper Plane -->
+  <path d="M 50 142 L 210 115 L 102 56 Z" fill="#ffffff"/>
+  <path d="M 210 115 L 120 168 L 102 119 Z" fill="#b3e5fc"/>
+  
+  <!-- Download Badge -->
+  <circle cx="196" cy="196" r="46" fill="url(#badge)" stroke="#ffffff" stroke-width="4" filter="url(#shadow)"/>
+  <path d="M 190 172 L 202 172 L 202 206 L 190 206 Z" fill="#ffffff"/>
+  <path d="M 176 204 L 216 204 L 196 226 Z" fill="#ffffff"/>
+</svg>

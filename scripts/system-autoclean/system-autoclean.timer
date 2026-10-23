@@ -1,0 +1,11 @@
+[Unit]
+Description=Trigger System & Flatpak Cache Cleanup on Restart and Every 4 Days
+Documentation=file:///usr/local/bin/system-autoclean
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=4d
+Persistent=true
+
+[Install]
+WantedBy=timers.target

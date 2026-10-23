@@ -2,13 +2,14 @@ import os
 import shutil
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List, BinaryIO
 
 logger = logging.getLogger("stream_cache")
 
 CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "stream_cache"
-MAX_CACHE_SIZE_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB max local media cache
+MAX_CACHE_SIZE_BYTES = int(os.getenv("STREAM_CACHE_MAX_GB", "2")) * 1024 * 1024 * 1024  # Default 2 GB local media cache
 
 BLOCK_SIZE = 10 * 1024 * 1024  # 10 MB discrete chunk block size
 BLOCKS_DIR = CACHE_DIR / "blocks"
@@ -186,7 +187,22 @@ class StreamCacheManager:
         return cleared_count
 
     def evict_if_needed(self):
-        """LRU cache cleanup when storage exceeds limit."""
+        """LRU cache cleanup when storage exceeds limit, plus 24h TTL cleanup of orphan chunk parts."""
+        now = time.time()
+        # 1. Clean stale unmerged block fragments older than 24 hours (86,400s) and orphan tmp/merging files
+        try:
+            for p in BLOCKS_DIR.glob("*.bin"):
+                if p.is_file() and (now - p.stat().st_mtime) > 86400:
+                    p.unlink(missing_ok=True)
+                    logger.debug(f"Purged expired stream chunk block: {p.name}")
+
+            for p in list(CACHE_DIR.glob("*.tmp")) + list(CACHE_DIR.glob("*.merging")) + list(BLOCKS_DIR.glob("*.tmp")):
+                if p.is_file() and (now - p.stat().st_mtime) > 3600:
+                    p.unlink(missing_ok=True)
+        except Exception as e:
+            logger.debug(f"Error purging expired blocks: {e}")
+
+        # 2. LRU eviction if total cache exceeds MAX_CACHE_SIZE_BYTES
         try:
             files = [p for p in list(CACHE_DIR.glob("*")) + list(BLOCKS_DIR.glob("*")) if p.is_file()]
             total_size = sum(p.stat().st_size for p in files)

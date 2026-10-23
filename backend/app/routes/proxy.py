@@ -4,11 +4,13 @@ import time
 import logging
 import asyncio
 import email.utils
-from typing import Optional, Dict, Any, List, Union, cast, Tuple
+from collections import defaultdict
+from typing import Optional, Dict, Any, List, Union, cast, Tuple, Set, DefaultDict
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
-from app.telegram_client import TelegramClientManager
+from starlette.requests import ClientDisconnect
+from app.telegram_client import TelegramClientManager, sender_pool
 from app.services.sniffer_service import auto_rename, sniffer_service
 from app.services.manager_detector import trigger_manager, detect_managers
 
@@ -17,8 +19,17 @@ logger = logging.getLogger("proxy_route")
 router = APIRouter(tags=["proxy"])
 
 _MESSAGE_CACHE = {}
+from telethon import errors, utils
+from telethon.tl.functions.upload import GetFileRequest
 
-from telethon import errors
+FILE_REF_ERRORS = (
+    errors.FileReferenceExpiredError,
+    errors.FileReferenceInvalidError,
+    errors.FileReferenceEmptyError,
+    errors.FilerefUpgradeNeededError,
+)
+from app.services.cinema_catalog import cinema_catalog, get_streamable_message
+_STREAM_MESSAGE_CACHE = cinema_catalog._message_cache
 from app.services.rate_governor import rate_governor
 from app.services.stream_cache import stream_cache_service, BLOCK_SIZE
 from app.services.fast_stream_engine import fast_stream_engine
@@ -28,70 +39,39 @@ from app.services.stream_saver import stream_saver_service
 from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_videos_db
 
 
-class StreamSlidingBuffer:
-    """
-    Sliding In-Memory Ring Buffer for real-time MTProto streams.
-    Holds up to 32MB of recent continuous video stream chunks in memory + first 2MB header.
-    When small seeks (e.g. 5-30s forward or backward) or header re-reads occur,
-    serves the target chunks INSTANTANEOUSLY with 0ms latency directly from RAM without MTProto round-trips!
-    """
-    def __init__(self):
-        self._buffers: Dict[Tuple[str, int], dict] = {}
-        self._headers: Dict[Tuple[str, int], bytearray] = {}
-
-    def push(self, chat_id: str, message_id: int, offset: int, data: bytes):
-        key = (str(chat_id), message_id)
-        # Store initial header (first 2MB) for instant 0ms header/index replays
-        if offset < 2 * 1024 * 1024:
-            if key not in self._headers:
-                self._headers[key] = bytearray()
-            h = self._headers[key]
-            if offset == len(h) and len(h) < 2 * 1024 * 1024:
-                take = min(len(data), 2 * 1024 * 1024 - len(h))
-                h.extend(data[:take])
-
-        if key not in self._buffers:
-            self._buffers[key] = {"start": offset, "data": bytearray(), "last_active": time.time()}
-        buf = self._buffers[key]
-        buf_end = buf["start"] + len(buf["data"])
-        if offset == buf_end:
-            buf["data"].extend(data)
-            if len(buf["data"]) > 32 * 1024 * 1024:
-                trim = len(buf["data"]) - 32 * 1024 * 1024
-                buf["data"] = buf["data"][trim:]
-                buf["start"] += trim
-        else:
-            buf["start"] = offset
-            buf["data"] = bytearray(data)
-        buf["last_active"] = time.time()
-
-    def get_slice(self, chat_id: str, message_id: int, start: int, length: int) -> Optional[bytes]:
-        key = (str(chat_id), message_id)
-        # Check header cache first
-        if key in self._headers and start < len(self._headers[key]):
-            h = self._headers[key]
-            available = len(h) - start
-            read_len = min(length, available)
-            if read_len > 0:
-                return bytes(h[start:start + read_len])
-
-        if key not in self._buffers:
-            return None
-        buf = self._buffers[key]
-        buf_start = buf["start"]
-        buf_end = buf_start + len(buf["data"])
-        if buf_start <= start < buf_end:
-            offset_in_buf = start - buf_start
-            available = len(buf["data"]) - offset_in_buf
-            read_len = min(length, available)
-            if read_len > 0:
-                return bytes(buf["data"][offset_in_buf:offset_in_buf + read_len])
-        return None
-
-_SLIDING_STREAM_BUFFER = StreamSlidingBuffer()
+from app.services.stream_buffer import stream_buffer, _SLIDING_STREAM_BUFFER, StreamSlidingBuffer
+from app.services.stream_engine import stream_engine
+from app.services.player_launcher import player_launcher, get_desktop_env
 _ACTIVE_STREAM_CLIENTS = 0
 _ACTIVE_STREAM_PRODUCERS: Dict[Tuple[str, int], asyncio.Task] = {}
+_ACTIVE_STREAM_TASKS: Dict[Tuple[str, int], Tuple[asyncio.Task, int]] = {}
+_ACTIVE_MEDIA_CONNS: DefaultDict[Tuple[str, int], Set[asyncio.Task]] = defaultdict(set)
+_ACTIVE_STREAM_ITERS: Dict[Tuple[str, int], Any] = {}
 _ACTIVE_PREFETCH_TASKS: Dict[Tuple[str, int], asyncio.Task] = {}
+_ACTIVE_PLAYER_PROC: Optional[Any] = None
+
+
+class StreamIteratorHandle:
+    """Atomic cancellation handle for pipelined MTProto streamer & fallback iterators."""
+    def __init__(self, stop_event: asyncio.Event, task: Optional[asyncio.Task] = None, it: Optional[Any] = None):
+        self.stop_event = stop_event
+        self.task = task
+        self.it = it
+
+    async def close(self):
+        self.stop_event.set()
+        if self.task and not self.task.done():
+            self.task.cancel()
+        if self.it:
+            try:
+                if hasattr(self.it, "aclose"):
+                    await self.it.aclose()
+                elif hasattr(self.it, "close"):
+                    res = self.it.close()
+                    if asyncio.iscoroutine(res):
+                        await res
+            except Exception:
+                pass
 
 
 async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id: int, file_size: int, filename: str, start_block: int = 0):
@@ -108,7 +88,7 @@ def compute_dynamic_align_unit(file_size: int, start: int, length: int, user_age
     - 1024 KB for large multi-part download manager requests
     """
     ua = user_agent.lower()
-    is_download_manager = any(dm in ua for dm in ("fdm", "aria2", "idm", "wget", "curl"))
+    is_download_manager = any(dm in ua for dm in ("fdm", "aria2", "idm", "wget", "curl", "freedownloadmanager", "libcurl", "persepolis", "kget", "neatdm"))
 
     if length <= 2 * 1024 * 1024:
         return 128 * 1024  # 128 KB for ultra-fast <50ms header/keyframe response
@@ -123,6 +103,142 @@ def compute_dynamic_align_unit(file_size: int, start: int, length: int, user_age
 
     return 512 * 1024
 
+
+_THUMB_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/thumbs")
+_PREVIEW_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/previews")
+os.makedirs(_THUMB_CACHE_DIR, exist_ok=True)
+os.makedirs(_PREVIEW_CACHE_DIR, exist_ok=True)
+_THUMB_SEMAPHORE = asyncio.Semaphore(4)
+DEFAULT_VIDEO_PLACEHOLDER_SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180">'
+    b'<rect width="320" height="180" fill="#0f1117"/>'
+    b'<circle cx="160" cy="90" r="26" fill="#1e2230" stroke="#3b82f6" stroke-width="2"/>'
+    b'<polygon points="153,78 173,90 153,102" fill="#3b82f6"/>'
+    b'</svg>'
+)
+
+
+@router.get("/dl/{chat_id}/{message_id}/thumb")
+@router.get("/stream/{chat_id}/{message_id}/thumb")
+async def get_media_thumbnail(chat_id: str, message_id: int):
+    """Fetches and caches the preview thumbnail for a Telegram video/document with multi-alias lookups."""
+    clean_chat_id: Union[int, str] = chat_id
+    if chat_id != "me":
+        try:
+            clean_chat_id = int(chat_id)
+        except ValueError:
+            clean_chat_id = chat_id
+
+    # 1. Resolve candidate cache filenames across all Telegram ID formats
+    my_info = TelegramClientManager.get_cached_me() or {}
+    my_id = my_info.get("id")
+
+    candidates = [
+        f"{chat_id}_{message_id}.jpg",
+        f"{clean_chat_id}_{message_id}.jpg"
+    ]
+    if chat_id == "me" or (my_id and str(clean_chat_id).lstrip("-") == str(my_id)):
+        candidates.append(f"me_{message_id}.jpg")
+        if my_id:
+            candidates.append(f"{my_id}_{message_id}.jpg")
+
+    str_cid = str(clean_chat_id)
+    if str_cid.startswith("-100"):
+        candidates.append(f"{str_cid[4:]}_{message_id}.jpg")
+    elif str_cid.lstrip("-").isdigit():
+        candidates.append(f"-100{str_cid}_{message_id}.jpg")
+
+    unique_candidates = list(dict.fromkeys(candidates))
+
+    # 2. Check disk cache first (instant <1ms response)
+    for fname in unique_candidates:
+        c_path = os.path.join(_THUMB_CACHE_DIR, fname)
+        if os.path.exists(c_path) and os.path.getsize(c_path) > 0:
+            with open(c_path, "rb") as f:
+                return Response(
+                    content=f.read(),
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=86400, immutable"}
+                )
+
+    client = await TelegramClientManager.get_client()
+    if not client or not client.is_connected():
+        return Response(
+            content=DEFAULT_VIDEO_PLACEHOLDER_SVG,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=60"}
+        )
+
+    try:
+        # Use get_streamable_message for robust entity resolution & channel -100 auto-healing
+        message = await get_streamable_message(client, clean_chat_id, message_id)
+        if not message or not getattr(message, "media", None):
+            return Response(
+                content=DEFAULT_VIDEO_PLACEHOLDER_SVG,
+                media_type="image/svg+xml",
+                headers={"Cache-Control": "public, max-age=3600"}
+            )
+
+        thumb_bytes = None
+        doc = getattr(message.media, "document", None) or (message.media if hasattr(message.media, "thumbs") else None)
+        thumbs = getattr(doc, "thumbs", None) or getattr(message.media, "thumbs", None) or []
+
+        # Fast Path 1: Check inlined PhotoStrippedSize / PhotoCachedSize (0ms instant JPEG decode)
+        from telethon.tl.types import PhotoStrippedSize, PhotoCachedSize
+        for t in thumbs:
+            if isinstance(t, PhotoStrippedSize) and getattr(t, "bytes", None):
+                try:
+                    thumb_bytes = utils.stripped_photo_to_jpg(t.bytes)
+                    if thumb_bytes:
+                        break
+                except Exception:
+                    pass
+            elif isinstance(t, PhotoCachedSize) and getattr(t, "bytes", None):
+                thumb_bytes = t.bytes
+                if thumb_bytes:
+                    break
+
+        # Fast Path 2: Download medium PhotoSize through client.download_media throttled by semaphore
+        if not thumb_bytes:
+            async with _THUMB_SEMAPHORE:
+                try:
+                    thumb_bytes = await client.download_media(message, thumb=0, file=bytes)
+                except Exception:
+                    try:
+                        thumb_bytes = await client.download_media(message, thumb=-1, file=bytes)
+                    except Exception:
+                        pass
+
+        if thumb_bytes:
+            # Save to disk cache under all alias keys so subsequent lookups hit in 0ms
+            for fname in unique_candidates:
+                try:
+                    with open(os.path.join(_THUMB_CACHE_DIR, fname), "wb") as f:
+                        f.write(thumb_bytes)
+                except Exception:
+                    pass
+
+            return Response(
+                content=thumb_bytes,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=86400, immutable"}
+            )
+
+        # Fallback to sleek SVG video placeholder
+        return Response(
+            content=DEFAULT_VIDEO_PLACEHOLDER_SVG,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+    except Exception as e:
+        logger.debug(f"Thumbnail notice for {chat_id}/{message_id}: {e}")
+        return Response(
+            content=DEFAULT_VIDEO_PLACEHOLDER_SVG,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=300"}
+        )
+
+
 @router.api_route("/dl/{chat_id}/{message_id}", methods=["GET", "HEAD"])
 @router.api_route("/dl/{chat_id}/{message_id}/{filename}", methods=["GET", "HEAD"])
 async def handle_proxy_download(
@@ -131,15 +247,23 @@ async def handle_proxy_download(
     request: Request,
     filename: Optional[str] = None
 ):
+    if filename == "thumb":
+        return await get_media_thumbnail(chat_id, message_id)
+
     """
     Streaming proxy endpoint that fetches data dynamically from Telegram MTProto
     and pipes it directly to the client (VLC, browser, or download manager).
     Supports HTTP Range requests (seeking/resuming) and real-time caching.
     """
     try:
+        # Give client up to 10s to reconnect if network interface is switching (e.g. WiFi to Hotspot/Cellular)
+        connected = await TelegramClientManager.ensure_connected(timeout=10.0)
         client = await TelegramClientManager.get_client()
-        if not client or not client.is_connected() or not await client.is_user_authorized():
+        is_auth = await TelegramClientManager.is_authorized()
+        if not is_auth:
             raise HTTPException(status_code=401, detail="Telegram client not authorized.")
+        if not connected or not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Telegram network connection temporarily unavailable. Please retry.")
     except HTTPException:
         raise
     except Exception as e:
@@ -153,31 +277,27 @@ async def handle_proxy_download(
         except ValueError:
             clean_chat_id = chat_id
 
-    message = sniffer_service._message_cache.get((clean_chat_id, message_id))
-    if not message:
-        message = sniffer_service._message_cache.get((str(clean_chat_id), message_id))
-    if not message:
-        try:
-            message = await client.get_messages(clean_chat_id, ids=message_id)
-        except Exception as e:
-            logger.warning(f"Could not fetch message {message_id} from {clean_chat_id}: {e}")
-            try:
-                entity = await client.get_entity(clean_chat_id)
-                message = await client.get_messages(entity, ids=message_id)
-            except Exception as e2:
-                logger.debug(f"Fallback entity fetch failed for {clean_chat_id}: {e2}")
-
+    message = await get_streamable_message(client, clean_chat_id, message_id)
     if not message or not message.media or not hasattr(message, "file") or not message.file:
         raise HTTPException(status_code=404, detail="Message not found or contains no media.")
 
-    sniffer_service._message_cache[(clean_chat_id, message_id)] = message
-    sniffer_service._message_cache[(str(clean_chat_id), message_id)] = message
-
     file_size = int(message.file.size)
+    file_info = utils._get_file_info(message.media) if hasattr(message, "media") else None
+    media_dc_id = getattr(file_info, "dc_id", None)
+    session_dc = getattr(getattr(client, "session", None), "dc_id", None)
+    if media_dc_id and session_dc and media_dc_id != session_dc and hasattr(client, "_borrow_exported_sender"):
+        borrowed = getattr(client, "_borrowed_senders", {}).get(media_dc_id)
+        if not borrowed or not borrowed[1] or not borrowed[1].is_connected():
+            asyncio.create_task(client._borrow_exported_sender(media_dc_id))
+
     raw_name = message.file.name if message.file.name else f"tg_media_{message_id}.bin"
     raw_name = "".join([c for c in raw_name if (c.isalnum() or c in " .-_()")]).strip()
     import urllib.parse
-    clean_name = urllib.parse.unquote(filename) if filename else auto_rename(raw_name)
+    real_name = auto_rename(raw_name)
+    if filename and filename != "thumb" and not filename.startswith("tg_media_"):
+        clean_name = urllib.parse.unquote(filename)
+    else:
+        clean_name = real_name
 
     range_header = request.headers.get("Range", "")
     start = 0
@@ -193,8 +313,28 @@ async def handle_proxy_download(
         status_code = 206
 
     length = int(end - start + 1)
+    media_key = (str(chat_id), message_id)
     user_agent = request.headers.get("User-Agent", "")
-    is_dm = any(dm in user_agent.lower() for dm in ("fdm", "aria2", "idm", "wget", "curl"))
+    ua_lower = user_agent.lower()
+
+    # Robust detection: dedicated media players (VLC, MPV, etc.) vs download managers and browser downloads
+    player_names = ("vlc", "mpv", "lavf", "libvlc", "quicktime", "exoplayer", "iina", "clapper")
+    is_dedicated_player = any(p in ua_lower for p in player_names)
+
+    sec_fetch_dest = request.headers.get("sec-fetch-dest", "").lower()
+    accept_hdr = request.headers.get("accept", "").lower()
+    is_browser_media = sec_fetch_dest in ("video", "audio") or "video/" in accept_hdr
+
+    is_media_player = is_dedicated_player or is_browser_media
+    is_known_dm_ua = any(dm in ua_lower for dm in ("fdm", "aria2", "idm", "wget", "curl", "freedownloadmanager", "libcurl", "persepolis", "kget", "neatdm"))
+    pragma_no_cache = "no-cache" in request.headers.get("pragma", "").lower()
+    cc_no_cache = "no-cache" in request.headers.get("cache-control", "").lower()
+    has_keepalive = request.headers.get("connection", "").lower() == "keep-alive"
+    no_sec_fetch = "sec-fetch-dest" not in request.headers
+    is_spoofed_dm = not is_media_player and (pragma_no_cache or cc_no_cache) and has_keepalive and no_sec_fetch
+    is_multi_conn = not is_media_player and len(_ACTIVE_MEDIA_CONNS.get(media_key, ())) >= 1
+
+    is_dm = not is_media_player and (is_known_dm_ua or is_spoofed_dm or is_multi_conn)
 
     if start > 0 and not is_dm:
         # Precise 4KB alignment: eliminates discarding up to 512KB of unneeded data on forward seek
@@ -208,10 +348,12 @@ async def handle_proxy_download(
         discard_bytes = start - aligned_start
         aligned_limit = length + discard_bytes
 
-    try:
-        playback_tracker.update_byte_progress(str(chat_id), message_id, clean_name, start, file_size)
-    except Exception as track_err:
-        logger.debug(f"Playback tracking notice: {track_err}")
+    # Only record progress on actual playback reads (not tiny probe requests or tail index probes)
+    if length > 2 * 1024 * 1024 and (file_size <= 0 or start < (file_size - 10 * 1024 * 1024)):
+        try:
+            playback_tracker.update_byte_progress(str(chat_id), message_id, clean_name, start, file_size)
+        except Exception as track_err:
+            logger.debug(f"Playback tracking notice: {track_err}")
 
     ext = os.path.splitext(clean_name)[1].lower()
     content_type = "application/octet-stream"
@@ -234,6 +376,8 @@ async def handle_proxy_download(
         "ETag": f'"{chat_id}_{message_id}_{file_size}"',
         "X-Accel-Buffering": "no",
         "Cache-Control": "public, max-age=3600",
+        "Connection": "keep-alive",
+        "Keep-Alive": "timeout=60, max=1000",
     }
 
     if status_code == 206:
@@ -248,6 +392,7 @@ async def handle_proxy_download(
     # 1. Check if complete media file is in local cache -> Instant <1ms serve
     cached_file = stream_cache_service.get_cached_file(str(chat_id), message_id)
     if cached_file and cached_file.exists() and cached_file.stat().st_size == file_size:
+        logger.info(f"STREAM [{clean_name}] Local disk cache hit: {cached_file.name} (serving {length:,}B from offset {start:,})")
         async def cached_streamer():
             try:
                 with open(cached_file, "rb") as f:
@@ -270,219 +415,131 @@ async def handle_proxy_download(
             headers=headers
         )
 
-    # 2. For media players (VLC, MPV, Web browser): Zero-Disk High-Speed Prefetch Streamer with RAM Ring Buffer
-    if not is_dm:
-        media_key = (str(chat_id), message_id)
+    # Pure Direct Zero-Disk Stream Pipeline (Zero background downloads, zero disk writes)
+    client_name = user_agent.split()[0] if user_agent else "Client"
+    logger.info(
+        f"STREAM [{clean_name}] Incoming stream request from {client_name}: "
+        f"Range={range_header or 'Full'} (start={start:,}, length={length:,}B, total={file_size:,}B)"
+    )
 
-        # 2a. Check RAM Sliding Ring Buffer & Header Cache first (<0.01ms instant response!)
-        cached_slice = _SLIDING_STREAM_BUFFER.get_slice(str(chat_id), message_id, start, length)
-        if cached_slice and len(cached_slice) == length:
-            async def ram_streamer():
-                yield cached_slice
-            return StreamingResponse(ram_streamer(), status_code=status_code, headers=headers)
+    # Check RAM Sliding Ring Buffer & Header/Tail Cache first (<0.01ms instant response)
+    cached_slice = _SLIDING_STREAM_BUFFER.get_slice(str(chat_id), message_id, start, length)
+    if cached_slice and len(cached_slice) == length:
+        logger.info(f"STREAM [{clean_name}] Instant RAM hit: 100% served from RAM buffer ({len(cached_slice):,}B, offset {start:,}) in 0.000s")
+        async def ram_streamer():
+            yield cached_slice
+        return StreamingResponse(ram_streamer(), status_code=status_code, headers=headers)
 
-        # Cancel any previous in-flight producer task for this media (frees MTProto connection instantly on seek)
-        if media_key in _ACTIVE_STREAM_PRODUCERS:
-            old_prod = _ACTIVE_STREAM_PRODUCERS.pop(media_key, None)
-            if old_prod and not old_prod.done():
-                old_prod.cancel()
+    # Differentiate between small probe requests (tail cues, short index queries) and continuous playback seeks
+    is_probe_request = length < 1024 * 1024 or (file_size > 0 and start >= (file_size - 4 * 1024 * 1024))
 
-        chunk_unit = 512 * 1024  # 512KB — optimal MTProto throughput and low latency
-        aligned_start = (start // 4096) * 4096
-        discard_front = start - aligned_start
-
-        chunk_queue: asyncio.Queue = asyncio.Queue(maxsize=3)
-        producer_cancelled = asyncio.Event()
-
-        async def _direct_producer():
-            curr_pos = aligned_start
-            it = client.iter_download(
-                message.media,
-                offset=aligned_start,
-                request_size=chunk_unit,
-                chunk_size=chunk_unit,
-            )
+    # Fast one-shot probe delivery for metadata queries (MKV cues, MP4 moov atoms, container probes)
+    if is_probe_request and length <= 512 * 1024:
+        chunk_size = 512 * 1024
+        aligned_offset = (start // chunk_size) * chunk_size
+        dc_id = media_dc_id or getattr(getattr(client, "session", None), "dc_id", 5)
+        file_loc = getattr(file_info, "location", None) if file_info else None
+        if file_loc:
             try:
-                async for raw in it:
-                    if producer_cancelled.is_set():
-                        break
-                    if raw:
-                        _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_pos, raw)
-                        curr_pos += len(raw)
-                        await chunk_queue.put(raw)
-            except asyncio.CancelledError:
-                pass
-            except errors.FloodWaitError as fwe:
-                rate_governor.report_flood_wait(fwe.seconds, reason=f"Streaming FloodWait on chat {chat_id}, msg {message_id}")
-            except Exception as pe:
-                logger.debug(f"Direct stream producer notice: {pe}")
-            finally:
+                req = GetFileRequest(file_loc, offset=aligned_offset, limit=chunk_size)
+                res = None
                 try:
-                    await it.close()
+                    async with sender_pool.borrow(client, dc_id) as s:
+                        res = await asyncio.wait_for(client._call(s, req, flood_sleep_threshold=0), timeout=8.0)
                 except Exception:
-                    pass
-                await chunk_queue.put(None)
+                    res = await asyncio.wait_for(client(req, flood_sleep_threshold=0), timeout=8.0)
 
-        prod_task = asyncio.create_task(_direct_producer())
-        _ACTIVE_STREAM_PRODUCERS[media_key] = prod_task
+                data = getattr(res, "bytes", None) or (bytes(res) if isinstance(res, (bytes, bytearray)) else b"")
+                if data:
+                    _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, aligned_offset, data)
+                    if file_size > 0 and aligned_offset >= (file_size - 4 * 1024 * 1024):
+                        _SLIDING_STREAM_BUFFER.push_tail(str(chat_id), message_id, aligned_offset, data)
 
-        async def prefetch_streamer():
-            bytes_sent = 0
-            discard_left = discard_front
-            try:
-                while True:
-                    try:
-                        chunk = await asyncio.wait_for(chunk_queue.get(), timeout=20.0)
-                    except asyncio.TimeoutError:
-                        logger.warning(f"Stream consumer timeout after 20s for {clean_name}")
-                        break
+                    slice_offset = start - aligned_offset
+                    probe_slice = data[slice_offset:slice_offset + length]
+                    if len(probe_slice) == length:
+                        logger.info(f"STREAM [{clean_name}] Direct probe delivered: {len(probe_slice):,}B at offset {start:,} (instant single shot)")
+                        return Response(content=probe_slice, status_code=status_code, headers=headers)
+            except Exception as probe_err:
+                logger.debug(f"Direct probe fallback: {probe_err}")
 
-                    if chunk is None:
-                        break
+    # Check for RAM prefix slice (e.g. VLC byte 107 seek where bytes 0..1MB are in RAM)
+    cached_prefix = None
+    if cached_slice and len(cached_slice) > 0 and len(cached_slice) < length:
+        cached_prefix = cached_slice
 
-                    # Strip unaligned front bytes from the first chunk
-                    if discard_left > 0:
-                        if len(chunk) <= discard_left:
-                            discard_left -= len(chunk)
-                            continue
-                        chunk = chunk[discard_left:]
-                        discard_left = 0
+    # Prewarm tail (cues / moov atom) in background during initial file load
+    if start == 0 and file_size > 2 * 1024 * 1024 and media_key not in _SLIDING_STREAM_BUFFER._tails:
+        asyncio.create_task(_SLIDING_STREAM_BUFFER.prewarm_tail(client, chat_id, message_id, message, file_size))
 
-                    remaining = length - bytes_sent
-                    if len(chunk) > remaining:
-                        chunk = chunk[:remaining]
+    curr_task = asyncio.current_task()
+    if curr_task and not is_probe_request:
+        # Atomic cancellation of preceding stream: halts obsolete MTProto in-flight requests in 0ms!
+        old_handle = _ACTIVE_STREAM_ITERS.pop(media_key, None)
+        if old_handle:
+            logger.info(
+                f"STREAM [{clean_name}] Fast seek detected ({start:,}): "
+                f"Instantly cancelling previous stream iterator to free MTProto senders."
+            )
+            asyncio.create_task(old_handle.close())
 
-                    yield chunk
-                    bytes_sent += len(chunk)
-                    if bytes_sent >= length:
-                        break
+        old_task_entry = _ACTIVE_STREAM_TASKS.get(media_key)
+        if old_task_entry:
+            old_task, old_start = old_task_entry
+            if old_task is not curr_task and not old_task.done():
+                old_task.cancel()
+        _ACTIVE_STREAM_TASKS[media_key] = (curr_task, start)
+        _ACTIVE_MEDIA_CONNS[media_key].add(curr_task)
 
-                if bytes_sent < length:
-                    raise asyncio.CancelledError()
-            except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
-                raise
-            except Exception as fe:
-                logger.debug(f"Stream playback notice at {bytes_sent}/{length}: {fe}")
-                raise asyncio.CancelledError()
-            finally:
-                producer_cancelled.set()
-                if not prod_task.done():
-                    prod_task.cancel()
-                if _ACTIVE_STREAM_PRODUCERS.get(media_key) is prod_task:
-                    _ACTIVE_STREAM_PRODUCERS.pop(media_key, None)
+    stop_event = asyncio.Event()
 
-        return StreamingResponse(
-            prefetch_streamer(),
-            status_code=status_code,
-            headers=headers
+    async def stream_wrapper():
+        gen = stream_engine.stream_media(
+            client=client,
+            chat_id=chat_id,
+            message_id=message_id,
+            start=start,
+            length=length,
+            file_size=file_size,
+            is_media_player=is_media_player,
+            clean_name=clean_name,
+            cached_prefix=cached_prefix,
+            message=message,
+            get_fresh_message_fn=get_streamable_message,
+            external_stop_event=stop_event
         )
-
-    # 3. Check if the requested range can be served directly from discrete block parts on disk (<0.1ms)
-    start_block = start // BLOCK_SIZE
-    end_block = end // BLOCK_SIZE
-    all_blocks_present = True
-    for b_idx in range(start_block, end_block + 1):
-        b_len = min(BLOCK_SIZE, file_size - (b_idx * BLOCK_SIZE))
-        if not stream_cache_service.has_block(str(chat_id), message_id, b_idx, b_len):
-            all_blocks_present = False
-            break
-
-    if all_blocks_present:
-        async def block_streamer():
-            curr_pos = start
-            bytes_left = length
-            while bytes_left > 0:
-                b_idx = curr_pos // BLOCK_SIZE
-                offset_in_b = curr_pos % BLOCK_SIZE
-                b_len = min(BLOCK_SIZE, file_size - (b_idx * BLOCK_SIZE))
-                read_len = min(bytes_left, b_len - offset_in_b)
-                data = stream_cache_service.read_block_slice(str(chat_id), message_id, b_idx, offset_in_b, read_len)
-                if not data:
-                    break
-                yield data
-                bytes_left -= len(data)
-                curr_pos += len(data)
-                await asyncio.sleep(0)
-
-        return StreamingResponse(
-            block_streamer(),
-            status_code=status_code,
-            headers=headers
-        )
-
-    # 4. Direct High-Throughput MTProto Stream with Async Queue (Pure Stream - Zero Disk Writes)
-    async def stream_generator():
-        bytes_written = 0
-        chunk_queue = asyncio.Queue(maxsize=8)
-        producer_done = asyncio.Event()
-
-        async def _mtproto_producer():
-            try:
-                await rate_governor.wait_if_cooling_down()
-                curr_pos = start
-                async for raw_chunk in fast_stream_engine.stream_parallel_mtproto(
-                    client=client,
-                    message=message,
-                    start=start,
-                    length=length,
-                    max_workers=2,
-                ):
-                    if raw_chunk:
-                        _SLIDING_STREAM_BUFFER.push(str(chat_id), message_id, curr_pos, raw_chunk)
-                        curr_pos += len(raw_chunk)
-                        await chunk_queue.put(raw_chunk)
-            except errors.FloodWaitError as fwe:
-                rate_governor.report_flood_wait(fwe.seconds, reason=f"Streaming FloodWait on chat {chat_id}, msg {message_id}")
-            except Exception as pe:
-                logger.debug(f"MTProto producer notice: {pe}")
-            finally:
-                producer_done.set()
-                await chunk_queue.put(None)
-
-        media_key = (str(chat_id), message_id)
-        if start > 0 and media_key in _ACTIVE_STREAM_PRODUCERS:
-            old_prod = _ACTIVE_STREAM_PRODUCERS.pop(media_key, None)
-            if old_prod and not old_prod.done():
-                old_prod.cancel()
-
-        prod_task = asyncio.create_task(_mtproto_producer())
-        _ACTIVE_STREAM_PRODUCERS[media_key] = prod_task
+        handle = StreamIteratorHandle(stop_event=stop_event, task=asyncio.current_task(), it=gen)
+        if not is_probe_request:
+            _ACTIVE_STREAM_ITERS[media_key] = handle
 
         try:
-            while True:
-                try:
-                    chunk = await asyncio.wait_for(chunk_queue.get(), timeout=20.0)
-                except asyncio.TimeoutError:
-                    logger.warning(f"Stream consumer timeout after 20s for {clean_name}, ending stream at {bytes_written}/{length} bytes")
-                    break
-                if chunk is None:
-                    break
-
-                remaining = length - bytes_written
-                if len(chunk) > remaining:
-                    chunk = chunk[:remaining]
-
+            async for chunk in gen:
+                if stop_event.is_set():
+                    raise ClientDisconnect()
                 yield chunk
-                bytes_written += len(chunk)
-                await asyncio.sleep(0)
-                if bytes_written >= length:
-                    break
-
-            if bytes_written < length:
-                raise asyncio.CancelledError()
-        except (ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError):
-            logger.debug(f"Client disconnected during streaming of {clean_name}")
-            raise
-        except Exception as err:
-            logger.warning(f"Error during streaming download: {err}")
-            raise asyncio.CancelledError()
+        except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError, ClientDisconnect):
+            raise ClientDisconnect()
+        except Exception as e:
+            logger.debug(f"Stream wrapper notice for {clean_name}: {e}")
+            raise ClientDisconnect()
         finally:
-            if not prod_task.done():
-                prod_task.cancel()
-            _ACTIVE_STREAM_PRODUCERS.pop(media_key, None)
+            try:
+                await gen.aclose()
+            except Exception:
+                pass
+            if not is_probe_request:
+                entry = _ACTIVE_STREAM_TASKS.get(media_key)
+                if entry and entry[0] is curr_task:
+                    _ACTIVE_STREAM_TASKS.pop(media_key, None)
+                if _ACTIVE_STREAM_ITERS.get(media_key) is handle:
+                    _ACTIVE_STREAM_ITERS.pop(media_key, None)
+                if curr_task:
+                    _ACTIVE_MEDIA_CONNS[media_key].discard(curr_task)
+                if not _ACTIVE_MEDIA_CONNS[media_key]:
+                    _ACTIVE_MEDIA_CONNS.pop(media_key, None)
 
     return StreamingResponse(
-        stream_generator(),
+        stream_wrapper(),
         status_code=status_code,
         headers=headers
     )
@@ -498,6 +555,9 @@ async def handle_transmux_stream(
     audio: int = 0,
     ss: float = 0.0
 ):
+    if filename == "thumb":
+        return await get_media_thumbnail(chat_id, message_id)
+
     """
     Real-Time Zero-Disk FFmpeg Chunk-Based Transmuxing Stream with Local Cache Acceleration.
     Remuxes MKV, AVI, TS, and AC3/DTS containers into fragmented MP4 chunks.
@@ -514,18 +574,7 @@ async def handle_transmux_stream(
         except ValueError:
             clean_chat_id = chat_id
 
-    message = sniffer_service._message_cache.get((clean_chat_id, message_id))
-    if not message:
-        try:
-            message = await client.get_messages(clean_chat_id, ids=message_id)
-        except Exception as e:
-            logger.warning(f"Could not fetch message {message_id} from {clean_chat_id}: {e}")
-            try:
-                entity = await client.get_entity(clean_chat_id)
-                message = await client.get_messages(entity, ids=message_id)
-            except Exception as e2:
-                logger.debug(f"Fallback entity fetch failed for {clean_chat_id}: {e2}")
-
+    message = await get_streamable_message(client, clean_chat_id, message_id)
     if not message or not message.media or not hasattr(message, "file") or not message.file:
         raise HTTPException(status_code=404, detail="Message not found or contains no media.")
 
@@ -551,6 +600,7 @@ async def handle_transmux_stream(
         "ffmpeg",
         "-hide_banner",
         "-loglevel", "error",
+        "-threads", "2",
     ]
     if input_target != "pipe:0":
         if ss > 0:
@@ -581,7 +631,8 @@ async def handle_transmux_stream(
             *cmd,
             stdin=asyncio.subprocess.PIPE if input_target == "pipe:0" else None,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            preexec_fn=lambda: os.nice(10) if hasattr(os, "nice") else None
         )
     except Exception as e:
         logger.error(f"Failed to start FFmpeg process: {e}")
@@ -655,6 +706,10 @@ async def handle_transmux_stream(
             logger.debug("Transmux stream client disconnected or cancelled")
         finally:
             feeder_task.cancel()
+            try:
+                await feeder_task
+            except (asyncio.CancelledError, Exception):
+                pass
             try:
                 if proc.returncode is None:
                     proc.kill()
@@ -947,86 +1002,69 @@ async def prefetch_media_subtitles(chat_id: str, message_id: int):
     return {"status": "skipped", "reason": "No media found"}
 
 
-_THUMB_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/thumbs")
-_PREVIEW_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/previews")
-os.makedirs(_THUMB_CACHE_DIR, exist_ok=True)
-os.makedirs(_PREVIEW_CACHE_DIR, exist_ok=True)
+@router.get("/api/media/subtitles/download/{chat_id}/{message_id}")
+async def download_media_subtitles(chat_id: str, message_id: int):
+    """
+    Direct subtitle file provider for VLC (--sub-file / --input-slave) and mobile M3U players.
+    Serves cached or auto-fetched SRT subtitles, or falls back to a clean empty subtitle stream.
+    """
+    clean_chat_id: Union[int, str] = chat_id if chat_id == "me" else int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
+    cached_msg = sniffer_service._message_cache.get((clean_chat_id, message_id)) or sniffer_service._message_cache.get((str(clean_chat_id), message_id))
 
-
-@router.get("/dl/{chat_id}/{message_id}/thumb")
-async def get_media_thumbnail(chat_id: str, message_id: int):
-    """Fetches and caches the preview thumbnail for a Telegram video/document."""
-    cache_file = os.path.join(_THUMB_CACHE_DIR, f"{chat_id}_{message_id}.jpg")
-    if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
-        with open(cache_file, "rb") as f:
-            return Response(
-                content=f.read(),
-                media_type="image/jpeg",
-                headers={"Cache-Control": "public, max-age=86400, immutable"}
-            )
-
-    client = await TelegramClientManager.get_client()
-    if not client or not client.is_connected():
-        raise HTTPException(status_code=503, detail="Telegram client is not connected.")
-
-    clean_chat_id: Union[int, str] = chat_id
-    if chat_id != "me":
+    filename = None
+    if cached_msg and getattr(cached_msg, "file", None) and getattr(cached_msg.file, "name", None):
+        filename = cached_msg.file.name
+    else:
         try:
-            clean_chat_id = int(chat_id)
-        except ValueError:
-            clean_chat_id = chat_id
-
-    try:
-        message = sniffer_service._message_cache.get((clean_chat_id, message_id))
-        if not message:
-            message = await client.get_messages(clean_chat_id, ids=message_id)
-
-        if not message or not message.media:
-            raise HTTPException(status_code=404, detail="Media not found.")
-
-        # Download compact lightweight thumbnail into memory buffer (<10ms)
-        thumb_bytes = None
-        doc = getattr(message.media, "document", None) or (message.media if hasattr(message.media, "thumbs") else None)
-        if doc and getattr(doc, "thumbs", None):
-            try:
-                # Prefer fast medium thumbnail (thumbs[1] or thumbs[0]) over massive full-res to load 10x faster
-                target_thumb = doc.thumbs[1] if len(doc.thumbs) > 1 else doc.thumbs[0]
-                thumb_bytes = await client.download_media(target_thumb, file=bytes)
-            except Exception:
-                try:
-                    thumb_bytes = await client.download_media(doc.thumbs[-1], file=bytes)
-                except Exception:
-                    pass
-
-        if not thumb_bytes:
-            try:
-                thumb_bytes = await client.download_media(message.media, thumb=0, file=bytes)
-            except Exception:
-                try:
-                    thumb_bytes = await client.download_media(message.media, thumb=-1, file=bytes)
-                except Exception:
-                    pass
-
-        if not thumb_bytes:
-            raise HTTPException(status_code=404, detail="No thumbnail available for this media.")
-
-        # Save to disk cache
-        try:
-            with open(cache_file, "wb") as f:
-                f.write(thumb_bytes)
+            client = await TelegramClientManager.get_client()
+            if client and client.is_connected():
+                msg = await get_streamable_message(client, clean_chat_id, message_id)
+                if msg and getattr(msg, "file", None) and getattr(msg.file, "name", None):
+                    filename = msg.file.name
         except Exception:
             pass
 
-        return Response(
-            content=thumb_bytes,
-            media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=86400, immutable"}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"Failed to fetch thumbnail for {chat_id}/{message_id}: {e}")
-        raise HTTPException(status_code=404, detail="Failed to load thumbnail.")
+    if not filename:
+        filename = f"media_{message_id}.bin"
+
+    # Check local cache first
+    cached_sub = subtitle_service.get_cached_subtitle(filename)
+    if not cached_sub:
+        try:
+            from app.config import PROXY_PORT
+            stream_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{chat_id}/{message_id}"
+            cached_sub = await asyncio.wait_for(
+                subtitle_service.get_or_download_subtitle(filename, stream_url=stream_url),
+                timeout=4.0
+            )
+        except Exception:
+            cached_sub = None
+
+    if cached_sub and cached_sub.exists():
+        try:
+            with open(cached_sub, "rb") as f:
+                content = f.read()
+            return Response(
+                content=content,
+                media_type="text/plain; charset=utf-8",
+                headers={
+                    "Content-Disposition": f'inline; filename="{os.path.basename(cached_sub)}"',
+                    "Cache-Control": "public, max-age=86400"
+                }
+            )
+        except Exception as read_err:
+            logger.debug(f"Subtitle download read error: {read_err}")
+
+    # Return valid blank SRT with 200 OK so media player does not display network error popup
+    blank_srt = b"1\n00:00:00,000 --> 00:00:01,000\n\n"
+    return Response(
+        content=blank_srt,
+        media_type="text/plain; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=300"}
+    )
+
+
+# Thumbnail cache directories & routes defined earlier above handle_proxy_download
 
 
 @router.get("/api/media/preview/{chat_id}/{message_id}/{frame_idx}")
@@ -1047,7 +1085,11 @@ async def get_media_preview_frame(chat_id: str, message_id: int, frame_idx: int 
 
     # If stream file is cached locally in stream_cache, extract directly
     local_cached = stream_cache_service.get_cached_file(chat_id, message_id)
-    input_source = str(local_cached) if local_cached and local_cached.exists() else f"http://127.0.0.1:8088/dl/{chat_id}/{message_id}"
+    if not (local_cached and local_cached.exists()):
+        # Avoid running FFmpeg against live MTProto proxy stream to protect VLC streaming bandwidth
+        return await get_media_thumbnail(chat_id, message_id)
+
+    input_source = str(local_cached)
     
     # Calculate seek percentage: 0 -> 10%, 1 -> 30%, 2 -> 50%, 3 -> 70%, 4 -> 90%
     ratios = [0.10, 0.30, 0.50, 0.70, 0.90]
@@ -1082,235 +1124,14 @@ async def get_media_preview_frame(chat_id: str, message_id: int, frame_idx: int 
     return await get_media_thumbnail(chat_id, message_id)
 
 
-_CINEMA_VIDEOS_CACHE: Dict[str, dict] = {}
-CINEMA_CACHE_TTL = 300  # 5 minutes in-memory cache
-
-
-async def _fetch_and_cache_videos(chat_id: str, limit: int = 250, offset_id: int = 0) -> dict:
-    try:
-        client = await TelegramClientManager.get_client()
-        if not client or not client.is_connected() or not await client.is_user_authorized():
-            raise HTTPException(status_code=401, detail="Telegram client not authorized.")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"Could not connect to Telegram client: {e}")
-        return {"chat_id": str(chat_id), "count": 0, "videos": []}
-
-    clean_chat_id: Union[int, str] = chat_id
-    if chat_id != "me":
-        try:
-            clean_chat_id = int(chat_id)
-        except ValueError:
-            clean_chat_id = chat_id
-
-    videos = []
-    try:
-        from telethon.tl.types import InputMessagesFilterVideo, InputMessagesFilterDocument, DocumentAttributeVideo, DocumentAttributeFilename
-
-        # Fetch recent messages, video filter, and document filter concurrently (up to 500)
-        fetch_limit = min(max(limit, 100), 500)
-        recent_task = client.get_messages(
-            clean_chat_id,
-            limit=fetch_limit,
-            offset_id=offset_id
-        )
-        v_task = client.get_messages(
-            clean_chat_id,
-            limit=fetch_limit,
-            offset_id=offset_id,
-            filter=InputMessagesFilterVideo
-        )
-        d_task = client.get_messages(
-            clean_chat_id,
-            limit=fetch_limit,
-            offset_id=offset_id,
-            filter=InputMessagesFilterDocument
-        )
-
-        recent_msgs, v_msgs, d_msgs = await asyncio.gather(recent_task, v_task, d_task, return_exceptions=True)
-        if isinstance(recent_msgs, Exception):
-            recent_msgs = []
-        if isinstance(v_msgs, Exception):
-            v_msgs = []
-        if isinstance(d_msgs, Exception):
-            d_msgs = []
-
-        seen_ids = set()
-        combined_msgs = []
-        for msg in list(v_msgs) + list(d_msgs) + list(recent_msgs):
-            if not msg or msg.id in seen_ids or not hasattr(msg, "file") or not msg.file:
-                continue
-            seen_ids.add(msg.id)
-            combined_msgs.append(msg)
-
-        # Sort messages by ID descending (newest first)
-        combined_msgs.sort(key=lambda m: m.id, reverse=True)
-
-        video_extensions = (
-            ".mp4", ".mkv", ".avi", ".mov", ".webm", ".ts",
-            ".flv", ".wmv", ".m4v", ".3gp", ".vob", ".mpg", ".mpeg"
-        )
-
-        for msg in combined_msgs:
-            filename = msg.file.name if msg.file.name else f"video_{msg.id}.mp4"
-            duration = 0
-            width = 0
-            height = 0
-
-            if hasattr(msg.media, "document") and msg.media.document:
-                for attr in msg.media.document.attributes:
-                    if isinstance(attr, DocumentAttributeVideo):
-                        duration = int(getattr(attr, "duration", 0))
-                        width = int(getattr(attr, "w", 0))
-                        height = int(getattr(attr, "h", 0))
-                    elif isinstance(attr, DocumentAttributeFilename):
-                        if getattr(attr, "file_name", None):
-                            filename = attr.file_name
-
-            # Check if this document/media is a video
-            mime = msg.file.mime_type or ""
-            is_video_media = (
-                getattr(msg, "video", None) is not None or
-                mime.startswith("video/") or
-                any(filename.lower().endswith(ext) for ext in video_extensions)
-            )
-
-            if not is_video_media:
-                continue
-
-            # Cache in sniffer message cache for instant stream resolution
-            sniffer_service._message_cache[(clean_chat_id, msg.id)] = msg
-
-            raw_name = "".join([c for c in filename if (c.isalnum() or c in " .-_()")]).strip()
-            clean_name = auto_rename(raw_name)
-
-            has_thumb = False
-            if hasattr(msg.media, "document") and msg.media.document and getattr(msg.media.document, "thumbs", None):
-                has_thumb = True
-            elif hasattr(msg.media, "photo"):
-                has_thumb = True
-
-            ext = os.path.splitext(clean_name)[1].lower()
-            is_mkv = ext in (".mkv", ".avi", ".ts", ".flv", ".wmv", ".vob")
-
-            import urllib.parse
-            encoded_name = urllib.parse.quote(clean_name)
-            base_clean = os.path.splitext(clean_name)[0]
-            encoded_mp4 = urllib.parse.quote(f"{base_clean}.mp4")
-
-            videos.append({
-                "message_id": msg.id,
-                "chat_id": str(chat_id),
-                "filename": clean_name,
-                "file_size": int(msg.file.size),
-                "duration": duration,
-                "width": width,
-                "height": height,
-                "date": int(msg.date.timestamp()) if msg.date else 0,
-                "mime_type": msg.file.mime_type or "video/mp4",
-                "has_thumb": has_thumb,
-                "is_mkv": is_mkv,
-                "stream_url": f"/dl/{chat_id}/{msg.id}/{encoded_name}",
-                "stream_transmux_url": f"/stream/{chat_id}/{msg.id}/{encoded_mp4}",
-                "thumb_url": f"/dl/{chat_id}/{msg.id}/thumb" if has_thumb else None
-            })
-
-        # Fire background thumbnail prefetcher for instant 0ms loads
-        async def _prefetch_thumbs(cid, msgs):
-            try:
-                for m in msgs[:30]:
-                    cf = os.path.join(_THUMB_CACHE_DIR, f"{cid}_{m.id}.jpg")
-                    if os.path.exists(cf) and os.path.getsize(cf) > 0:
-                        continue
-                    doc = getattr(m.media, "document", None) or (m.media if hasattr(m.media, "thumbs") else None)
-                    if doc and getattr(doc, "thumbs", None):
-                        target = doc.thumbs[1] if len(doc.thumbs) > 1 else doc.thumbs[0]
-                        tb = await client.download_media(target, file=bytes)
-                        if tb:
-                            with open(cf, "wb") as f:
-                                f.write(tb)
-            except Exception:
-                pass
-
-        asyncio.create_task(_prefetch_thumbs(clean_chat_id, combined_msgs))
-
-        # Retrieve existing cached videos to merge (ensuring older series episodes are NEVER dropped)
-        existing_videos_map = {}
-        try:
-            db_cached = await get_cinema_cached_videos_db(str(chat_id))
-            if db_cached and "videos" in db_cached:
-                for v in db_cached["videos"]:
-                    if isinstance(v, dict) and "message_id" in v:
-                        existing_videos_map[v["message_id"]] = v
-        except Exception as e:
-            logger.debug(f"Could not load existing db videos to merge: {e}")
-
-        new_videos_map = {v["message_id"]: v for v in videos}
-        merged_videos_dict = {**existing_videos_map, **new_videos_map}
-        videos = sorted(merged_videos_dict.values(), key=lambda x: x.get("message_id", 0), reverse=True)
-
-    except Exception as e:
-        logger.error(f"Error querying videos for {chat_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to query videos: {str(e)}")
-
-    res = {
-        "chat_id": str(chat_id),
-        "count": len(videos),
-        "videos": videos
-    }
-
-    cache_key = f"{chat_id}_{offset_id}"
-    _CINEMA_VIDEOS_CACHE[cache_key] = {
-        "data": res,
-        "timestamp": time.time()
-    }
-    # Persist to SQLite database for instant cross-session recall
-    asyncio.create_task(save_cinema_cached_videos_db(str(chat_id), videos))
-
-    # Broadcast real-time update to all connected frontend clients via Socket.IO
-    try:
-        from app.socket_handlers import sio
-        asyncio.create_task(sio.emit("cinema:videos_updated", res))
-    except Exception as e:
-        logger.debug(f"Socket emit notice: {e}")
-
-    return res
-
-
 @router.get("/api/media/videos/{chat_id}")
 async def get_chat_videos(chat_id: str, limit: int = 250, offset_id: int = 0, force_refresh: bool = False):
     """
     Fetches video archives from a Telegram channel, group, or Saved Messages for the Cinema tab.
-    Implements multi-layer Memory + SQLite Stale-While-Revalidate caching for instantaneous (<1ms) response times.
+    Delegates to CinemaCatalog deep module with Stale-While-Revalidate caching.
     """
-    cache_key = f"{chat_id}_{offset_id}"
-    now = time.time()
-
-    # 1. Fast Memory Cache (<0.1ms)
-    if not force_refresh and cache_key in _CINEMA_VIDEOS_CACHE:
-        cached_entry = _CINEMA_VIDEOS_CACHE[cache_key]
-        if (now - cached_entry["timestamp"]) > 60:
-            asyncio.create_task(_fetch_and_cache_videos(chat_id, limit, offset_id))
-        return cached_entry["data"]
-
-    # 2. Fast SQLite Persistent Cache (<1ms)
-    if not force_refresh:
-        try:
-            db_cached = await get_cinema_cached_videos_db(chat_id)
-            if db_cached and db_cached.get("count", 0) > 0:
-                _CINEMA_VIDEOS_CACHE[cache_key] = {
-                    "data": db_cached,
-                    "timestamp": db_cached.get("updated_at", now)
-                }
-                if (now - db_cached.get("updated_at", 0)) > 60:
-                    asyncio.create_task(_fetch_and_cache_videos(chat_id, limit, offset_id))
-                return db_cached
-        except Exception as e:
-            logger.debug(f"SQLite cache lookup error: {e}")
-
-    # 3. Synchronous fetch from MTProto
-    return await _fetch_and_cache_videos(chat_id, limit, offset_id)
+    client = await TelegramClientManager.get_client()
+    return await cinema_catalog.get_videos(client, chat_id, limit, offset_id, force_refresh)
 
 
 @router.post("/api/proxy/trigger")
@@ -1345,22 +1166,6 @@ async def clear_stream_cache():
     return {"success": True, "cleared_files": cleared}
 
 
-def get_desktop_env() -> dict:
-    """Constructs complete graphical desktop environment so VLC/MPV opens reliably in user session."""
-    env = os.environ.copy()
-    if not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
-        env["DISPLAY"] = ":0"
-    if "DBUS_SESSION_BUS_ADDRESS" not in env:
-        env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/run/user/1001/bus"
-    if "XAUTHORITY" not in env:
-        import glob
-        from pathlib import Path
-        auth_files = glob.glob("/tmp/xauth_*") + [str(Path.home() / ".Xauthority")]
-        for af in auth_files:
-            if os.path.exists(af):
-                env["XAUTHORITY"] = af
-                break
-    return env
 
 
 @router.post("/api/media/vlc/play")
@@ -1375,130 +1180,76 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
     raw_url = payload.get("stream_url")
     filename = payload.get("filename", "video.mp4")
 
+    # If filename is generic or missing, try resolving from sniffer cache
+    if chat_id and message_id:
+        try:
+            clean_cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
+            cached_msg = sniffer_service._message_cache.get((clean_cid, message_id)) or sniffer_service._message_cache.get((str(clean_cid), message_id))
+            if cached_msg and cached_msg.file and cached_msg.file.name:
+                if not filename or filename in ("thumb", "video.mp4") or filename.startswith("tg_media_"):
+                    filename = auto_rename(cached_msg.file.name)
+        except Exception:
+            pass
+
+    import urllib.parse
+    encoded_name = urllib.parse.quote(filename)
+
     if not raw_url and chat_id and message_id:
-        import urllib.parse
-        encoded_name = urllib.parse.quote(filename)
         raw_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{chat_id}/{message_id}/{encoded_name}"
     elif raw_url and raw_url.startswith("/"):
         raw_url = f"http://127.0.0.1:{PROXY_PORT}{raw_url}"
 
-    target_player = payload.get("player", "vlc")
-    vlc_bin = shutil.which("vlc") or "/usr/bin/vlc"
-    mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
+    # If stream_url ended with /thumb, correct to proper media stream URL
+    if raw_url and raw_url.endswith("/thumb") and filename != "thumb":
+        raw_url = raw_url[:-6] + f"/{encoded_name}"
 
-    chosen_bin = None
-    if target_player == "mpv" and os.path.exists(mpv_bin):
-        chosen_bin = mpv_bin
-    elif os.path.exists(vlc_bin):
-        chosen_bin = vlc_bin
-    elif os.path.exists(mpv_bin):
-        chosen_bin = mpv_bin
-
-    launched = False
-    player_name = "vlc"
-    desktop_env = get_desktop_env()
-
-    # Instant check for locally cached subtitle (<0.1ms)
-    sub_file = subtitle_service.get_cached_subtitle(filename)
-    if not sub_file:
-        # Fetch matching subtitles asynchronously in background without blocking player launch
-        asyncio.create_task(subtitle_service.get_or_download_subtitle(filename))
-
-    resume_sec = 0
+    # Pre-resolve and warm message cache before launching player so /dl/... never hits 404
     if chat_id and message_id:
         try:
+            client = await TelegramClientManager.get_client()
+            if client and client.is_connected():
+                clean_cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
+                await get_streamable_message(client, clean_cid, int(message_id))
+        except Exception as pre_err:
+            logger.debug(f"Pre-warm streamable message notice: {pre_err}")
+
+    target_player = payload.get("player", "vlc")
+    resume_sec = 0
+    if "start_time" in payload and payload["start_time"] is not None:
+        resume_sec = max(0, int(payload["start_time"]))
+    elif chat_id and message_id:
+        try:
             prog = playback_tracker.get_playback_progress(str(chat_id), message_id)
-            if prog and prog.get("progress_percent", 0) < 95.0:
-                resume_sec = max(0, int(prog.get("last_position_seconds", 0)))
+            if prog and prog.get("progress_percent", 0) < 96.0:
+                pos = prog.get("last_position_seconds", 0)
+                if pos and pos > 10:
+                    resume_sec = max(0, int(pos))
         except Exception as pe:
             logger.debug(f"Progress check notice: {pe}")
 
-    if chosen_bin:
-        try:
-            if "mpv" in chosen_bin:
-                player_name = "mpv"
-                mpv_cmd = [
-                    chosen_bin,
-                    raw_url,
-                    "--hr-seek=no",
-                    "--hr-seek-framedrop=yes",
-                    "--slang=eng,tam,hin,all",
-                    "--cache=yes",
-                    "--cache-pause=no",
-                    "--cache-secs=30",
-                    "--demuxer-max-bytes=128M",
-                    "--demuxer-readahead-secs=45",
-                    "--vd-lavc-threads=0",
-                    "--vd-lavc-fast=yes"
-                ]
-                if sub_file and sub_file.exists():
-                    mpv_cmd.append(f"--sub-file={str(sub_file)}")
-                if resume_sec > 10:
-                    mpv_cmd.append(f"--start={resume_sec}")
-                    logger.info(f"Resuming {filename} at {resume_sec}s in MPV")
-
-                subprocess.Popen(
-                    mpv_cmd,
-                    env=desktop_env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    start_new_session=True
-                )
-            else:
-                player_name = "vlc"
-                vlc_cmd = [
-                    chosen_bin,
-                    raw_url,
-                    "--no-qt-privacy-ask",
-                    "--no-qt-error-dialogs",
-                    "--input-fast-seek",
-                    "--sub-language=eng,tam,hin,all",
-                    "--sub-track=0",
-                    "--avcodec-threads=0",
-                    "--avcodec-hw=auto",
-                    "--network-caching=1000",
-                    "--file-caching=1000",
-                    "--live-caching=1000",
-                    "--sout-mux-caching=1000",
-                    "--subsdec-encoding=UTF-8"
-                ]
-                if sub_file and sub_file.exists():
-                    vlc_cmd.append(f"--sub-file={str(sub_file)}")
-                if resume_sec > 10:
-                    vlc_cmd.append(f"--start-time={resume_sec}")
-                    logger.info(f"Resuming {filename} at {resume_sec}s in VLC")
-
-                subprocess.Popen(
-                    vlc_cmd,
-                    env=desktop_env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    start_new_session=True
-                )
-            launched = True
-            logger.info(f"Launched {player_name.upper()} player (Direct Stream Pipeline) for: {raw_url}")
+    _ACTIVE_STREAM_TASKS.clear()
+    for k in list(_ACTIVE_STREAM_ITERS.keys()):
+        old_i = _ACTIVE_STREAM_ITERS.pop(k, None)
+        if old_i:
             try:
-                playback_tracker.update_progress(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    filename=filename,
-                    last_position_seconds=resume_sec
-                )
-            except Exception as pe:
-                logger.debug(f"Could not seed VLC progress: {pe}")
-        except Exception as e:
-            logger.warning(f"Could not launch media player subprocess: {e}")
+                await old_i.close()
+            except Exception:
+                pass
+
+    logger.info(f"PLAYER LAUNCH: player={target_player}, file='{filename}', resume_sec={resume_sec}s, stream_url={raw_url}")
+    res = player_launcher.launch(
+        stream_url=raw_url,
+        filename=filename,
+        player=target_player,
+        resume_sec=resume_sec,
+        chat_id=chat_id,
+        message_id=message_id
+    )
 
     import urllib.parse
     encoded_file = urllib.parse.quote(f"{filename}.m3u")
-    return {
-        "success": True,
-        "launched": launched,
-        "stream_url": raw_url,
-        "has_subtitles": bool(sub_file and sub_file.exists()),
-        "resume_seconds": resume_sec,
-        "playlist_url": f"/api/media/vlc/playlist/{chat_id}/{message_id}/{encoded_file}"
-    }
+    res["playlist_url"] = f"/api/media/vlc/playlist/{chat_id}/{message_id}/{encoded_file}"
+    return res
 
 
 @router.get("/api/media/vlc/playlist/{chat_id}/{message_id}/{filename}")
@@ -1507,11 +1258,10 @@ async def generate_vlc_playlist(chat_id: str, message_id: int, filename: str, re
     from app.config import PROXY_PORT
     host = request.headers.get("host", f"localhost:{PROXY_PORT}")
     clean_filename = filename.replace(".m3u", "")
-    import urllib.parse
     encoded_name = urllib.parse.quote(clean_filename)
     stream_url = f"http://{host}/dl/{chat_id}/{message_id}/{encoded_name}"
-
-    m3u_content = f"#EXTM3U\n#EXTINF:-1,{clean_filename}\n{stream_url}\n"
+    sub_url = f"http://{host}/api/media/subtitles/download/{chat_id}/{message_id}"
+    m3u_content = player_launcher.build_single_playlist(clean_filename, stream_url, sub_url=sub_url)
     return Response(
         content=m3u_content,
         media_type="audio/x-mpegurl",
@@ -1522,90 +1272,111 @@ async def generate_vlc_playlist(chat_id: str, message_id: int, filename: str, re
     )
 
 
-@router.post("/api/media/vlc/play_batch")
-async def launch_vlc_batch(payload: Dict[str, Any]):
-    """Launch VLC Player with an entire TV Series / Season playlist queued for seamless binge watching."""
-    import shutil
-    import subprocess
+@router.get("/api/media/mobile_info/{chat_id}/{message_id}")
+async def get_mobile_playback_info(chat_id: str, message_id: int, request: Request, filename: Optional[str] = None):
+    """
+    Returns complete multi-platform playback metadata formatted for mobile VLC.
+    Includes vlc:// protocol URL, Android Intent URL, M3U playlist URL, and direct stream links.
+    """
     from app.config import PROXY_PORT
+    host = request.headers.get("host", f"127.0.0.1:{PROXY_PORT}")
+    scheme = request.url.scheme or "http"
+    clean_fn = filename or f"video_{message_id}.mp4"
+    if clean_fn in ("thumb", "video.mp4") or clean_fn.startswith("tg_media_"):
+        clean_cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
+        cached_msg = sniffer_service._message_cache.get((clean_cid, message_id)) or sniffer_service._message_cache.get((str(clean_cid), message_id))
+        if cached_msg and cached_msg.file and cached_msg.file.name:
+            clean_fn = auto_rename(cached_msg.file.name)
 
+    import urllib.parse
+    enc_name = urllib.parse.quote(clean_fn)
+    stream_url = f"{scheme}://{host}/dl/{chat_id}/{message_id}/{enc_name}"
+
+    vlc_url = f"vlc://{stream_url}"
+    path_only = f"{host}/dl/{chat_id}/{message_id}/{enc_name}"
+    android_intent = f"intent://{path_only}#Intent;scheme={scheme};type=video/*;package=org.videolan.vlc;end"
+
+    playlist_url = f"/api/media/vlc/playlist/{chat_id}/{message_id}/{enc_name}.m3u"
+    base_no_ext = os.path.splitext(clean_fn)[0]
+    transmux_url = f"/stream/{chat_id}/{message_id}/{urllib.parse.quote(base_no_ext)}.mp4"
+    sub_file = subtitle_service.get_cached_subtitle(clean_fn)
+
+    from app.services.network_service import network_service
+    lan_ip = network_service.get_lan_ip()
+    lan_host = f"{lan_ip}:{PROXY_PORT}"
+    lan_stream_url = f"{scheme}://{lan_host}/dl/{chat_id}/{message_id}/{enc_name}"
+    lan_vlc_url = f"vlc://{lan_stream_url}"
+    lan_android_intent = f"intent://{lan_host}/dl/{chat_id}/{message_id}/{enc_name}#Intent;scheme={scheme};type=video/*;package=org.videolan.vlc;end"
+    lan_playlist_url = f"http://{lan_host}/api/media/vlc/playlist/{chat_id}/{message_id}/{enc_name}.m3u"
+    lan_qrcode_url = f"/api/system/qrcode?text={urllib.parse.quote(lan_vlc_url)}"
+
+    return {
+        "chat_id": str(chat_id),
+        "message_id": message_id,
+        "filename": clean_fn,
+        "stream_url": stream_url,
+        "vlc_url": vlc_url,
+        "android_intent": android_intent,
+        "playlist_url": playlist_url,
+        "transmux_url": transmux_url,
+        "has_subtitles": bool(sub_file and sub_file.exists()),
+        "subtitles_url": f"/api/media/subtitles/download/{chat_id}/{message_id}" if (sub_file and sub_file.exists()) else None,
+        "host": host,
+        "lan_ip": lan_ip,
+        "lan_stream_url": lan_stream_url,
+        "lan_vlc_url": lan_vlc_url,
+        "lan_android_intent": lan_android_intent,
+        "lan_playlist_url": lan_playlist_url,
+        "lan_qrcode_url": lan_qrcode_url
+    }
+
+
+@router.get("/api/media/vlc/live_status")
+async def get_vlc_live_status():
+    """Returns live playback telemetry, volume, and playback state from active VLC instance."""
+    return player_launcher.get_vlc_live_status()
+
+
+@router.post("/api/media/vlc/control")
+async def control_vlc(payload: Dict[str, Any]):
+    """Dispatches remote control commands (play/pause, seek, volume, fullscreen, stop) to VLC."""
+    command = payload.get("command", "")
+    val = payload.get("val")
+    if not command:
+        raise HTTPException(status_code=400, detail="Command is required")
+    return player_launcher.send_vlc_control(command, val)
+
+
+@router.post("/api/media/vlc/play_batch")
+async def launch_vlc_batch(payload: Dict[str, Any], request: Request):
+    """Launch VLC Player with an entire TV Series / Season playlist queued for seamless binge watching."""
+    from app.config import PROXY_PORT
+    host = request.headers.get("host", f"127.0.0.1:{PROXY_PORT}")
     items = payload.get("items", [])
     title = payload.get("title", "Season Playlist")
+    player = payload.get("player", "vlc")
+    
+    # Auto-resolve from chat_id and message_ids if items not provided directly
+    if not items:
+        chat_id = payload.get("chat_id")
+        message_ids = payload.get("message_ids", [])
+        if chat_id and message_ids:
+            items = []
+            for mid in message_ids:
+                fn = "video.mp4"
+                cached = sniffer_service._message_cache.get((chat_id, mid)) or sniffer_service._message_cache.get((str(chat_id), mid))
+                if cached and getattr(cached, "file", None) and getattr(cached.file, "name", None):
+                    fn = auto_rename(cached.file.name)
+                items.append({
+                    "chat_id": str(chat_id),
+                    "message_id": int(mid),
+                    "filename": fn
+                })
+
     if not items:
         raise HTTPException(status_code=400, detail="No video items provided for batch playback.")
 
-    vlc_bin = shutil.which("vlc") or "/usr/bin/vlc"
-    mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
-
-    stream_urls = []
-    for item in items:
-        chat_id = item.get("chat_id")
-        msg_id = item.get("message_id")
-        fn = item.get("filename", "video.mp4")
-        raw_url = item.get("stream_url")
-        if not raw_url and chat_id and msg_id:
-            import urllib.parse
-            encoded_name = urllib.parse.quote(fn)
-            raw_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{chat_id}/{msg_id}/{encoded_name}"
-        elif raw_url and raw_url.startswith("/"):
-            raw_url = f"http://127.0.0.1:{PROXY_PORT}{raw_url}"
-        if raw_url:
-            stream_urls.append(raw_url)
-
-    chosen_bin = vlc_bin if os.path.exists(vlc_bin) else (mpv_bin if os.path.exists(mpv_bin) else None)
-    desktop_env = get_desktop_env()
-
-    if chosen_bin and stream_urls:
-        try:
-            if "mpv" in chosen_bin:
-                player_name = "mpv"
-                cmd = [
-                    chosen_bin,
-                    *stream_urls,
-                    "--hr-seek=no",
-                    "--slang=eng,tam,hin,all",
-                    "--cache=yes",
-                    "--demuxer-max-bytes=128M",
-                    "--demuxer-readahead-secs=45"
-                ]
-            else:
-                player_name = "vlc"
-                cmd = [
-                    chosen_bin,
-                    *stream_urls,
-                    "--no-qt-privacy-ask",
-                    "--no-qt-error-dialogs",
-                    "--input-fast-seek",
-                    "--sub-language=eng,tam,hin,all",
-                    "--sub-track=0",
-                    "--avcodec-threads=0",
-                    "--avcodec-hw=auto",
-                    "--network-caching=250",
-                    "--file-caching=250",
-                    "--live-caching=250",
-                    "--sout-mux-caching=250",
-                    "--clock-jitter=0",
-                    "--clock-synchro=0",
-                    "--subsdec-encoding=UTF-8"
-                ]
-            subprocess.Popen(
-                cmd,
-                env=desktop_env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
-            launched = True
-            logger.info(f"Launched batch binge session for {len(stream_urls)} episodes: {title}")
-        except Exception as e:
-            logger.warning(f"Could not launch batch player subprocess: {e}")
-
-    return {
-        "success": True,
-        "launched": launched,
-        "episodes_count": len(stream_urls),
-        "title": title
-    }
+    return player_launcher.launch_batch(items=items, title=title, player=player, host=host)
 
 
 @router.post("/api/media/vlc/batch_playlist")
@@ -1616,18 +1387,26 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
     items = payload.get("items", [])
     title = payload.get("title", "Season_Playlist").replace(" ", "_")
 
-    m3u_lines = ["#EXTM3U"]
-    for item in items:
-        chat_id = item.get("chat_id")
-        msg_id = item.get("message_id")
-        fn = item.get("filename", "episode.mp4")
-        import urllib.parse
-        encoded_name = urllib.parse.quote(fn)
-        stream_url = f"http://{host}/dl/{chat_id}/{msg_id}/{encoded_name}"
-        m3u_lines.append(f"#EXTINF:-1,{fn}")
-        m3u_lines.append(stream_url)
+    if not items:
+        chat_id = payload.get("chat_id")
+        message_ids = payload.get("message_ids", [])
+        if chat_id and message_ids:
+            items = []
+            for mid in message_ids:
+                fn = "video.mp4"
+                cached = sniffer_service._message_cache.get((chat_id, mid)) or sniffer_service._message_cache.get((str(chat_id), mid))
+                if cached and getattr(cached, "file", None) and getattr(cached.file, "name", None):
+                    fn = auto_rename(cached.file.name)
+                items.append({
+                    "chat_id": str(chat_id),
+                    "message_id": int(mid),
+                    "filename": fn
+                })
 
-    m3u_content = "\n".join(m3u_lines) + "\n"
+    if not items:
+        raise HTTPException(status_code=400, detail="No video items provided for batch playlist.")
+
+    m3u_content = player_launcher.build_playlist(items, host, title)
     return Response(
         content=m3u_content,
         media_type="audio/x-mpegurl",
@@ -1658,18 +1437,22 @@ class PlaybackProgressPayload(BaseModel):
     position_seconds: float
     duration_seconds: float
     thumbnail_url: Optional[str] = None
+    last_chunk_index: Optional[int] = 0
+    last_byte_offset: Optional[int] = 0
 
 
 @router.post("/api/media/playback_progress")
 async def update_playback_progress_api(payload: PlaybackProgressPayload):
-    """Updates watch progress for a video."""
+    """Updates watch progress for a video with chunk coordinates."""
     playback_tracker.update_progress(
         chat_id=payload.chat_id,
         message_id=payload.message_id,
         filename=payload.filename,
         last_position_seconds=payload.position_seconds,
         duration_seconds=payload.duration_seconds,
-        thumbnail_url=payload.thumbnail_url
+        thumbnail_url=payload.thumbnail_url,
+        last_chunk_index=payload.last_chunk_index or 0,
+        last_byte_offset=payload.last_byte_offset or 0
     )
     return {"status": "ok"}
 

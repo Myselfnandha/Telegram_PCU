@@ -1,6 +1,7 @@
 import { showToast } from './ui.js';
 import { formatBytes, escapeHtml, cleanFileName } from './utils.js';
 import { chatPicker } from './chat-picker.js';
+import { socketManager } from './socket.js';
 
 let _cinemaVideos = [];
 let _currentChatId = 'me';
@@ -13,8 +14,27 @@ export async function initCinema() {
   const btnToggleOfflineSaver = document.getElementById('btnToggleOfflineSaver');
   const offlineSaverStateLabel = document.getElementById('offlineSaverStateLabel');
 
+  // Real-time video sync from backend MTProto cache
+  socketManager.onCinemaUpdate((data) => {
+    if (data && String(data.chat_id) === String(_currentChatId) && Array.isArray(data.videos)) {
+      _cinemaVideos = data.videos;
+      const countBadge = document.getElementById('cinemaVideoCount');
+      if (countBadge) countBadge.textContent = `${_cinemaVideos.length} Videos`;
+      const cacheKey = 'tg_cinema_cache_' + _currentChatId;
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(_cinemaVideos));
+      } catch (e) {}
+      renderCinemaGrid(_cinemaVideos);
+    }
+  });
+
   // 1. Destination Bar & Watched Channels Setup
   _initCinemaDestinationPicker();
+  window._openMobileVlcDialog = openMobileVlcModal;
+  window._closeMobileVlcModal = () => {
+    const modal = document.getElementById('mobileVlcModal');
+    if (modal) modal.classList.remove('open', 'active');
+  };
   if (btnChooseChat) {
     btnChooseChat.addEventListener('click', () => {
       chatPicker.open((chat) => _onCinemaChatSelected(chat));
@@ -72,9 +92,12 @@ export async function initCinema() {
     });
   }
 
-  // Refresh
+  // Refresh (busts local cache and requests full fresh MTProto sync)
   if (btnRefresh) {
     btnRefresh.addEventListener('click', () => {
+      try {
+        localStorage.removeItem('tg_cinema_cache_' + _currentChatId);
+      } catch (e) {}
       loadCinemaVideos(_currentChatId, true);
       loadContinueWatching();
     });
@@ -87,8 +110,10 @@ export async function initCinema() {
     });
   }
 
-  // Initial Load
-  loadCinemaVideos('me');
+  // Initial Load: Only fetch if user is already on cinema tab
+  if (document.getElementById('tabPaneCinema')?.classList.contains('active')) {
+    loadCinemaVideos('me');
+  }
 }
 
 function _initCinemaDestinationPicker() {
@@ -155,9 +180,6 @@ async function _loadCinemaWatchedChips() {
     chipsContainer.style.display = 'flex';
 
     channels.forEach((ch) => {
-      // Background pre-warm channel video cache for 0ms instant switching
-      fetch(`/api/media/videos/${encodeURIComponent(ch.id)}`).catch(() => {});
-
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'cinema-chip' + (_currentChatId == ch.id ? ' active' : '');
@@ -222,7 +244,7 @@ export async function loadCinemaVideos(chatId = 'me', forceRefresh = false) {
             <div class="pulse-ring"></div>
             <div class="pulse-core">📡</div>
           </div>
-          <h3 style="margin-top: 14px; font-size: 1.05rem; font-weight: 700; background: linear-gradient(135deg, #00cec9, #6c5ce7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Fetching video files from Telegram MTProto...</h3>
+          <h3 style="margin-top: 14px; font-size: 1.05rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Fetching video files from Telegram MTProto...</h3>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 6px;">Retrieving high-speed video stream catalog from Telegram cloud...</p>
         </div>
         <div class="cinema-skeleton-card"></div>
@@ -252,8 +274,8 @@ export async function loadCinemaVideos(chatId = 'me', forceRefresh = false) {
 
   try {
     const url = forceRefresh
-      ? `/api/media/videos/${encodeURIComponent(chatId)}?force_refresh=true`
-      : `/api/media/videos/${encodeURIComponent(chatId)}`;
+      ? `/api/media/videos/${encodeURIComponent(chatId)}?force_refresh=true&limit=250`
+      : `/api/media/videos/${encodeURIComponent(chatId)}?limit=250`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -339,9 +361,9 @@ function _extractSeriesInfo(filename) {
   const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
   const clean = cleanFileName(filename, channelContext) || filename;
 
-  // Match Season and Episode patterns:
+  // Match Season and Episode patterns (including multi-episode ranges like EP 25 28 or EP 25-28):
   // e.g. S01E01, S1E1, S01 EP01, Season 1 Episode 2, EP01, Episode 01, Part 1
-  const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}|ep\s*\d{1,3}|episode\s*\d{1,3}|part\s*\d{1,2}))(.*)$/i;
+  const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}(?:[\s\-]+\d{1,3})?|ep\s*\d{1,3}(?:[\s\-]+\d{1,3})?|episode\s*\d{1,3}(?:[\s\-]+\d{1,3})?|part\s*\d{1,2}))(.*)$/i;
   const m = clean.match(regex);
   if (m) {
     let rawName = (m[1] || '').replace(/\.\w+$/, '').replace(/[._\-\(\)]+$/, '').trim();
@@ -520,7 +542,7 @@ export function renderCinemaGrid(videos) {
             <div class="series-showcase-info">
               <div class="series-showcase-tags">
                 <span class="series-tag-pill active-season-tag" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid rgba(0, 206, 201, 0.4);">${escapeHtml(currentSeason)}</span>
-                ${hasMultipleSeasons ? `<span class="series-tag-pill" style="background: rgba(108, 92, 231, 0.2); color: var(--accent-primary); border: 1px solid rgba(108, 92, 231, 0.4);">${show.seasonKeys.length} Seasons</span>` : ''}
+                ${hasMultipleSeasons ? `<span class="series-tag-pill" style="background: rgba(14, 165, 233, 0.2); color: var(--accent-primary); border: 1px solid rgba(14, 165, 233, 0.4);">${show.seasonKeys.length} Seasons</span>` : ''}
                 <span class="series-tag-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border: 1px solid rgba(255, 121, 63, 0.4);">${show.totalEpisodes} Episodes Total</span>
                 <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(show.totalBytes)}</span>
               </div>
@@ -592,8 +614,11 @@ export function renderCinemaGrid(videos) {
                     <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.7rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
                       <span>🎬</span><span>VLC</span>
                     </button>
-                    <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.85; padding: 4px 6px; font-size: 0.7rem;">
-                      <span>🚀</span><span>FDM</span>
+                    <button class="btn-secondary btn-ep-mobile" type="button" title="Mobile VLC Streaming & QR" style="flex: 0.85; padding: 4px 6px; font-size: 0.7rem;">
+                      <span>📱</span><span>Mobile</span>
+                    </button>
+                    <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.7; padding: 4px 6px; font-size: 0.7rem;">
+                      <span>🚀</span>
                     </button>
                   </div>
                 </div>
@@ -605,11 +630,19 @@ export function renderCinemaGrid(videos) {
               const ep = episodes[idx];
               const epThumb = epCard.querySelector('.series-ep-thumb');
               const epVlc = epCard.querySelector('.btn-ep-vlc');
+              const epMobile = epCard.querySelector('.btn-ep-mobile');
               const epFdm = epCard.querySelector('.btn-ep-fdm');
               if (epThumb) _attachHoverScrubber(epThumb, ep);
               if (epThumb) epThumb.addEventListener('click', () => playInVlc(ep, 'auto', epCard));
               if (epVlc) epVlc.addEventListener('click', () => playInVlc(ep, 'auto', epCard));
+              if (epMobile) epMobile.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openMobileVlcModal(ep);
+              });
               if (epFdm) epFdm.addEventListener('click', () => triggerFdm(ep));
+              epCard.addEventListener('mouseenter', () => {
+                fetch(`/api/media/subtitles/prefetch/${encodeURIComponent(ep.chat_id)}/${ep.message_id}`, { method: 'POST' }).catch(() => {});
+              }, { once: true });
             });
           }
         };
@@ -728,6 +761,14 @@ export function renderCinemaGrid(videos) {
     const cleanTitle = cleanFileName(v.filename) || v.filename;
     const durationStr = v.duration ? _formatDuration(v.duration) : '';
     const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+    let resPill = '';
+    if ((v.width && v.width >= 3800) || /4k|2160p|uhd/i.test(v.filename)) {
+      resPill = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">4K</span>';
+    } else if ((v.width && v.width >= 1800) || /1080p|fhd/i.test(v.filename)) {
+      resPill = '<span style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">1080p</span>';
+    } else if ((v.width && v.width >= 1200) || /720p/i.test(v.filename)) {
+      resPill = '<span style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">720p</span>';
+    }
 
     card.innerHTML = `
       <div class="cinema-hub-thumb" title="Hover to preview frames, Click to stream in VLC">
@@ -742,22 +783,28 @@ export function renderCinemaGrid(videos) {
         <div class="cinema-hub-sub">
           <span>${formatBytes(v.file_size)}</span>
           <span>•</span>
-          <span style="color: ${isMkv ? '#ff793f' : 'var(--accent-secondary)'}; font-weight: 600;">${isMkv ? 'MKV' : 'MP4'}</span>
+          <span style="color: ${isMkv ? '#38bdf8' : 'var(--accent-secondary)'}; font-weight: 600;">${isMkv ? 'MKV' : 'MP4'}</span>
+          ${resPill ? `<span>•</span>${resPill}` : ''}
           <span>•</span>
           <span>${v.date ? new Date(v.date * 1000).toLocaleDateString() : 'Cloud'}</span>
+          <span>•</span>
+          <span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;" title="Dual-track Subtitle Auto-Sync Active">CC</span>
         </div>
       </div>
       <div class="cinema-hub-card-actions">
-        <button class="btn-primary btn-card-vlc" type="button" title="Stream in VLC Media Player" style="flex: 1.2; padding: 6px 10px; font-size: 0.78rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
+        <button class="btn-primary btn-card-vlc" type="button" title="Stream in VLC Media Player" style="flex: 1.1; padding: 6px 8px; font-size: 0.78rem; background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%); border-color: rgba(14, 165, 233, 0.4);">
           <span>🎬</span><span>VLC</span>
         </button>
-        <button class="btn-secondary btn-card-fdm" type="button" title="Push to Free Download Manager" style="flex: 1; padding: 6px 8px; font-size: 0.78rem;">
-          <span>🚀</span><span>FDM</span>
+        <button class="btn-secondary btn-card-mobile" type="button" title="Mobile VLC Streaming & QR" style="flex: 1.1; padding: 6px 8px; font-size: 0.78rem;">
+          <span>📱</span><span>Mobile</span>
         </button>
-        <button class="btn-secondary btn-card-copy" type="button" title="Copy HTTP Stream Link" style="flex: 0.8; padding: 6px 8px; font-size: 0.78rem;">
+        <button class="btn-secondary btn-card-fdm" type="button" title="Push to Free Download Manager" style="flex: 0.75; padding: 6px 8px; font-size: 0.78rem;">
+          <span>🚀</span>
+        </button>
+        <button class="btn-secondary btn-card-copy" type="button" title="Copy HTTP Stream Link" style="flex: 0.65; padding: 6px 8px; font-size: 0.78rem;">
           <span>📋</span>
         </button>
-        <button class="btn-secondary btn-card-m3u" type="button" title="Download VLC .m3u Playlist" style="flex: 0.8; padding: 6px 8px; font-size: 0.78rem;">
+        <button class="btn-secondary btn-card-m3u" type="button" title="Download VLC .m3u Playlist" style="flex: 0.65; padding: 6px 8px; font-size: 0.78rem;">
           <span>📥</span>
         </button>
       </div>
@@ -766,9 +813,19 @@ export function renderCinemaGrid(videos) {
     // 1. Hover Scrubber & Play Click
     const thumbEl = card.querySelector('.cinema-hub-thumb');
     const vlcBtn = card.querySelector('.btn-card-vlc');
+    const mobileBtn = card.querySelector('.btn-card-mobile');
     if (thumbEl) _attachHoverScrubber(thumbEl, v);
     if (thumbEl) thumbEl.addEventListener('click', () => playInVlc(v, 'auto', card));
     if (vlcBtn) vlcBtn.addEventListener('click', () => playInVlc(v, 'auto', card));
+    if (mobileBtn) {
+      mobileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMobileVlcModal(v);
+      });
+    }
+    card.addEventListener('mouseenter', () => {
+      fetch(`/api/media/subtitles/prefetch/${encodeURIComponent(v.chat_id)}/${v.message_id}`, { method: 'POST' }).catch(() => {});
+    }, { once: true });
 
     // 2. Click FDM button -> Push to Download Manager
     const fdmBtn = card.querySelector('.btn-card-fdm');
@@ -870,9 +927,12 @@ export async function loadContinueWatching() {
   try {
     const resp = await fetch('/api/media/continue_watching');
     if (!resp.ok) return;
-    const items = await resp.json();
+    const rawItems = await resp.json();
+    const items = (Array.isArray(rawItems) ? rawItems : []).filter(
+      (item) => item && item.filename && item.filename !== 'thumb'
+    );
 
-    if (!Array.isArray(items) || items.length === 0) {
+    if (items.length === 0) {
       section.style.display = 'none';
       return;
     }
@@ -978,5 +1038,115 @@ function _formatDuration(seconds) {
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+export async function openMobileVlcModal(v) {
+  const modal = document.getElementById('mobileVlcModal');
+  if (!modal) return;
+  modal.classList.add('open', 'active');
+
+  const filenameEl = document.getElementById('mobileVlcFilename');
+  const sizeBadge = document.getElementById('mobileVlcSizeBadge');
+  const codecBadge = document.getElementById('mobileVlcCodecBadge');
+  const subBadge = document.getElementById('mobileVlcSubBadge');
+  const hostBadge = document.getElementById('mobileVlcNetHost');
+  const tunnelStatusEl = document.getElementById('mobileVlcTunnelStatus');
+  const btnLaunchVlc = document.getElementById('btnMobileLaunchVlc');
+  const btnLaunchIntent = document.getElementById('btnMobileLaunchIntent');
+  const btnDownloadM3u = document.getElementById('btnMobileDownloadM3u');
+  const btnCopyLink = document.getElementById('btnMobileCopyLink');
+  const btnDownloadSrt = document.getElementById('btnMobileDownloadSrt');
+  const transmuxLink = document.getElementById('btnMobileTransmuxLink');
+  const qrImg = document.getElementById('mobileVlcQrImg');
+  const streamInput = document.getElementById('mobileVlcStreamUrlInput');
+
+  const rawName = v.cleanTitle || v.filename || 'Video';
+  if (filenameEl) filenameEl.textContent = rawName;
+  if (sizeBadge) sizeBadge.textContent = v.file_size ? formatBytes(v.file_size) : 'Cloud Media';
+  const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename || '');
+  if (codecBadge) codecBadge.textContent = isMkv ? 'MKV Container' : 'MP4 Stream';
+
+  try {
+    const res = await fetch(`/api/media/mobile_info/${encodeURIComponent(v.chat_id)}/${v.message_id}?filename=${encodeURIComponent(v.filename || '')}`);
+    if (!res.ok) throw new Error('Failed to load mobile playback metadata');
+    const data = await res.json();
+
+    if (filenameEl) filenameEl.textContent = data.filename;
+    if (hostBadge) hostBadge.textContent = data.host;
+    if (streamInput) streamInput.value = data.stream_url;
+
+    if (tunnelStatusEl) {
+      if (data.host && data.host.includes('trycloudflare.com')) {
+        tunnelStatusEl.textContent = '● Remote Cellular Tunnel';
+        tunnelStatusEl.style.color = '#10b981';
+      } else {
+        tunnelStatusEl.textContent = '● Direct LAN Link';
+        tunnelStatusEl.style.color = '#38bdf8';
+      }
+    }
+
+    if (btnLaunchVlc) {
+      btnLaunchVlc.href = data.vlc_url;
+      btnLaunchVlc.onclick = () => {
+        showToast('🚀 Opening video in Mobile VLC Player...', 'info');
+      };
+    }
+
+    if (btnLaunchIntent) {
+      btnLaunchIntent.href = data.android_intent;
+      btnLaunchIntent.onclick = () => {
+        showToast('🤖 Opening via Android VLC App Intent...', 'info');
+      };
+    }
+
+    if (btnDownloadM3u) {
+      btnDownloadM3u.onclick = () => {
+        const a = document.createElement('a');
+        a.href = data.playlist_url;
+        a.download = `${data.filename}.m3u`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('📥 Downloaded VLC Playlist (.m3u)', 'success');
+      };
+    }
+
+    if (btnCopyLink) {
+      btnCopyLink.onclick = () => {
+        navigator.clipboard.writeText(data.stream_url).then(() => {
+          showToast('📋 Mobile stream link copied to clipboard!', 'success');
+        }).catch(() => {
+          showToast('Link: ' + data.stream_url, 'info');
+        });
+      };
+    }
+
+    if (btnDownloadSrt) {
+      if (data.has_subtitles && data.subtitles_url) {
+        btnDownloadSrt.style.display = 'flex';
+        btnDownloadSrt.onclick = () => {
+          const a = document.createElement('a');
+          a.href = data.subtitles_url;
+          a.download = `${data.filename.replace(/\.[^/.]+$/, '')}.srt`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          showToast('📥 Downloaded Subtitle (.srt)', 'success');
+        };
+      } else {
+        btnDownloadSrt.style.display = 'none';
+      }
+    }
+
+    if (transmuxLink) {
+      transmuxLink.href = data.transmux_url;
+    }
+
+    if (qrImg) {
+      qrImg.src = `/api/system/qrcode?text=${encodeURIComponent(data.stream_url)}`;
+    }
+  } catch (err) {
+    showToast(`Mobile stream notice: ${err.message}`, 'warning');
+  }
 }
 

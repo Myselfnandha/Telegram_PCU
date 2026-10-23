@@ -25,7 +25,8 @@ backend/sessions/*.session
 backend/sessions/*.session-journal
 backend/sessions/*.session*
 *.session
-
+.agents
+*.agents
 # Local Database, Logs & Storage
 backend/data/*.db
 backend/data/*.sqlite*

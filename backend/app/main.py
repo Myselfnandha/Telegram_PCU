@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import ClientDisconnect
 import socketio
 
 from app.config import CORS_ORIGINS, FRONTEND_DIR, TEMP_UPLOAD_DIR, PORT
@@ -27,6 +28,7 @@ from app.routes.proxy import router as proxy_router
 from app.routes.sniffer import router as sniffer_router
 from app.routes.settings import router as settings_router
 from app.routes.system import router as system_router, get_system_telemetry
+from app.routes.tgweb import router as tgweb_router
 from app.telegram_client import TelegramClientManager
 
 # Configure root logger with file handler
@@ -44,10 +46,25 @@ file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(name
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] %(message)s"))
 
+class EndpointFilter(logging.Filter):
+    SILENT_PATHS = (
+        "/api/governor/status",
+        "/api/auth/status",
+        "/api/history",
+        "/api/system/network",
+        "/socket.io/",
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(path in msg for path in self.SILENT_PATHS)
+
 logging.basicConfig(
     level=logging.INFO,
-    handlers=[file_handler, stream_handler]
+    handlers=[file_handler, stream_handler],
+    force=True
 )
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 logger = logging.getLogger("main")
 
 def cleanup_stale_temp_files():
@@ -75,6 +92,19 @@ async def _telemetry_broadcast_loop():
         except Exception as e:
             logger.debug(f"Telemetry broadcast err: {e}")
 
+async def _periodic_maintenance_loop():
+    """Periodically sweeps interrupted temp uploads and stream cache LRU/TTL eviction every hour."""
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            cleanup_stale_temp_files()
+            from app.services.stream_cache import stream_cache_service
+            stream_cache_service.evict_if_needed()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.debug(f"Periodic storage maintenance notice: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -84,8 +114,13 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Initializing TG Power Suite Backend...")
 
-    # 1. Cleanup old orphaned temp files
+    # 1. Cleanup old orphaned temp files & unmerged stream blocks
     cleanup_stale_temp_files()
+    try:
+        from app.services.stream_cache import stream_cache_service
+        stream_cache_service.evict_if_needed()
+    except Exception as e:
+        logger.debug(f"Initial stream cache sweep notice: {e}")
 
     # 2. Initialize SQLite Database
     await init_db()
@@ -102,8 +137,9 @@ async def lifespan(app: FastAPI):
     queue_manager.start_workers()
     download_manager.start()
 
-    # 5. Start Telemetry Broadcast Loop
+    # 5. Start Telemetry Broadcast Loop & Storage Maintenance Loop
     telemetry_task = asyncio.create_task(_telemetry_broadcast_loop())
+    maintenance_task = asyncio.create_task(_periodic_maintenance_loop())
 
     # 6. Attempt to initialize Telethon MTProto Client if session/credentials exist
     try:
@@ -115,9 +151,6 @@ async def lifespan(app: FastAPI):
             
             # Attach sniffer to client
             sniffer_service.attach_to_client(client)
-            
-            # Preload user dialogs
-            asyncio.create_task(preload_chats())
         else:
             logger.info("Telegram client is not authorized yet. Log in via setup_auth.py or Web Settings.")
     except Exception as e:
@@ -128,8 +161,15 @@ async def lifespan(app: FastAPI):
     # Clean shutdown
     logger.info("Shutting down TG Power Suite backend...")
     telemetry_task.cancel()
+    maintenance_task.cancel()
     await queue_manager.stop_workers()
     await TelegramClientManager.disconnect()
+    try:
+        from app.routes.tgweb import _client as tgweb_client
+        if tgweb_client and not tgweb_client.is_closed:
+            await tgweb_client.aclose()
+    except Exception:
+        pass
     logger.info("Shutdown complete.")
 
 
@@ -141,15 +181,35 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Pure ASGI Cache Control Middleware for Static Assets (Safe, zero-overhead, never deadlocks streaming)
-class NoCacheStaticASGIMiddleware:
+from starlette.middleware.gzip import GZipMiddleware
+
+
+class SmartStaticCacheASGIMiddleware:
+    """
+    High-Performance Static Asset Caching Middleware:
+    1. Immutable Cache (1 year) for content-hashed assets (/assets/*, fonts, bundled JS/CSS).
+    2. Zero-Cache (must-revalidate) for dynamic HTML entry points (/, index.html, sw.js)
+       so code updates are picked up instantly without stale browser caches.
+    """
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
             path = scope.get("path", "")
-            if path.endswith((".js", ".css", ".html")) or path == "/":
+            # Hashed assets in /assets/ or static font files can be aggressively cached forever
+            if path.startswith("/assets/") or path.endswith((".woff2", ".woff", ".ttf")):
+                async def send_wrapper(message):
+                    if message["type"] == "http.response.start":
+                        headers = list(message.get("headers", []))
+                        headers.append((b"cache-control", b"public, max-age=31536000, immutable"))
+                        message["headers"] = headers
+                    await send(message)
+                await self.app(scope, receive, send_wrapper)
+                return
+
+            # Dynamic entrypoints (index.html, sw.js, root) must never be cached
+            if path == "/" or path.endswith((".html", "manifest.json", "sw.js")):
                 async def send_wrapper(message):
                     if message["type"] == "http.response.start":
                         headers = list(message.get("headers", []))
@@ -163,7 +223,34 @@ class NoCacheStaticASGIMiddleware:
 
         await self.app(scope, receive, send)
 
-app.add_middleware(NoCacheStaticASGIMiddleware)
+
+class ClientDisconnectSuppressorMiddleware:
+    """
+    Prevents noisy ASGI tracebacks when media players (VLC, mpv, mobile)
+    close or reset HTTP Range connections during seek or pause operations.
+    """
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        try:
+            await self.app(scope, receive, send)
+        except (asyncio.CancelledError, ConnectionResetError, BrokenPipeError, ClientDisconnect):
+            if scope["type"] == "http":
+                # Yield control to let asyncio loop process transport disconnection callbacks
+                # so that Uvicorn marks the connection as disconnected before finalizing.
+                await asyncio.sleep(0)
+                return
+            raise
+        except RuntimeError as re:
+            if scope["type"] == "http" and "Response content shorter than Content-Length" in str(re):
+                return
+            raise
+
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(ClientDisconnectSuppressorMiddleware)
+app.add_middleware(SmartStaticCacheASGIMiddleware)
 
 # Add CORS Middleware
 app.add_middleware(
@@ -183,11 +270,14 @@ app.include_router(settings_router)
 app.include_router(chats_router)
 app.include_router(history_router)
 app.include_router(system_router)
+app.include_router(tgweb_router)
 
 # Mount Frontend Static Assets
 if FRONTEND_DIR.exists():
-    app.mount("/css", StaticFiles(directory=str(FRONTEND_DIR / "css")), name="css")
-    app.mount("/js", StaticFiles(directory=str(FRONTEND_DIR / "js")), name="js")
+    if (FRONTEND_DIR / "css").exists():
+        app.mount("/css", StaticFiles(directory=str(FRONTEND_DIR / "css")), name="css")
+    if (FRONTEND_DIR / "js").exists():
+        app.mount("/js", StaticFiles(directory=str(FRONTEND_DIR / "js")), name="js")
     if (FRONTEND_DIR / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="assets")
 

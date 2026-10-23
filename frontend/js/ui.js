@@ -56,7 +56,7 @@ function buildStatusBadgeHtml(task) {
       else if (mins > 0) countdownStr = `${mins}m ${secs}s`;
       else countdownStr = `${secs}s`;
     }
-    return `<span class="badge" style="background: rgba(162, 155, 254, 0.2); color: #a29bfe; border: 1px solid rgba(162,155,254,0.4);" title="Scheduled upload">⏰ SCHEDULED ${countdownStr ? '(' + countdownStr + ')' : ''}</span>`;
+    return `<span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35);" title="Scheduled upload">⏰ SCHEDULED ${countdownStr ? '(' + countdownStr + ')' : ''}</span>`;
   } else if (isPaused) {
     return `<span class="badge" style="background: rgba(253, 203, 110, 0.2); color: var(--status-warning);">PAUSED</span>`;
   } else if (isCompleted) {
@@ -85,7 +85,7 @@ function buildStageLineHtml(task) {
       const dt = new Date(task.scheduled_at * 1000);
       timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (' + dt.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ')';
     }
-    return `<div class="card-stage-line" style="color: #a29bfe;">⏰ <strong>Scheduled:</strong> Will start streaming at ${timeStr}</div>`;
+    return `<div class="card-stage-line" style="color: #38bdf8;">⏰ <strong>Scheduled:</strong> Will start streaming at ${timeStr}</div>`;
   } else if (task.status === 'completed') {
     return `<div class="card-stage-line completed">✅ <strong>Upload Finished:</strong> Delivered to ${escapeHtml(task.chatName || 'Telegram')}</div>`;
   } else if (task.status === 'paused') {

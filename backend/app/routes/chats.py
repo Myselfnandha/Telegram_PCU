@@ -1,4 +1,6 @@
+import os
 import time
+import asyncio
 import logging
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
@@ -37,10 +39,10 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
 
     me = await client.get_me()
     
-    # 1. Fetch main dialogs and archived dialogs
-    main_dialogs = await client.get_dialogs(limit=300)
+    # 1. Fetch main dialogs and archived dialogs (compact slice to save RAM)
+    main_dialogs = await client.get_dialogs(limit=100)
     try:
-        archived_dialogs = await client.get_dialogs(folder=1, limit=100)
+        archived_dialogs = await client.get_dialogs(folder=1, limit=30)
     except Exception:
         archived_dialogs = []
 
@@ -124,11 +126,15 @@ os.makedirs(_AVATAR_CACHE_DIR, exist_ok=True)
 _EMPTY_PIXEL = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
 
 
+_AVATAR_SEMAPHORE = asyncio.Semaphore(2)
+
+
 @router.get("/chats/{chat_id}/avatar")
 async def get_chat_avatar(chat_id: str):
     """
     Downloads and caches Telegram channel/group/user profile avatar photo.
     Returns 1x1 transparent PNG if no photo exists, preventing 404 console noise.
+    Uses concurrency semaphore and 3.5s timeout to protect Telethon from multi-DC flood.
     """
     cache_file = os.path.join(_AVATAR_CACHE_DIR, f"{chat_id}.jpg")
     cache_none = os.path.join(_AVATAR_CACHE_DIR, f"{chat_id}.none")
@@ -150,51 +156,61 @@ async def get_chat_avatar(chat_id: str):
     if not client or not client.is_connected():
         return Response(content=_EMPTY_PIXEL, media_type="image/png")
 
-    try:
-        clean_id: int | str = chat_id
-        if chat_id != "me":
-            try:
-                clean_id = int(chat_id)
-            except ValueError:
-                clean_id = chat_id
+    async with _AVATAR_SEMAPHORE:
+        # Re-check cache inside semaphore lock
+        if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
+            with open(cache_file, "rb") as f:
+                return Response(
+                    content=f.read(),
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=604800, immutable"}
+                )
 
-        entity = await client.get_entity(clean_id)
-        if not getattr(entity, "photo", None):
+        try:
+            clean_id: int | str = chat_id
+            if chat_id != "me":
+                try:
+                    clean_id = int(chat_id)
+                except ValueError:
+                    clean_id = chat_id
+
+            entity = await asyncio.wait_for(client.get_entity(clean_id), timeout=3.0)
+            if not getattr(entity, "photo", None):
+                try:
+                    with open(cache_none, "w") as f:
+                        f.write("none")
+                except Exception:
+                    pass
+                return Response(content=_EMPTY_PIXEL, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+            photo_bytes = await asyncio.wait_for(client.download_profile_photo(entity, file=bytes), timeout=3.5)
+            if not photo_bytes:
+                try:
+                    with open(cache_none, "w") as f:
+                        f.write("none")
+                except Exception:
+                    pass
+                return Response(content=_EMPTY_PIXEL, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+            try:
+                with open(cache_file, "wb") as f:
+                    f.write(photo_bytes)
+            except Exception:
+                pass
+
+            return Response(
+                content=photo_bytes,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=604800, immutable"}
+            )
+        except Exception as e:
+            logger.debug(f"Avatar fetch notice for {chat_id}: {e}")
             try:
                 with open(cache_none, "w") as f:
                     f.write("none")
             except Exception:
                 pass
             return Response(content=_EMPTY_PIXEL, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
-
-        photo_bytes = await client.download_profile_photo(entity, file=bytes)
-        if not photo_bytes:
-            try:
-                with open(cache_none, "w") as f:
-                    f.write("none")
-            except Exception:
-                pass
-            return Response(content=_EMPTY_PIXEL, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
-
-        try:
-            with open(cache_file, "wb") as f:
-                f.write(photo_bytes)
-        except Exception:
-            pass
-
-        return Response(
-            content=photo_bytes,
-            media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=604800, immutable"}
-        )
-    except Exception as e:
-        logger.debug(f"Avatar fetch notice for {chat_id}: {e}")
-        try:
-            with open(cache_none, "w") as f:
-                f.write("none")
-        except Exception:
-            pass
-        return Response(content=_EMPTY_PIXEL, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 from pydantic import BaseModel
@@ -333,3 +349,136 @@ async def list_chats(
         return [c for c in chats if q in c.name.lower() or (c.username and q in c.username.lower())]
 
     return chats
+
+
+class SendTextMessageRequest(BaseModel):
+    text: str
+
+
+@router.get("/chats/{chat_id}/messages")
+async def get_chat_messages(
+    chat_id: str,
+    limit: int = Query(35, ge=1, le=100),
+    offset_id: int = Query(0, ge=0)
+):
+    """
+    Fetches recent messages from a Telegram chat/channel for the native mobile dock.
+    Extracts text, media attributes (video/photo/document, size, duration, stream_url),
+    and sender information.
+    """
+    client = await TelegramClientManager.get_client()
+    if not await client.is_user_authorized():
+        raise HTTPException(status_code=401, detail="Telegram account not authorized.")
+
+    try:
+        clean_chat_id: int | str = chat_id
+        if chat_id != "me":
+            try:
+                clean_chat_id = int(chat_id)
+            except ValueError:
+                clean_chat_id = chat_id
+
+        entity = await client.get_entity(clean_chat_id)
+        raw_msgs = await client.get_messages(entity, limit=limit, offset_id=offset_id)
+
+        messages = []
+        for m in raw_msgs:
+            if not m:
+                continue
+
+            media_info = None
+            if m.media:
+                has_doc = hasattr(m, "document") and m.document
+                file_name = getattr(m.file, "name", None) if m.file else None
+                file_size = getattr(m.file, "size", 0) if m.file else 0
+                mime_type = getattr(m.file, "mime_type", "") if m.file else ""
+                duration = getattr(m.file, "duration", None) if m.file else None
+
+                is_video = bool(
+                    getattr(m, "video", False)
+                    or (has_doc and mime_type and mime_type.startswith("video/"))
+                    or (file_name and any(file_name.lower().endswith(ext) for ext in (".mkv", ".mp4", ".avi", ".mov", ".ts", ".webm")))
+                )
+
+                if is_video:
+                    media_info = {
+                        "type": "video",
+                        "file_name": file_name or f"video_{m.id}.mp4",
+                        "file_size": file_size,
+                        "duration": duration,
+                        "mime_type": mime_type or "video/mp4",
+                        "stream_url": f"/stream/{chat_id}/{m.id}/{file_name or 'video.mp4'}",
+                        "thumb_url": f"/stream/{chat_id}/{m.id}/thumb"
+                    }
+                elif getattr(m, "photo", False):
+                    media_info = {
+                        "type": "photo",
+                        "file_name": f"photo_{m.id}.jpg",
+                        "file_size": file_size,
+                        "thumb_url": f"/stream/{chat_id}/{m.id}/thumb"
+                    }
+                elif has_doc:
+                    media_info = {
+                        "type": "document",
+                        "file_name": file_name or f"file_{m.id}",
+                        "file_size": file_size,
+                        "mime_type": mime_type,
+                        "download_url": f"/dl/{chat_id}/{m.id}/{file_name or 'file'}"
+                    }
+
+            sender_name = "User"
+            if m.out:
+                sender_name = "You"
+            elif m.sender:
+                s_first = getattr(m.sender, "first_name", "") or ""
+                s_last = getattr(m.sender, "last_name", "") or ""
+                s_title = getattr(m.sender, "title", "") or ""
+                sender_name = s_title or f"{s_first} {s_last}".strip() or getattr(m.sender, "username", "User")
+
+            messages.append({
+                "id": m.id,
+                "date": m.date.isoformat() if m.date else None,
+                "text": m.message or "",
+                "out": bool(m.out),
+                "sender_name": sender_name,
+                "sender_id": getattr(m, "sender_id", None),
+                "media": media_info,
+                "views": getattr(m, "views", None),
+                "forwards": getattr(m, "forwards", None)
+            })
+
+        return {
+            "chat_id": str(chat_id),
+            "count": len(messages),
+            "messages": messages
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch messages for chat {chat_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chats/{chat_id}/send")
+async def send_chat_message(chat_id: str, payload: SendTextMessageRequest):
+    """Sends a text message to the specified Telegram chat/channel."""
+    client = await TelegramClientManager.get_client()
+    if not await client.is_user_authorized():
+        raise HTTPException(status_code=401, detail="Telegram account not authorized.")
+
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message text cannot be empty.")
+
+    try:
+        clean_chat_id: int | str = chat_id
+        if chat_id != "me":
+            try:
+                clean_chat_id = int(chat_id)
+            except ValueError:
+                clean_chat_id = chat_id
+
+        sent = await client.send_message(clean_chat_id, text)
+        return {"success": True, "message_id": sent.id}
+    except Exception as e:
+        logger.error(f"Failed to send message to {chat_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

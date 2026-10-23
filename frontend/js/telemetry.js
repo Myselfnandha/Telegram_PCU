@@ -132,8 +132,8 @@ export class TelemetryController {
 
     // Create gradient
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, "rgba(0, 206, 201, 0.35)");
-    gradient.addColorStop(1, "rgba(108, 92, 231, 0.02)");
+    gradient.addColorStop(0, "rgba(14, 165, 233, 0.35)");
+    gradient.addColorStop(1, "rgba(14, 165, 233, 0.02)");
 
     // Plot path
     ctx.beginPath();

@@ -22,7 +22,8 @@ TEMP_UPLOAD_DIR = BACKEND_DIR / "temp_uploads"
 SESSION_DIR = BACKEND_DIR / "sessions"
 DATA_DIR = BACKEND_DIR / "data"
 DOWNLOADS_DIR = BACKEND_DIR / "downloads"
-FRONTEND_DIR = ROOT_DIR / "frontend"
+REUI_DIST = ROOT_DIR / "frontend-reui" / "dist"
+FRONTEND_DIR = REUI_DIST if (REUI_DIST / "index.html").exists() else (ROOT_DIR / "frontend")
 ASSETS_DIR = ROOT_DIR / "assets"
 if not ASSETS_DIR.exists():
     ASSETS_DIR = BACKEND_DIR / "assets"

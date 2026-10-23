@@ -104,8 +104,8 @@ EOF
     chmod +x "$APPLICATIONS_DIR/$DESKTOP_NAME"
     update-desktop-database "$APPLICATIONS_DIR" 2>/dev/null || true
 
-    # 5. Install and Enable Systemd User Service
-    echo -e "${YELLOW}[+] Setting up systemd user service ($SERVICE_NAME)...${NC}"
+    # 5. Optional Systemd User Service (Installed but disabled by default to prevent autostart on system boot)
+    echo -e "${YELLOW}[+] Installing systemd user service unit ($SERVICE_NAME)...${NC}"
     cat <<EOF > "$SYSTEMD_DIR/$SERVICE_NAME"
 [Unit]
 Description=TG Power Suite (Telegram MTProto Turbo Uploader & FDM Proxy)
@@ -125,14 +125,14 @@ WantedBy=default.target
 EOF
 
     systemctl --user daemon-reload
-    systemctl --user enable --now "$SERVICE_NAME"
+    # Autostart on boot is disabled per user configuration. Can be manually started with: tg-power-suite start
 
     echo -e "\n${GREEN}======================================================================${NC}"
-    echo -e "${GREEN}  🎉 TG Power Suite Successfully Installed & Running!${NC}"
+    echo -e "${GREEN}  🎉 TG Power Suite Successfully Installed! (Autostart Disabled)${NC}"
     echo -e "${GREEN}======================================================================${NC}"
     echo -e "  • Web Dashboard   : ${CYAN}http://localhost:8088${NC}"
-    echo -e "  • CLI Command     : ${CYAN}tg-power-suite [start|stop|status|logs]${NC}"
-    echo -e "  • Service Status  : ${CYAN}systemctl --user status tg-power-suite.service${NC}"
+    echo -e "  • Manual Start    : ${CYAN}tg-power-suite start --daemon${NC}"
+    echo -e "  • CLI Commands    : ${CYAN}tg-power-suite [start|stop|restart|status|logs]${NC}"
     echo -e "${GREEN}======================================================================${NC}\n"
 }
 
@@ -215,15 +215,18 @@ EOF
 
     systemctl --user daemon-reload
     
-    # Step 5: Restart Service
-    echo -e "${YELLOW}[5/5] Restarting background service...${NC}"
-    systemctl --user restart "$SERVICE_NAME" || return 1
+    # Step 5: Restart Service only if already active
+    if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo -e "${YELLOW}[5/5] Restarting background service...${NC}"
+        systemctl --user restart "$SERVICE_NAME" || return 1
+    fi
 
     echo -e "\n${GREEN}======================================================================${NC}"
-    echo -e "${GREEN}  ✨ TG Power Suite Successfully Updated & Running!${NC}"
+    echo -e "${GREEN}  ✨ TG Power Suite Successfully Updated!${NC}"
     echo -e "${GREEN}======================================================================${NC}"
     echo -e "  • Web Dashboard   : ${CYAN}http://localhost:8088${NC}"
-    echo -e "  • Service Status  : ${CYAN}systemctl --user status tg-power-suite.service${NC}"
+    echo -e "  • Manual Start    : ${CYAN}tg-power-suite start --daemon${NC}"
+    echo -e "  • CLI Commands    : ${CYAN}tg-power-suite [start|stop|restart|status|logs]${NC}"
     echo -e "${GREEN}======================================================================${NC}\n"
     return 0
 }

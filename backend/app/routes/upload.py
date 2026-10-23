@@ -28,6 +28,42 @@ class ChunkCompleteRequest(BaseModel):
     scheduled_at: Optional[float] = None
 
 
+
+@router.get("/upload/chunk/status")
+async def get_chunk_upload_status(
+    upload_id: str,
+    filename: str,
+    chunk_size: int = 10 * 1024 * 1024
+):
+    """
+    Checks on-disk state of chunked upload. Returns the number of complete chunks
+    and byte offset already received, enabling seamless chunk-based resume.
+    """
+    clean_original_filename = filename or f"upload_{upload_id}"
+    clean_original_filename = "".join([c for c in clean_original_filename if (c.isalnum() or c in " .-_()")]).strip()
+    temp_file_path = TEMP_UPLOAD_DIR / f"{upload_id}_{clean_original_filename}"
+
+    if not temp_file_path.exists():
+        return {
+            "exists": False,
+            "received_bytes": 0,
+            "next_chunk_index": 0,
+            "total_chunks_received": 0
+        }
+
+    actual_size = temp_file_path.stat().st_size
+    complete_chunks = actual_size // chunk_size if chunk_size > 0 else 0
+    resume_byte_offset = complete_chunks * chunk_size
+
+    return {
+        "exists": True,
+        "received_bytes": resume_byte_offset,
+        "actual_file_size": actual_size,
+        "next_chunk_index": complete_chunks,
+        "total_chunks_received": complete_chunks
+    }
+
+
 @router.post("/upload/chunk")
 async def handle_upload_chunk(
     file: UploadFile = File(...),
@@ -42,13 +78,14 @@ async def handle_upload_chunk(
     Handles sliced chunk uploads from the browser.
     Appends binary chunks directly to the target temporary file on NVMe disk,
     bypassing /tmp memory limits completely for multi-gigabyte (10GB-100GB+) uploads.
+    Supports chunk-based resume by writing to exact byte offsets.
     """
     clean_original_filename = filename or f"upload_{upload_id}"
     clean_original_filename = "".join([c for c in clean_original_filename if (c.isalnum() or c in " .-_()")]).strip()
     temp_file_path = TEMP_UPLOAD_DIR / f"{upload_id}_{clean_original_filename}"
 
     try:
-        # Pre-allocate full file space on first chunk to prevent fragmentation
+        # Pre-allocate full file space on first chunk to prevent fragmentation if not already allocated
         if chunk_index == 0 and not temp_file_path.exists():
             try:
                 fd = os.open(str(temp_file_path), os.O_CREAT | os.O_WRONLY, 0o644)
@@ -68,6 +105,7 @@ async def handle_upload_chunk(
         with open(temp_file_path, mode) as f:
             f.seek(offset)
             f.write(chunk_data)
+            f.flush()
 
         return {
             "status": "ok",

@@ -72,3 +72,47 @@ def get_system_telemetry() -> Dict[str, Any]:
 async def get_stats():
     """Returns real-time system and throughput telemetry metrics."""
     return get_system_telemetry()
+
+
+@router.get("/network")
+async def get_network_info():
+    """Returns detected LAN IP, Wi-Fi addresses, and active remote tunnel status."""
+    from app.services.network_service import network_service
+    from app.config import PORT
+    return network_service.get_network_info(port=int(PORT or 8088))
+
+
+@router.get("/qrcode")
+async def get_qrcode(text: str):
+    """Generates a PNG QR code for mobile scanning."""
+    from app.services.network_service import network_service
+    from fastapi import Response
+    png_bytes = network_service.generate_qr(text)
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"}
+    )
+
+
+@router.post("/tunnel/start")
+async def start_tunnel():
+    """Starts Cloudflare Quick Tunnel for 1-click remote cellular streaming."""
+    from app.services.network_service import network_service
+    from app.config import PORT
+    return await network_service.start_cloudflare_tunnel(local_port=int(PORT or 8088))
+
+
+@router.post("/tunnel/stop")
+async def stop_tunnel():
+    """Stops active Cloudflare Quick Tunnel."""
+    from app.services.network_service import network_service
+    return await network_service.stop_cloudflare_tunnel()
+
+
+@router.get("/tunnel/status")
+async def get_tunnel_status():
+    """Checks Cloudflare Quick Tunnel state."""
+    from app.services.network_service import network_service
+    return network_service.get_tunnel_status()
+

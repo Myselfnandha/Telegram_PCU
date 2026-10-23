@@ -12,7 +12,7 @@ import { themeManager } from './theme.js';
 import { tabController } from './tabs.js';
 import { snifferUI } from './sniffer-ui.js';
 import { settingsUI } from './settings-ui.js';
-import { initCinema } from './cinema-ui.js';
+import { initCinema, loadCinemaVideos } from './cinema-ui.js';
 import { authUI } from './auth-ui.js';
 
 async function checkAuthStatus() {
@@ -273,6 +273,9 @@ function initApp() {
   // Initialize Cinema & Video Streaming Tab
   try {
     initCinema();
+    tabController.onTabSwitch('cinema', () => {
+      loadCinemaVideos();
+    });
   } catch (e) {
     console.error('Cinema Controller error:', e);
   }

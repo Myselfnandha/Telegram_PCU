@@ -65,8 +65,8 @@ class MediaStreamSession:
         self.memory_slices[slice_idx] = data
         self.last_active_time = time.time()
 
-        # Evict old memory slices if memory buffer exceeds 64MB limit
-        max_slices = max(32, MAX_MEM_CACHE_PER_MEDIA // SLICE_SIZE)
+        # Evict old memory slices if memory buffer exceeds 32MB limit
+        max_slices = max(16, MAX_MEM_CACHE_PER_MEDIA // (2 * SLICE_SIZE))
         if len(self.memory_slices) > max_slices:
             # Preserve head (0..19) and tail (last 5) for instant seek, evict far slices beyond 32MB radius
             head_indices = set(range(min(20, self.total_slices)))
@@ -106,7 +106,7 @@ class FastStreamEngine:
                 now = time.time()
                 stale_keys = []
                 for key, session in list(self._sessions.items()):
-                    if now - session.last_active_time > 60:  # 1 minute idle
+                    if now - session.last_active_time > 20:  # 20s idle - fast eviction
                         stale_keys.append(key)
                 if stale_keys:
                     for key in stale_keys:
@@ -161,24 +161,28 @@ class FastStreamEngine:
         self, client, sender, file_loc, offset: int, limit: int = 1024 * 1024
     ) -> bytes:
         """Executes a single GetFileRequest with RateGovernor pacing, sender re-acquisition on reset, and FloodWait backoff."""
-        await rate_governor.wait_if_cooling_down()
         req = GetFileRequest(file_loc, offset=offset, limit=limit)
         active_sender = sender
         for attempt in range(5):
-            await rate_governor.wait_if_cooling_down()
             try:
-                if active_sender and hasattr(client, "_call"):
-                    try:
-                        res = await asyncio.wait_for(
-                            client._call(active_sender, req),
-                            timeout=12.0
-                        )
-                    except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError, errors.SecurityError, asyncio.TimeoutError):
-                        # Sender died — use primary client call as immediate fallback
-                        active_sender = None
-                        res = await asyncio.wait_for(client(req), timeout=12.0)
+                if rate_governor.is_cooling_down:
+                    async with rate_governor.fallback_slot():
+                        res = await asyncio.wait_for(client(req, flood_sleep_threshold=0), timeout=25.0)
                 else:
-                    res = await asyncio.wait_for(client(req), timeout=12.0)
+                    await rate_governor.acquire_chunk_slot(limit)
+                    if active_sender and hasattr(client, "_call"):
+                        try:
+                            res = await asyncio.wait_for(
+                                client._call(active_sender, req, flood_sleep_threshold=0),
+                                timeout=20.0
+                            )
+                        except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError, errors.SecurityError, asyncio.TimeoutError):
+                            # Sender died — use primary client call as immediate fallback
+                            active_sender = None
+                            res = await asyncio.wait_for(client(req, flood_sleep_threshold=0), timeout=20.0)
+                    else:
+                        res = await asyncio.wait_for(client(req, flood_sleep_threshold=0), timeout=20.0)
+
                 if hasattr(res, "bytes"):
                     return res.bytes
                 elif isinstance(res, (bytes, bytearray)):
@@ -186,8 +190,8 @@ class FastStreamEngine:
                 return b""
             except errors.FloodWaitError as fwe:
                 wait_s = max(fwe.seconds, 1)
-                rate_governor.report_flood_wait(wait_s, reason=f"MTProto 1MB Fetcher (attempt {attempt+1})")
-                await rate_governor.wait_if_cooling_down()
+                rate_governor.report_flood_wait(wait_s, reason=f"MTProto 1MB Fetcher (attempt {attempt+1})", client=client)
+                await asyncio.sleep(min(wait_s, 2.0))
             except asyncio.TimeoutError:
                 logger.warning(f"Chunk offset {offset} timed out (attempt {attempt+1}/5)")
                 active_sender = None  # Force re-acquire on next attempt
@@ -204,7 +208,7 @@ class FastStreamEngine:
                 logger.debug(f"Fetch chunk offset {offset} error (attempt {attempt+1}): {e}")
                 if attempt == 4:
                     raise
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.3)
         return b""
 
     async def stream_parallel_mtproto(
@@ -273,7 +277,6 @@ class FastStreamEngine:
         """
         if length <= 0:
             return b""
-        await rate_governor.wait_if_cooling_down()
 
         # Attempt direct high-speed 1MB fetch via MTProto
         try:

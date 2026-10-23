@@ -6,6 +6,7 @@
       this.progressListeners = /* @__PURE__ */ new Set();
       this.queueListeners = /* @__PURE__ */ new Set();
       this.connectionListeners = /* @__PURE__ */ new Set();
+      this.cinemaListeners = /* @__PURE__ */ new Set();
       this.isConnected = false;
     }
     init() {
@@ -50,6 +51,15 @@
           }
         });
       });
+      this.socket.on("cinema:videos_updated", (data) => {
+        this.cinemaListeners.forEach((fn) => {
+          try {
+            fn(data);
+          } catch (e) {
+            console.error("Error in cinema update listener:", e);
+          }
+        });
+      });
     }
     onProgress(callback) {
       this.progressListeners.add(callback);
@@ -58,6 +68,10 @@
     onQueueSnapshot(callback) {
       this.queueListeners.add(callback);
       return () => this.queueListeners.delete(callback);
+    }
+    onCinemaUpdate(callback) {
+      this.cinemaListeners.add(callback);
+      return () => this.cinemaListeners.delete(callback);
     }
     onConnectionChange(callback) {
       this.connectionListeners.add(callback);
@@ -274,7 +288,6 @@
         });
       });
       this.loadSavedSelection();
-      setTimeout(() => this.fetchChats(), 100);
     }
     loadSavedSelection() {
       try {
@@ -1179,7 +1192,7 @@
         else if (mins > 0) countdownStr = `${mins}m ${secs}s`;
         else countdownStr = `${secs}s`;
       }
-      return `<span class="badge" style="background: rgba(162, 155, 254, 0.2); color: #a29bfe; border: 1px solid rgba(162,155,254,0.4);" title="Scheduled upload">\u23F0 SCHEDULED ${countdownStr ? "(" + countdownStr + ")" : ""}</span>`;
+      return `<span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35);" title="Scheduled upload">\u23F0 SCHEDULED ${countdownStr ? "(" + countdownStr + ")" : ""}</span>`;
     } else if (isPaused) {
       return `<span class="badge" style="background: rgba(253, 203, 110, 0.2); color: var(--status-warning);">PAUSED</span>`;
     } else if (isCompleted) {
@@ -1207,7 +1220,7 @@
         const dt = new Date(task.scheduled_at * 1e3);
         timeStr = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " (" + dt.toLocaleDateString([], { month: "short", day: "numeric" }) + ")";
       }
-      return `<div class="card-stage-line" style="color: #a29bfe;">\u23F0 <strong>Scheduled:</strong> Will start streaming at ${timeStr}</div>`;
+      return `<div class="card-stage-line" style="color: #38bdf8;">\u23F0 <strong>Scheduled:</strong> Will start streaming at ${timeStr}</div>`;
     } else if (task.status === "completed") {
       return `<div class="card-stage-line completed">\u2705 <strong>Upload Finished:</strong> Delivered to ${escapeHtml(task.chatName || "Telegram")}</div>`;
     } else if (task.status === "paused") {
@@ -1736,25 +1749,25 @@
       "--text-main": "#111827",
       "--text-muted": "#4b5563",
       "--text-dim": "#6b7280",
-      "--accent-primary": "#6c5ce7",
-      "--accent-secondary": "#0984e3",
-      "--accent-gradient": "linear-gradient(135deg, #6c5ce7 0%, #0984e3 100%)",
-      "--accent-gradient-hover": "linear-gradient(135deg, #5b4cc4 0%, #0873c4 100%)",
+      "--accent-primary": "#0ea5e9",
+      "--accent-secondary": "#10b981",
+      "--accent-gradient": "linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)",
+      "--accent-gradient-hover": "linear-gradient(135deg, #0284c7 0%, #059669 100%)",
       "--border-glass": "rgba(0, 0, 0, 0.1)"
     },
     "deep-space": {
-      "--bg-primary": "#0f111a",
-      "--bg-secondary": "#161926",
-      "--bg-card": "rgba(26, 31, 46, 0.65)",
-      "--bg-card-hover": "rgba(34, 40, 60, 0.85)",
-      "--bg-input": "rgba(18, 22, 34, 0.7)",
-      "--text-main": "#e4e7eb",
-      "--text-muted": "#8a94a6",
-      "--text-dim": "#5a6474",
-      "--accent-primary": "#6c5ce7",
-      "--accent-secondary": "#00cec9",
-      "--accent-gradient": "linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)",
-      "--accent-gradient-hover": "linear-gradient(135deg, #5b4cc4 0%, #8c82f8 100%)",
+      "--bg-primary": "#090d16",
+      "--bg-secondary": "#0f172a",
+      "--bg-card": "rgba(15, 23, 42, 0.72)",
+      "--bg-card-hover": "rgba(30, 41, 59, 0.85)",
+      "--bg-input": "rgba(15, 23, 42, 0.85)",
+      "--text-main": "#f8fafc",
+      "--text-muted": "#94a3b8",
+      "--text-dim": "#64748b",
+      "--accent-primary": "#0ea5e9",
+      "--accent-secondary": "#10b981",
+      "--accent-gradient": "linear-gradient(135deg, #0ea5e9 0%, #38bdf8 50%, #10b981 100%)",
+      "--accent-gradient-hover": "linear-gradient(135deg, #0284c7 0%, #0ea5e9 50%, #059669 100%)",
       "--border-glass": "rgba(255, 255, 255, 0.08)"
     },
     "oled": {
@@ -1936,7 +1949,7 @@
         if (saved && this.tabPanes[saved]) {
           this.switchTab(saved);
         } else {
-          this.switchTab("uploader");
+          this.switchTab("cinema");
         }
       }
       window._switchTab = (tabName) => this.switchTab(tabName);
@@ -2193,11 +2206,11 @@
       this.watchChannelListContainer.innerHTML = displayList.map((ch) => {
         let icon = "\u{1F4E2}";
         let typeLabel = "CHANNEL";
-        let avatarBg = "linear-gradient(135deg, #00cec9, #6c5ce7)";
+        let avatarBg = "linear-gradient(135deg, #06b6d4, #0284c7)";
         if (ch.type === "supergroup" || ch.type === "group") {
           icon = "\u{1F465}";
           typeLabel = "GROUP";
-          avatarBg = "linear-gradient(135deg, #fd79a8, #6c5ce7)";
+          avatarBg = "linear-gradient(135deg, #0ea5e9, #10b981)";
         } else if (ch.type === "bot") {
           icon = "\u{1F916}";
           typeLabel = "BOT";
@@ -2565,9 +2578,11 @@
       if (tabController2) {
         tabController2.onTabSwitch("settings", () => {
           this.loadSettings();
+          if (this.reloadNetwork) this.reloadNetwork();
         });
       }
       this.loadSettings();
+      this.initNetworkSettings();
     }
     async loadSettings() {
       try {
@@ -2607,6 +2622,111 @@
         showToast(`Error saving settings: ${err.message}`, "error");
       }
     }
+    async initNetworkSettings() {
+      const lanIpBadge = document.getElementById("lanIpBadge");
+      const netLanUrlInput = document.getElementById("netLanUrlInput");
+      const netLanQrImg = document.getElementById("netLanQrImg");
+      const btnCopyLanUrl = document.getElementById("btnCopyLanUrl");
+      const cloudflareStatusPill = document.getElementById("cloudflareStatusPill");
+      const netTunnelUrlInput = document.getElementById("netTunnelUrlInput");
+      const btnCopyTunnelUrl = document.getElementById("btnCopyTunnelUrl");
+      const btnToggleTunnel = document.getElementById("btnToggleTunnel");
+      const tunnelErrorMsg = document.getElementById("tunnelErrorMsg");
+      const updateNetworkUI = (netInfo) => {
+        if (!netInfo) return;
+        if (lanIpBadge) lanIpBadge.textContent = `LAN: ${netInfo.lan_ip || "127.0.0.1"}`;
+        if (netLanUrlInput) netLanUrlInput.value = netInfo.default_url || `http://${netInfo.lan_ip}:8088`;
+        if (netLanQrImg) netLanQrImg.src = `/api/system/qrcode?text=${encodeURIComponent(netInfo.default_url || `http://${netInfo.lan_ip}:8088`)}`;
+        const tunnel = netInfo.tunnel || {};
+        if (tunnel.status === "running" && tunnel.public_url) {
+          if (cloudflareStatusPill) {
+            cloudflareStatusPill.textContent = "Active (Online)";
+            cloudflareStatusPill.style.background = "rgba(16, 185, 129, 0.15)";
+            cloudflareStatusPill.style.color = "#10b981";
+          }
+          if (netTunnelUrlInput) netTunnelUrlInput.value = tunnel.public_url;
+          if (btnCopyTunnelUrl) btnCopyTunnelUrl.disabled = false;
+          if (btnToggleTunnel) {
+            btnToggleTunnel.innerHTML = "<span>\u{1F6D1} Stop Remote Tunnel</span>";
+            btnToggleTunnel.style.background = "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)";
+          }
+          if (tunnelErrorMsg) tunnelErrorMsg.style.display = "none";
+        } else {
+          if (cloudflareStatusPill) {
+            cloudflareStatusPill.textContent = "Stopped";
+            cloudflareStatusPill.style.background = "rgba(148, 163, 184, 0.15)";
+            cloudflareStatusPill.style.color = "#94a3b8";
+          }
+          if (netTunnelUrlInput) netTunnelUrlInput.value = "";
+          if (btnCopyTunnelUrl) btnCopyTunnelUrl.disabled = true;
+          if (btnToggleTunnel) {
+            btnToggleTunnel.innerHTML = "<span>\u26A1 Start Remote Tunnel</span>";
+            btnToggleTunnel.style.background = "linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)";
+          }
+        }
+      };
+      const fetchNetwork = async () => {
+        try {
+          const res = await fetch("/api/system/network");
+          if (res.ok) {
+            const netInfo = await res.json();
+            updateNetworkUI(netInfo);
+          }
+        } catch (e) {
+          console.debug("Network info load error:", e);
+        }
+      };
+      this.reloadNetwork = fetchNetwork;
+      await fetchNetwork();
+      if (btnCopyLanUrl && netLanUrlInput) {
+        btnCopyLanUrl.addEventListener("click", () => {
+          navigator.clipboard.writeText(netLanUrlInput.value).then(() => {
+            showToast("\u{1F4CB} LAN Wi-Fi URL copied to clipboard!", "success");
+          });
+        });
+      }
+      if (btnCopyTunnelUrl && netTunnelUrlInput) {
+        btnCopyTunnelUrl.addEventListener("click", () => {
+          if (netTunnelUrlInput.value) {
+            navigator.clipboard.writeText(netTunnelUrlInput.value).then(() => {
+              showToast("\u{1F4CB} Remote Cloudflare Tunnel URL copied!", "success");
+            });
+          }
+        });
+      }
+      if (btnToggleTunnel) {
+        btnToggleTunnel.addEventListener("click", async () => {
+          btnToggleTunnel.disabled = true;
+          const currentText = btnToggleTunnel.textContent;
+          const isRunning = currentText.includes("Stop");
+          try {
+            if (isRunning) {
+              btnToggleTunnel.innerHTML = "<span>Stopping tunnel...</span>";
+              await fetch("/api/system/tunnel/stop", { method: "POST" });
+              showToast("Remote Cloudflare tunnel stopped", "info");
+            } else {
+              btnToggleTunnel.innerHTML = "<span>Connecting to Cloudflare...</span>";
+              const startRes = await fetch("/api/system/tunnel/start", { method: "POST" });
+              const startData = await startRes.json();
+              if (startData.status === "running") {
+                showToast(`\u{1F310} Cloudflare Tunnel Active: ${startData.public_url}`, "success");
+              } else if (startData.status === "error") {
+                if (tunnelErrorMsg) {
+                  tunnelErrorMsg.textContent = startData.error || "Failed to start tunnel";
+                  tunnelErrorMsg.style.display = "block";
+                }
+                showToast(`Tunnel error: ${startData.error}`, "error");
+              }
+            }
+            await fetchNetwork();
+          } catch (err) {
+            showToast(`Tunnel error: ${err.message}`, "error");
+          } finally {
+            btnToggleTunnel.disabled = false;
+          }
+        });
+      }
+    }
   };
   var settingsUI = new SettingsUI();
 
@@ -2620,7 +2740,25 @@
     const btnRefresh = document.getElementById("btnCinemaRefresh");
     const btnToggleOfflineSaver = document.getElementById("btnToggleOfflineSaver");
     const offlineSaverStateLabel = document.getElementById("offlineSaverStateLabel");
+    socketManager.onCinemaUpdate((data) => {
+      if (data && String(data.chat_id) === String(_currentChatId) && Array.isArray(data.videos)) {
+        _cinemaVideos = data.videos;
+        const countBadge = document.getElementById("cinemaVideoCount");
+        if (countBadge) countBadge.textContent = `${_cinemaVideos.length} Videos`;
+        const cacheKey = "tg_cinema_cache_" + _currentChatId;
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(_cinemaVideos));
+        } catch (e) {
+        }
+        renderCinemaGrid(_cinemaVideos);
+      }
+    });
     _initCinemaDestinationPicker();
+    window._openMobileVlcDialog = openMobileVlcModal;
+    window._closeMobileVlcModal = () => {
+      const modal = document.getElementById("mobileVlcModal");
+      if (modal) modal.classList.remove("open", "active");
+    };
     if (btnChooseChat) {
       btnChooseChat.addEventListener("click", () => {
         chatPicker.open((chat) => _onCinemaChatSelected(chat));
@@ -2668,6 +2806,10 @@
     }
     if (btnRefresh) {
       btnRefresh.addEventListener("click", () => {
+        try {
+          localStorage.removeItem("tg_cinema_cache_" + _currentChatId);
+        } catch (e) {
+        }
         loadCinemaVideos(_currentChatId, true);
         loadContinueWatching();
       });
@@ -2677,7 +2819,9 @@
         _filterCinemaGrid(e.target.value.toLowerCase().trim());
       });
     }
-    loadCinemaVideos("me");
+    if (document.getElementById("tabPaneCinema")?.classList.contains("active")) {
+      loadCinemaVideos("me");
+    }
   }
   function _initCinemaDestinationPicker() {
     const nameEl = document.getElementById("cinemaCurrentChatName");
@@ -2731,8 +2875,6 @@
       }
       chipsContainer.style.display = "flex";
       channels.forEach((ch) => {
-        fetch(`/api/media/videos/${encodeURIComponent(ch.id)}`).catch(() => {
-        });
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "cinema-chip" + (_currentChatId == ch.id ? " active" : "");
@@ -2790,7 +2932,7 @@
             <div class="pulse-ring"></div>
             <div class="pulse-core">\u{1F4E1}</div>
           </div>
-          <h3 style="margin-top: 14px; font-size: 1.05rem; font-weight: 700; background: linear-gradient(135deg, #00cec9, #6c5ce7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Fetching video files from Telegram MTProto...</h3>
+          <h3 style="margin-top: 14px; font-size: 1.05rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Fetching video files from Telegram MTProto...</h3>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 6px;">Retrieving high-speed video stream catalog from Telegram cloud...</p>
         </div>
         <div class="cinema-skeleton-card"></div>
@@ -2817,7 +2959,7 @@
       }
     }
     try {
-      const url = forceRefresh ? `/api/media/videos/${encodeURIComponent(chatId)}?force_refresh=true` : `/api/media/videos/${encodeURIComponent(chatId)}`;
+      const url = forceRefresh ? `/api/media/videos/${encodeURIComponent(chatId)}?force_refresh=true&limit=250` : `/api/media/videos/${encodeURIComponent(chatId)}?limit=250`;
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
@@ -2893,7 +3035,7 @@
   function _extractSeriesInfo(filename) {
     const channelContext = _currentChatName ? { name: _currentChatName, username: _currentChatName } : null;
     const clean = cleanFileName(filename, channelContext) || filename;
-    const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}|ep\s*\d{1,3}|episode\s*\d{1,3}|part\s*\d{1,2}))(.*)$/i;
+    const regex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}(?:[\s\-]+\d{1,3})?|ep\s*\d{1,3}(?:[\s\-]+\d{1,3})?|episode\s*\d{1,3}(?:[\s\-]+\d{1,3})?|part\s*\d{1,2}))(.*)$/i;
     const m = clean.match(regex);
     if (m) {
       let rawName = (m[1] || "").replace(/\.\w+$/, "").replace(/[._\-\(\)]+$/, "").trim();
@@ -3031,7 +3173,7 @@
             <div class="series-showcase-info">
               <div class="series-showcase-tags">
                 <span class="series-tag-pill active-season-tag" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid rgba(0, 206, 201, 0.4);">${escapeHtml(currentSeason)}</span>
-                ${hasMultipleSeasons ? `<span class="series-tag-pill" style="background: rgba(108, 92, 231, 0.2); color: var(--accent-primary); border: 1px solid rgba(108, 92, 231, 0.4);">${show.seasonKeys.length} Seasons</span>` : ""}
+                ${hasMultipleSeasons ? `<span class="series-tag-pill" style="background: rgba(14, 165, 233, 0.2); color: var(--accent-primary); border: 1px solid rgba(14, 165, 233, 0.4);">${show.seasonKeys.length} Seasons</span>` : ""}
                 <span class="series-tag-pill" style="background: rgba(255, 121, 63, 0.15); color: #ff793f; border: 1px solid rgba(255, 121, 63, 0.4);">${show.totalEpisodes} Episodes Total</span>
                 <span style="font-size: 0.68rem; color: var(--text-muted);">${formatBytes(show.totalBytes)}</span>
               </div>
@@ -3096,8 +3238,11 @@
                     <button class="btn-primary btn-ep-vlc" type="button" style="flex: 1; padding: 4px 6px; font-size: 0.7rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
                       <span>\u{1F3AC}</span><span>VLC</span>
                     </button>
-                    <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.85; padding: 4px 6px; font-size: 0.7rem;">
-                      <span>\u{1F680}</span><span>FDM</span>
+                    <button class="btn-secondary btn-ep-mobile" type="button" title="Mobile VLC Streaming & QR" style="flex: 0.85; padding: 4px 6px; font-size: 0.7rem;">
+                      <span>\u{1F4F1}</span><span>Mobile</span>
+                    </button>
+                    <button class="btn-secondary btn-ep-fdm" type="button" style="flex: 0.7; padding: 4px 6px; font-size: 0.7rem;">
+                      <span>\u{1F680}</span>
                     </button>
                   </div>
                 </div>
@@ -3107,11 +3252,20 @@
                 const ep = episodes[idx];
                 const epThumb = epCard.querySelector(".series-ep-thumb");
                 const epVlc = epCard.querySelector(".btn-ep-vlc");
+                const epMobile = epCard.querySelector(".btn-ep-mobile");
                 const epFdm = epCard.querySelector(".btn-ep-fdm");
                 if (epThumb) _attachHoverScrubber(epThumb, ep);
                 if (epThumb) epThumb.addEventListener("click", () => playInVlc(ep, "auto", epCard));
                 if (epVlc) epVlc.addEventListener("click", () => playInVlc(ep, "auto", epCard));
+                if (epMobile) epMobile.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  openMobileVlcModal(ep);
+                });
                 if (epFdm) epFdm.addEventListener("click", () => triggerFdm(ep));
+                epCard.addEventListener("mouseenter", () => {
+                  fetch(`/api/media/subtitles/prefetch/${encodeURIComponent(ep.chat_id)}/${ep.message_id}`, { method: "POST" }).catch(() => {
+                  });
+                }, { once: true });
               });
             }
           };
@@ -3211,6 +3365,14 @@
       const cleanTitle = cleanFileName(v.filename) || v.filename;
       const durationStr = v.duration ? _formatDuration(v.duration) : "";
       const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename);
+      let resPill = "";
+      if (v.width && v.width >= 3800 || /4k|2160p|uhd/i.test(v.filename)) {
+        resPill = '<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">4K</span>';
+      } else if (v.width && v.width >= 1800 || /1080p|fhd/i.test(v.filename)) {
+        resPill = '<span style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">1080p</span>';
+      } else if (v.width && v.width >= 1200 || /720p/i.test(v.filename)) {
+        resPill = '<span style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;">720p</span>';
+      }
       card.innerHTML = `
       <div class="cinema-hub-thumb" title="Hover to preview frames, Click to stream in VLC">
         ${v.has_thumb ? `<img src="${v.thumb_url}" class="video-thumb-img" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'cinema-hub-thumb-fallback\\'>\u{1F3AC}</div>'">` : `<div class="cinema-hub-thumb-fallback">\u{1F3AC}</div>`}
@@ -3221,31 +3383,48 @@
         <div class="cinema-hub-sub">
           <span>${formatBytes(v.file_size)}</span>
           <span>\u2022</span>
-          <span style="color: ${isMkv ? "#ff793f" : "var(--accent-secondary)"}; font-weight: 600;">${isMkv ? "MKV" : "MP4"}</span>
+          <span style="color: ${isMkv ? "#38bdf8" : "var(--accent-secondary)"}; font-weight: 600;">${isMkv ? "MKV" : "MP4"}</span>
+          ${resPill ? `<span>\u2022</span>${resPill}` : ""}
           <span>\u2022</span>
           <span>${v.date ? new Date(v.date * 1e3).toLocaleDateString() : "Cloud"}</span>
+          <span>\u2022</span>
+          <span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; letter-spacing: 0.05em;" title="Dual-track Subtitle Auto-Sync Active">CC</span>
         </div>
       </div>
       <div class="cinema-hub-card-actions">
-        <button class="btn-primary btn-card-vlc" type="button" title="Stream in VLC Media Player" style="flex: 1.2; padding: 6px 10px; font-size: 0.78rem; background: linear-gradient(135deg, #ff793f 0%, #e55039 100%); border-color: rgba(255, 121, 63, 0.4);">
+        <button class="btn-primary btn-card-vlc" type="button" title="Stream in VLC Media Player" style="flex: 1.1; padding: 6px 8px; font-size: 0.78rem; background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%); border-color: rgba(14, 165, 233, 0.4);">
           <span>\u{1F3AC}</span><span>VLC</span>
         </button>
-        <button class="btn-secondary btn-card-fdm" type="button" title="Push to Free Download Manager" style="flex: 1; padding: 6px 8px; font-size: 0.78rem;">
-          <span>\u{1F680}</span><span>FDM</span>
+        <button class="btn-secondary btn-card-mobile" type="button" title="Mobile VLC Streaming & QR" style="flex: 1.1; padding: 6px 8px; font-size: 0.78rem;">
+          <span>\u{1F4F1}</span><span>Mobile</span>
         </button>
-        <button class="btn-secondary btn-card-copy" type="button" title="Copy HTTP Stream Link" style="flex: 0.8; padding: 6px 8px; font-size: 0.78rem;">
+        <button class="btn-secondary btn-card-fdm" type="button" title="Push to Free Download Manager" style="flex: 0.75; padding: 6px 8px; font-size: 0.78rem;">
+          <span>\u{1F680}</span>
+        </button>
+        <button class="btn-secondary btn-card-copy" type="button" title="Copy HTTP Stream Link" style="flex: 0.65; padding: 6px 8px; font-size: 0.78rem;">
           <span>\u{1F4CB}</span>
         </button>
-        <button class="btn-secondary btn-card-m3u" type="button" title="Download VLC .m3u Playlist" style="flex: 0.8; padding: 6px 8px; font-size: 0.78rem;">
+        <button class="btn-secondary btn-card-m3u" type="button" title="Download VLC .m3u Playlist" style="flex: 0.65; padding: 6px 8px; font-size: 0.78rem;">
           <span>\u{1F4E5}</span>
         </button>
       </div>
     `;
       const thumbEl = card.querySelector(".cinema-hub-thumb");
       const vlcBtn = card.querySelector(".btn-card-vlc");
+      const mobileBtn = card.querySelector(".btn-card-mobile");
       if (thumbEl) _attachHoverScrubber(thumbEl, v);
       if (thumbEl) thumbEl.addEventListener("click", () => playInVlc(v, "auto", card));
       if (vlcBtn) vlcBtn.addEventListener("click", () => playInVlc(v, "auto", card));
+      if (mobileBtn) {
+        mobileBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openMobileVlcModal(v);
+        });
+      }
+      card.addEventListener("mouseenter", () => {
+        fetch(`/api/media/subtitles/prefetch/${encodeURIComponent(v.chat_id)}/${v.message_id}`, { method: "POST" }).catch(() => {
+        });
+      }, { once: true });
       const fdmBtn = card.querySelector(".btn-card-fdm");
       if (fdmBtn) {
         fdmBtn.addEventListener("click", () => triggerFdm(v));
@@ -3333,8 +3512,11 @@
     try {
       const resp = await fetch("/api/media/continue_watching");
       if (!resp.ok) return;
-      const items = await resp.json();
-      if (!Array.isArray(items) || items.length === 0) {
+      const rawItems = await resp.json();
+      const items = (Array.isArray(rawItems) ? rawItems : []).filter(
+        (item) => item && item.filename && item.filename !== "thumb"
+      );
+      if (items.length === 0) {
         section.style.display = "none";
         return;
       }
@@ -3428,6 +3610,103 @@
       return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
     }
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
+  async function openMobileVlcModal(v) {
+    const modal = document.getElementById("mobileVlcModal");
+    if (!modal) return;
+    modal.classList.add("open", "active");
+    const filenameEl = document.getElementById("mobileVlcFilename");
+    const sizeBadge = document.getElementById("mobileVlcSizeBadge");
+    const codecBadge = document.getElementById("mobileVlcCodecBadge");
+    const subBadge = document.getElementById("mobileVlcSubBadge");
+    const hostBadge = document.getElementById("mobileVlcNetHost");
+    const tunnelStatusEl = document.getElementById("mobileVlcTunnelStatus");
+    const btnLaunchVlc = document.getElementById("btnMobileLaunchVlc");
+    const btnLaunchIntent = document.getElementById("btnMobileLaunchIntent");
+    const btnDownloadM3u = document.getElementById("btnMobileDownloadM3u");
+    const btnCopyLink = document.getElementById("btnMobileCopyLink");
+    const btnDownloadSrt = document.getElementById("btnMobileDownloadSrt");
+    const transmuxLink = document.getElementById("btnMobileTransmuxLink");
+    const qrImg = document.getElementById("mobileVlcQrImg");
+    const streamInput = document.getElementById("mobileVlcStreamUrlInput");
+    const rawName = v.cleanTitle || v.filename || "Video";
+    if (filenameEl) filenameEl.textContent = rawName;
+    if (sizeBadge) sizeBadge.textContent = v.file_size ? formatBytes(v.file_size) : "Cloud Media";
+    const isMkv = v.is_mkv || /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(v.filename || "");
+    if (codecBadge) codecBadge.textContent = isMkv ? "MKV Container" : "MP4 Stream";
+    try {
+      const res = await fetch(`/api/media/mobile_info/${encodeURIComponent(v.chat_id)}/${v.message_id}?filename=${encodeURIComponent(v.filename || "")}`);
+      if (!res.ok) throw new Error("Failed to load mobile playback metadata");
+      const data = await res.json();
+      if (filenameEl) filenameEl.textContent = data.filename;
+      if (hostBadge) hostBadge.textContent = data.host;
+      if (streamInput) streamInput.value = data.stream_url;
+      if (tunnelStatusEl) {
+        if (data.host && data.host.includes("trycloudflare.com")) {
+          tunnelStatusEl.textContent = "\u25CF Remote Cellular Tunnel";
+          tunnelStatusEl.style.color = "#10b981";
+        } else {
+          tunnelStatusEl.textContent = "\u25CF Direct LAN Link";
+          tunnelStatusEl.style.color = "#38bdf8";
+        }
+      }
+      if (btnLaunchVlc) {
+        btnLaunchVlc.href = data.vlc_url;
+        btnLaunchVlc.onclick = () => {
+          showToast2("\u{1F680} Opening video in Mobile VLC Player...", "info");
+        };
+      }
+      if (btnLaunchIntent) {
+        btnLaunchIntent.href = data.android_intent;
+        btnLaunchIntent.onclick = () => {
+          showToast2("\u{1F916} Opening via Android VLC App Intent...", "info");
+        };
+      }
+      if (btnDownloadM3u) {
+        btnDownloadM3u.onclick = () => {
+          const a = document.createElement("a");
+          a.href = data.playlist_url;
+          a.download = `${data.filename}.m3u`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          showToast2("\u{1F4E5} Downloaded VLC Playlist (.m3u)", "success");
+        };
+      }
+      if (btnCopyLink) {
+        btnCopyLink.onclick = () => {
+          navigator.clipboard.writeText(data.stream_url).then(() => {
+            showToast2("\u{1F4CB} Mobile stream link copied to clipboard!", "success");
+          }).catch(() => {
+            showToast2("Link: " + data.stream_url, "info");
+          });
+        };
+      }
+      if (btnDownloadSrt) {
+        if (data.has_subtitles && data.subtitles_url) {
+          btnDownloadSrt.style.display = "flex";
+          btnDownloadSrt.onclick = () => {
+            const a = document.createElement("a");
+            a.href = data.subtitles_url;
+            a.download = `${data.filename.replace(/\.[^/.]+$/, "")}.srt`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            showToast2("\u{1F4E5} Downloaded Subtitle (.srt)", "success");
+          };
+        } else {
+          btnDownloadSrt.style.display = "none";
+        }
+      }
+      if (transmuxLink) {
+        transmuxLink.href = data.transmux_url;
+      }
+      if (qrImg) {
+        qrImg.src = `/api/system/qrcode?text=${encodeURIComponent(data.stream_url)}`;
+      }
+    } catch (err) {
+      showToast2(`Mobile stream notice: ${err.message}`, "warning");
+    }
   }
 
   // frontend/js/auth-ui.js
@@ -3930,6 +4209,9 @@
     }
     try {
       initCinema();
+      tabController.onTabSwitch("cinema", () => {
+        loadCinemaVideos();
+      });
     } catch (e) {
       console.error("Cinema Controller error:", e);
     }

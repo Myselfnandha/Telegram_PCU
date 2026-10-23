@@ -150,6 +150,18 @@ def is_manager_running(manager_id: str) -> bool:
             return False
 
 
+def _get_desktop_env() -> Dict[str, str]:
+    """Ensure desktop display and session bus variables are passed to GUI apps."""
+    env = os.environ.copy()
+    if sys.platform != "win32":
+        if "DISPLAY" not in env:
+            env["DISPLAY"] = ":0"
+        if "XDG_RUNTIME_DIR" not in env:
+            uid = os.getuid() if hasattr(os, "getuid") else 1000
+            env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+    return env
+
+
 async def ensure_manager_running(manager_id: str, installed: Dict[str, str]) -> bool:
     """Launch manager if installed but not running."""
     if manager_id in ("aria2", "direct"):
@@ -162,7 +174,7 @@ async def ensure_manager_running(manager_id: str, installed: Dict[str, str]) -> 
     cmd = ["flatpak", "run", "org.freedownloadmanager.Manager"] if (sys.platform != "win32" and exe == "flatpak") else [exe]
     logger.info(f"[{manager_id.upper()}] Launching manager: {cmd}")
     try:
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=_get_desktop_env())
     except Exception as e:
         logger.error(f"[{manager_id.upper()}] Failed to launch: {e}")
         return False
@@ -184,15 +196,16 @@ async def trigger_manager(manager_id: str, url: str, installed: Optional[Dict[st
         return False
 
     await ensure_manager_running(manager_id, installed)
+    desktop_env = _get_desktop_env()
 
     if sys.platform != "win32":
         if manager_id == "fdm" and exe == "flatpak":
-            cmd = ["flatpak", "run", "org.freedownloadmanager.Manager", "-a", url]
+            cmd = ["flatpak", "run", "org.freedownloadmanager.Manager", url]
         elif manager_id == "aria2":
             downloads_dir = os.path.expanduser("~/Downloads")
             cmd = ["aria2c", "-s", "16", "-x", "16", "-k", "1M", "--dir", downloads_dir, url]
             try:
-                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, env=desktop_env)
                 logger.info(f"[ARIA2] Started background download: {url}")
                 return True
             except Exception as e:
@@ -206,13 +219,14 @@ async def trigger_manager(manager_id: str, url: str, installed: Optional[Dict[st
         cmd = [part.format(exe=exe, url=url) for part in cmd_template]
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=desktop_env,
+            start_new_session=True,
         )
-        await proc.communicate()
-        logger.info(f"[{manager_id.upper()}] Triggered download: {url}")
+        logger.info(f"[{manager_id.upper()}] Triggered download (PID: {proc.pid}): {url}")
         return True
     except Exception as e:
         logger.error(f"[{manager_id.upper()}] Failed to trigger: {e}")

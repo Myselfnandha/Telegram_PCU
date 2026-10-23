@@ -9,6 +9,7 @@ class SocketManager {
     this.progressListeners = new Set();
     this.queueListeners = new Set();
     this.connectionListeners = new Set();
+    this.cinemaListeners = new Set();
     this.isConnected = false;
   }
 
@@ -62,6 +63,16 @@ class SocketManager {
         }
       });
     });
+
+    this.socket.on('cinema:videos_updated', (data) => {
+      this.cinemaListeners.forEach((fn) => {
+        try {
+          fn(data);
+        } catch (e) {
+          console.error('Error in cinema update listener:', e);
+        }
+      });
+    });
   }
 
   onProgress(callback) {
@@ -72,6 +83,11 @@ class SocketManager {
   onQueueSnapshot(callback) {
     this.queueListeners.add(callback);
     return () => this.queueListeners.delete(callback);
+  }
+
+  onCinemaUpdate(callback) {
+    this.cinemaListeners.add(callback);
+    return () => this.cinemaListeners.delete(callback);
   }
 
   onConnectionChange(callback) {

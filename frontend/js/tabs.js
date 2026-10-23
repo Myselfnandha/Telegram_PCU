@@ -40,7 +40,7 @@ export class TabController {
       if (saved && this.tabPanes[saved]) {
         this.switchTab(saved);
       } else {
-        this.switchTab("uploader");
+        this.switchTab("cinema");
       }
     }
 

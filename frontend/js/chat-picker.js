@@ -61,9 +61,6 @@ class ChatPicker {
 
     // Try to load cached chat from localStorage, or use default Saved Messages
     this.loadSavedSelection();
-
-    // Fetch initial chat list in background without blocking
-    setTimeout(() => this.fetchChats(), 100);
   }
 
   loadSavedSelection() {

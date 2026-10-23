@@ -1,0 +1,14 @@
+[Unit]
+Description=Automated System & Flatpak Cache Cleanup
+Documentation=file:///usr/local/bin/system-autoclean
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/system-autoclean
+Nice=19
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle
+
+[Install]
+WantedBy=multi-user.target
