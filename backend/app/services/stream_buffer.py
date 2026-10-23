@@ -410,7 +410,7 @@ class StreamSlidingBuffer:
             "total_buffered_mb": round(total_bytes / (1024 * 1024), 2),
             "headers_cached_count": len(self._headers),
             "tails_cached_count": len(self._tails),
-            "max_buffer_bytes": self._max_buffer_bytes
+            "max_buffer_bytes": self.MAX_RING_SIZE
         }
 
     def clear(self):
