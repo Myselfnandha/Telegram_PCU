@@ -258,7 +258,10 @@ class ApiService {
     player?: string;
     resume?: boolean;
     start_time?: number;
-  }): Promise<{ launched: boolean; playlist_url?: string; resume_seconds?: number; has_subtitles?: boolean }> {
+    network_caching?: number;
+    audio_lang?: string;
+    sub_lang?: string;
+  }): Promise<{ launched: boolean; playlist_url?: string; resume_seconds?: number; has_subtitles?: boolean; network_caching?: number }> {
     return this.request('/api/media/vlc/play', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -266,7 +269,11 @@ class ApiService {
     });
   }
 
-  async playBatchVlc(chatId: string | number, messageIds: number[]): Promise<any> {
+  async playBatchVlc(
+    chatId: string | number,
+    messageIds: number[],
+    options?: { network_caching?: number; audio_lang?: string; sub_lang?: string }
+  ): Promise<any> {
     return this.request('/api/media/vlc/play_batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -274,6 +281,9 @@ class ApiService {
         chat_id: chatId,
         message_ids: messageIds,
         items: messageIds.map((mid) => ({ chat_id: String(chatId), message_id: mid })),
+        network_caching: options?.network_caching,
+        audio_lang: options?.audio_lang,
+        sub_lang: options?.sub_lang,
       }),
     });
   }
@@ -286,9 +296,13 @@ class ApiService {
     volume?: number;
     volume_percent?: number;
     fullscreen?: boolean;
+    rate?: number;
     filename?: string;
     chat_id?: string;
     message_id?: number;
+    has_batch?: boolean;
+    episode_index?: number;
+    total_episodes?: number;
   }> {
     return this.request('/api/media/vlc/live_status');
   }

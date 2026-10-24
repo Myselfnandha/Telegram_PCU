@@ -10,14 +10,16 @@ from app.main import app
 BASE_URL = "http://127.0.0.1:8088"
 
 def make_client(timeout: float = 10.0):
-    try:
-        import socket
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(0.2)
-            if s.connect_ex(("127.0.0.1", 8088)) == 0:
-                return httpx.AsyncClient(base_url=BASE_URL, timeout=timeout)
-    except Exception:
-        pass
+    import os
+    if os.environ.get("TEST_LIVE_SERVER") == "1":
+        try:
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.2)
+                if s.connect_ex(("127.0.0.1", 8088)) == 0:
+                    return httpx.AsyncClient(base_url=BASE_URL, timeout=timeout)
+        except Exception:
+            pass
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:8088", timeout=timeout)
 
 @pytest.mark.asyncio

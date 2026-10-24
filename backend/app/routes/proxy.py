@@ -79,6 +79,44 @@ async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id
     return
 
 
+async def prewarm_media_stream(client, chat_id: Union[str, int], message_id: int, message: Any):
+    """
+    Asynchronously pre-warms the media file header (0..512KB) and tail (cues/moov) into RAM
+    concurrently so that VLC's initial probing requests hit memory with <0.001s latency.
+    """
+    try:
+        if not message or not getattr(message, "file", None):
+            return
+        f_size = getattr(message.file, "size", 0)
+        key = (str(chat_id), int(message_id))
+
+        # 1. Prewarm tail if not already cached and file > 2MB
+        if f_size > 2 * 1024 * 1024 and key not in _SLIDING_STREAM_BUFFER._tails:
+            asyncio.create_task(_SLIDING_STREAM_BUFFER.prewarm_tail(client, chat_id, message_id, message, f_size))
+
+        # 2. Prewarm header chunk 0 (512KB) into RAM buffer if not already in headers
+        if key not in _SLIDING_STREAM_BUFFER._headers:
+            chunk_size = 512 * 1024
+            file_info = utils._get_file_info(message.media) if hasattr(message, "media") else None
+            file_loc = getattr(file_info, "location", None)
+            dc_id = getattr(file_info, "dc_id", None) or getattr(getattr(client, "session", None), "dc_id", 5)
+            if file_loc:
+                req = GetFileRequest(file_loc, offset=0, limit=chunk_size)
+                res = None
+                try:
+                    async with sender_pool.borrow(client, dc_id) as s:
+                        res = await asyncio.wait_for(client._call(s, req, flood_sleep_threshold=0), timeout=6.0)
+                except Exception:
+                    res = await asyncio.wait_for(client(req, flood_sleep_threshold=0), timeout=6.0)
+                data = getattr(res, "bytes", None) or (bytes(res) if isinstance(res, (bytes, bytearray)) else b"")
+                if data:
+                    _SLIDING_STREAM_BUFFER.push(str(chat_id), int(message_id), 0, data)
+                    fn = getattr(message.file, "name", "media")
+                    logger.info(f"STREAM [{fn}] Prewarmed {len(data):,}B header into RAM for instant VLC playback.")
+    except Exception as e:
+        logger.debug(f"Media prewarm notice: {e}")
+
+
 def compute_dynamic_align_unit(file_size: int, start: int, length: int, user_agent: str = "") -> int:
     """
     Adaptive MTProto chunk alignment strategy:
@@ -481,6 +519,7 @@ async def handle_proxy_download(
                 f"STREAM [{clean_name}] Fast seek detected ({start:,}): "
                 f"Instantly cancelling previous stream iterator to free MTProto senders."
             )
+            old_handle.stop_event.set()
             asyncio.create_task(old_handle.close())
 
         old_task_entry = _ACTIVE_STREAM_TASKS.get(media_key)
@@ -1211,17 +1250,22 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
     if raw_url and raw_url.endswith("/thumb") and filename != "thumb":
         raw_url = raw_url[:-6] + f"/{encoded_name}"
 
-    # Pre-resolve and warm message cache before launching player so /dl/... never hits 404
+    # Pre-resolve and warm message cache & RAM buffer before launching player so /dl/... never stalls
     if chat_id and message_id:
         try:
             client = await TelegramClientManager.get_client()
             if client and client.is_connected():
                 clean_cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
-                await get_streamable_message(client, clean_cid, int(message_id))
+                msg = await get_streamable_message(client, clean_cid, int(message_id))
+                if msg:
+                    asyncio.create_task(prewarm_media_stream(client, clean_cid, int(message_id), msg))
         except Exception as pre_err:
             logger.debug(f"Pre-warm streamable message notice: {pre_err}")
 
     target_player = payload.get("player", "vlc")
+    network_caching = payload.get("network_caching")
+    audio_lang = payload.get("audio_lang")
+    sub_lang = payload.get("sub_lang")
     resume_sec = 0
     if "start_time" in payload and payload["start_time"] is not None:
         resume_sec = max(0, int(payload["start_time"]))
@@ -1244,24 +1288,43 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
             except Exception:
                 pass
 
-    logger.info(f"PLAYER LAUNCH: player={target_player}, file='{filename}', resume_sec={resume_sec}s, stream_url={raw_url}")
+    logger.info(f"PLAYER LAUNCH: player={target_player}, file='{filename}', resume_sec={resume_sec}s, stream_url={raw_url}, caching={network_caching}ms")
     res = player_launcher.launch(
         stream_url=raw_url,
         filename=filename,
         player=target_player,
         resume_sec=resume_sec,
         chat_id=chat_id,
-        message_id=message_id
+        message_id=message_id,
+        network_caching=network_caching,
+        audio_lang=audio_lang,
+        sub_lang=sub_lang
     )
 
     import urllib.parse
     encoded_file = urllib.parse.quote(f"{filename}.m3u")
-    res["playlist_url"] = f"/api/media/vlc/playlist/{chat_id}/{message_id}/{encoded_file}"
+    q_params = []
+    if network_caching:
+        q_params.append(f"caching={network_caching}")
+    if audio_lang:
+        q_params.append(f"audio={urllib.parse.quote(audio_lang)}")
+    if sub_lang:
+        q_params.append(f"sub={urllib.parse.quote(sub_lang)}")
+    qs = f"?{'&'.join(q_params)}" if q_params else ""
+    res["playlist_url"] = f"/api/media/vlc/playlist/{chat_id}/{message_id}/{encoded_file}{qs}"
     return res
 
 
 @router.get("/api/media/vlc/playlist/{chat_id}/{message_id}/{filename}")
-async def generate_vlc_playlist(chat_id: str, message_id: int, filename: str, request: Request):
+async def generate_vlc_playlist(
+    chat_id: str,
+    message_id: int,
+    filename: str,
+    request: Request,
+    caching: Optional[int] = None,
+    audio: Optional[str] = None,
+    sub: Optional[str] = None
+):
     """Generates an .m3u playlist file for 1-click opening in VLC on any device."""
     from app.config import PROXY_PORT
     host = request.headers.get("host", f"localhost:{PROXY_PORT}")
@@ -1269,7 +1332,14 @@ async def generate_vlc_playlist(chat_id: str, message_id: int, filename: str, re
     encoded_name = urllib.parse.quote(clean_filename)
     stream_url = f"http://{host}/dl/{chat_id}/{message_id}/{encoded_name}"
     sub_url = f"http://{host}/api/media/subtitles/download/{chat_id}/{message_id}"
-    m3u_content = player_launcher.build_single_playlist(clean_filename, stream_url, sub_url=sub_url)
+    m3u_content = player_launcher.build_single_playlist(
+        clean_filename,
+        stream_url,
+        sub_url=sub_url,
+        network_caching=caching,
+        audio_lang=audio,
+        sub_lang=sub
+    )
     return Response(
         content=m3u_content,
         media_type="audio/x-mpegurl",
@@ -1384,7 +1454,19 @@ async def launch_vlc_batch(payload: Dict[str, Any], request: Request):
     if not items:
         raise HTTPException(status_code=400, detail="No video items provided for batch playback.")
 
-    return player_launcher.launch_batch(items=items, title=title, player=player, host=host)
+    network_caching = payload.get("network_caching")
+    audio_lang = payload.get("audio_lang")
+    sub_lang = payload.get("sub_lang")
+
+    return player_launcher.launch_batch(
+        items=items,
+        title=title,
+        player=player,
+        host=host,
+        network_caching=network_caching,
+        audio_lang=audio_lang,
+        sub_lang=sub_lang
+    )
 
 
 @router.post("/api/media/vlc/batch_playlist")
@@ -1414,7 +1496,18 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
     if not items:
         raise HTTPException(status_code=400, detail="No video items provided for batch playlist.")
 
-    m3u_content = player_launcher.build_playlist(items, host, title)
+    network_caching = payload.get("network_caching")
+    audio_lang = payload.get("audio_lang")
+    sub_lang = payload.get("sub_lang")
+
+    m3u_content = player_launcher.build_playlist(
+        items=items,
+        host=host,
+        title=title,
+        network_caching=network_caching,
+        audio_lang=audio_lang,
+        sub_lang=sub_lang
+    )
     return Response(
         content=m3u_content,
         media_type="audio/x-mpegurl",

@@ -176,11 +176,12 @@ class RateGovernor:
                 self._tokens -= tokens_needed
                 delay = 0.0
             else:
-                self._target_time = self._target_time + (tokens_needed / self._rate)
+                chunk_interval = tokens_needed / self._rate
+                self._target_time = max(now, self._target_time) + chunk_interval
                 raw_delay = self._target_time - now
-                if raw_delay > 0.8:
-                    self._target_time = now + 0.8
-                    delay = 0.8
+                if raw_delay > 1.0:
+                    self._target_time = now + 0.8 + random.uniform(0.02, 0.08)
+                    delay = self._target_time - now
                 else:
                     delay = max(0.0, raw_delay)
 

@@ -2,7 +2,7 @@ import logging
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -290,6 +290,23 @@ if FRONTEND_DIR.exists():
     @app.get("/manifest.json")
     async def serve_manifest():
         return FileResponse(FRONTEND_DIR / "manifest.json", media_type="application/manifest+json")
+
+    @app.api_route("/favicon.svg", methods=["GET", "HEAD"])
+    @app.api_route("/favicon.ico", methods=["GET", "HEAD"])
+    async def serve_favicon():
+        fav = FRONTEND_DIR / "favicon.svg"
+        if not fav.exists():
+            fav = FRONTEND_DIR / "assets" / "icon.svg"
+        if fav.exists():
+            return FileResponse(fav, media_type="image/svg+xml")
+        raise HTTPException(status_code=404, detail="Favicon not found")
+
+    @app.api_route("/icons.svg", methods=["GET", "HEAD"])
+    async def serve_icons():
+        ic = FRONTEND_DIR / "icons.svg"
+        if ic.exists():
+            return FileResponse(ic, media_type="image/svg+xml")
+        raise HTTPException(status_code=404, detail="Icons not found")
 
     @app.get("/sw.js")
     async def serve_sw():

@@ -50,24 +50,27 @@ class StreamEngine:
         first_chunk_sent = False
         effective_start = start
 
-        # 1. Deliver pre-cached RAM prefix immediately (0.000s instant start)
-        if cached_prefix:
-            first_chunk_sent = True
-            logger.info(f"STREAM [{clean_name}] RAM prefix hit: {len(cached_prefix):,}B delivered in {time.time() - t0:.3f}s (0ms TTFB)")
-            yield cached_prefix
-            bytes_sent += len(cached_prefix)
-            effective_start += len(cached_prefix)
-            if bytes_sent >= length:
-                logger.info(f"STREAM [{clean_name}] Complete (RAM prefix only): {bytes_sent:,}B in {time.time() - t0:.3f}s")
-                return
+        # 1. Fast Path: Full RAM prefix coverage (e.g. tiny probe or complete cached slice)
+        if cached_prefix and len(cached_prefix) >= length:
+            logger.info(f"STREAM [{clean_name}] Complete (RAM prefix only): {length:,}B delivered in {time.time() - t0:.3f}s (0ms TTFB)")
+            yield cached_prefix[:length]
+            return
 
-        # 2. Compute optimal chunk size: 128KB for small probes/tails, 1MB for media streaming (Telegram standard)
+        cached_prefix_len = len(cached_prefix) if cached_prefix else 0
+        effective_start = start + cached_prefix_len
+        remaining_length = length - cached_prefix_len
+
+        # 2. Compute optimal chunk size:
+        # - 128KB for tiny probes / container metadata tails
+        # - 512KB for media player seeks (cuts seek TTFB & alignment discard waste in half)
+        # - 1024KB for bulk continuous media downloads
         if length <= 256 * 1024 or (file_size > 0 and effective_start >= (file_size - 4 * 1024 * 1024)):
             chunk_size = 128 * 1024
+        elif is_media_player and start > 0:
+            chunk_size = 512 * 1024
         else:
             chunk_size = 1024 * 1024
 
-        remaining_length = length - bytes_sent
         aligned_offset = (effective_start // chunk_size) * chunk_size
         discard_front = effective_start - aligned_offset
         total_chunks = (remaining_length + discard_front + chunk_size - 1) // chunk_size
@@ -181,48 +184,27 @@ class StreamEngine:
                         logger.debug(f"STREAM [{clean_name}] Chunk {c_idx+1}/{total_chunks} retry {attempt+1}: {err_str}")
                     await asyncio.sleep(0.4)
 
-        start_chunk_idx = 0
         last_progress_log = time.time()
         delivered_chunks = 0
 
-        # Fast Seek / Instant Start: Fetch and deliver seek target chunk 0 directly for sub-second TTFB
-        if is_media_player and total_chunks > 0 and not first_chunk_sent and bytes_sent < length:
-            try:
-                c_idx, data = await fetch_one_chunk(0)
-                first_chunk_sent = True
-                ttfb = time.time() - t0
-                logger.info(f"STREAM [{clean_name}] Seek target chunk 1/{total_chunks} ({len(data):,}B) delivered in {ttfb:.3f}s (TTFB)")
-                chunk_slice = data
-                if discard_front > 0:
-                    chunk_slice = chunk_slice[discard_front:]
-                    discard_front = 0
-                remaining = length - bytes_sent
-                if len(chunk_slice) > remaining:
-                    chunk_slice = chunk_slice[:remaining]
-                yield chunk_slice
-                bytes_sent += len(chunk_slice)
-                delivered_chunks += 1
-                start_chunk_idx = 1
-            except Exception as first_err:
-                logger.debug(f"Direct chunk 0 fetch notice: {first_err}")
-
+        # Concurrent Pipelined Producer: pre-fetches chunks in lookahead window concurrently
         producer_task = None
-        if bytes_sent < length and start_chunk_idx < total_chunks:
+        if remaining_length > 0 and total_chunks > 0:
             async def pipelined_chunk_producer():
                 is_premium_rate = rate_governor.current_rate_limit_mbs > 15.0
                 if is_media_player:
                     # Media Player Smooth Cruise Control:
                     # 14-24MB lookahead runway is optimal (~30-60s of video).
                     # Avoids wire burst flooding while keeping steady, stutter-free playback.
-                    max_in_flight = 4 if is_premium_rate else 2
+                    max_in_flight = 4 if is_premium_rate else 3
                     max_lookahead = 48 if is_premium_rate else 28
                 else:
                     max_in_flight = 6 if is_premium_rate else 3
                     max_lookahead = 96 if is_premium_rate else 48
 
                 in_flight = {}
-                next_to_fetch = start_chunk_idx
-                next_to_deliver = start_chunk_idx
+                next_to_fetch = 0
+                next_to_deliver = 0
                 buffered = {}
 
                 try:
@@ -238,8 +220,8 @@ class StreamEngine:
 
                         # 2. Adaptive Buffer-Aware Concurrency:
                         # If runway is deep (>= 10 chunks in RAM, ~5MB / 25-50s of video), cruise with 1 worker.
-                        # If recovering from a seek or buffer is thin (< 4 chunks), allow up to 3 workers for standard
-                        # to quickly re-establish the safety cushion.
+                        # If recovering from a seek or buffer is thin (< 4 chunks), burst with 3 workers
+                        # (or 4 for premium) to immediately re-establish the safety cushion.
                         runway = next_to_fetch - next_to_deliver
                         if is_media_player:
                             if runway >= 10:
@@ -284,7 +266,7 @@ class StreamEngine:
                                 if next_to_deliver not in buffered:
                                     break
                             else:
-                                # Lookahead window is completely full (96 chunks in RAM) and waiting for player to consume from queue
+                                # Lookahead window is completely full and waiting for player to consume from queue
                                 if next_to_deliver in buffered:
                                     continue
                                 await asyncio.sleep(0.05)
@@ -295,11 +277,11 @@ class StreamEngine:
                 except Exception as e:
                     logger.debug(f"STREAM [{clean_name}] Producer notice: {e}")
                 finally:
-                    # Graceful Drain: If stop_event was set, allow active in-flight chunk downloads
-                    # up to 350ms to finish receiving their bytes off the MTProto wire.
-                    # Finished chunks go into stream_buffer and return clean, warm senders to the pool.
+                    # Fast-Drain: If stop_event was set on seek or disconnect, allow active in-flight
+                    # chunk downloads up to 150ms to finish receiving cleanly. Cancel lingering tasks
+                    # immediately to release MTProto senders for subsequent seeks.
                     if in_flight:
-                        done, pending = await asyncio.wait(list(in_flight.keys()), timeout=0.35)
+                        done, pending = await asyncio.wait(list(in_flight.keys()), timeout=0.15)
                         for d in done:
                             try:
                                 d.result()
@@ -316,8 +298,15 @@ class StreamEngine:
 
             producer_task = asyncio.create_task(pipelined_chunk_producer())
 
+        # 3. Deliver pre-cached RAM prefix immediately while producer warms wire lookahead in parallel
+        if cached_prefix:
+            first_chunk_sent = True
+            logger.info(f"STREAM [{clean_name}] RAM prefix hit: {len(cached_prefix):,}B delivered in {time.time() - t0:.3f}s (0ms TTFB)")
+            yield cached_prefix
+            bytes_sent += len(cached_prefix)
+
         try:
-            feed_pos = aligned_offset + (start_chunk_idx * chunk_size)
+            feed_pos = aligned_offset
             while bytes_sent < length:
                 chunk = await queue.get()
                 if chunk is None:
@@ -329,7 +318,7 @@ class StreamEngine:
                 if not first_chunk_sent:
                     first_chunk_sent = True
                     ttfb = time.time() - t0
-                    logger.info(f"STREAM [{clean_name}] First chunk ({len(chunk):,}B) delivered in {ttfb:.2f}s (TTFB)")
+                    logger.info(f"STREAM [{clean_name}] Seek target chunk 1/{total_chunks} ({len(chunk):,}B) delivered in {ttfb:.3f}s (TTFB)")
 
                 feed_pos += len(chunk)
 
@@ -387,8 +376,7 @@ class StreamEngine:
             stop_event.set()
             if producer_task and not producer_task.done():
                 try:
-                    # Allow producer up to 400ms to let in-flight chunks finish and return warm senders to the pool
-                    await asyncio.wait_for(asyncio.shield(producer_task), timeout=0.40)
+                    await asyncio.wait_for(asyncio.shield(producer_task), timeout=0.20)
                 except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
                     if not producer_task.done():
                         producer_task.cancel()

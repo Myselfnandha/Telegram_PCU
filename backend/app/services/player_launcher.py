@@ -159,6 +159,9 @@ class PlayerLauncher:
                                                         curr_message_id = new_mid
                                                         curr_filename = new_fn
                                                         last_saved = -1
+                                                        self._active_media_info["chat_id"] = curr_chat_id
+                                                        self._active_media_info["message_id"] = curr_message_id
+                                                        self._active_media_info["filename"] = curr_filename
                                                         logger.info(f"VLC Binge Tracker: advanced to episode '{curr_filename}' (message {curr_message_id})")
                                 except Exception as pl_err:
                                     logger.debug(f"Playlist check notice: {pl_err}")
@@ -249,11 +252,14 @@ class PlayerLauncher:
         player: str = "vlc",
         resume_sec: int = 0,
         chat_id: Optional[Union[int, str]] = None,
-        message_id: Optional[int] = None
+        message_id: Optional[int] = None,
+        network_caching: Optional[int] = None,
+        audio_lang: Optional[str] = None,
+        sub_lang: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Launches host media player (VLC or MPV) with direct streaming, instant seek flags,
-        embedded/cached subtitles, and automated two-way playback progress tracking.
+        embedded/cached subtitles, configurable network caching, and automated two-way playback progress tracking.
         """
         vlc_bin = shutil.which("vlc") or "/usr/bin/vlc"
         mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
@@ -296,6 +302,11 @@ class PlayerLauncher:
         # On <=8 thread CPUs (like Core i5-10310U 15W), cap decoder at 2 threads so GUI never starves or throttles
         safe_threads = min(2, max(1, cores // 4)) if cores <= 8 else min(3, cores // 4)
 
+        # Tuned low-latency caching parameters: 1000ms default (or user-tuned) with clean bitstream audio
+        caching_ms = max(300, min(5000, network_caching or 1000))
+        sub_languages = sub_lang.strip() if sub_lang else "eng,tam,hin,all"
+        audio_languages = audio_lang.strip() if audio_lang else "tam,eng,hin,tel,mal,kan,all"
+
         player_name = "mpv" if "mpv" in chosen_bin else "vlc"
         launched = False
         vlc_port = get_free_port(8089)
@@ -310,11 +321,12 @@ class PlayerLauncher:
                     f"--input-ipc-server={mpv_sock}",
                     "--hr-seek=no",
                     "--hr-seek-framedrop=yes",
-                    "--slang=eng,tam,hin,all",
+                    f"--slang={sub_languages}",
+                    f"--alang={audio_languages}",
                     "--sid=1",
                     "--cache=yes",
                     "--cache-pause=no",
-                    "--cache-secs=30",
+                    f"--cache-secs={max(10, caching_ms // 100)}",
                     "--demuxer-max-bytes=128M",
                     "--demuxer-readahead-secs=45",
                     f"--vd-lavc-threads={safe_threads}",
@@ -339,16 +351,18 @@ class PlayerLauncher:
                     "--no-qt-privacy-ask",
                     "--no-qt-error-dialogs",
                     "--input-fast-seek",
-                    "--sub-language=eng,tam,hin,all",
+                    f"--sub-language={sub_languages}",
                     "--sub-track=0",
-                    "--audio-language=tam,eng,hin,tel,mal,kan,all",
+                    f"--audio-language={audio_languages}",
                     "--deinterlace=-1",
                     "--deinterlace-mode=auto",
                     f"--avcodec-threads={safe_threads}",
                     "--avcodec-hw=any",
                     "--avcodec-fast",
-                    "--network-caching=1000",
-                    "--file-caching=1000",
+                    f"--network-caching={caching_ms}",  # default: --network-caching=1000
+                    f"--file-caching={caching_ms}",
+                    f"--live-caching={caching_ms}",
+                    f"--disc-caching={caching_ms}",
                     "--http-reconnect",
                     "--no-video-title-show",
                     "--one-instance"
@@ -370,7 +384,7 @@ class PlayerLauncher:
                 start_new_session=True
             )
             launched = True
-            logger.info(f"Launched {player_name.upper()} player (Direct Stream Pipeline) for: {stream_url}")
+            logger.info(f"Launched {player_name.upper()} player (Direct Stream Pipeline) for: {stream_url} (network-caching={caching_ms}ms)")
 
             if player_name == "vlc":
                 self._vlc_port = vlc_port
@@ -413,7 +427,8 @@ class PlayerLauncher:
             "stream_url": stream_url,
             "player": player_name,
             "has_subtitles": bool(sub_file and sub_file.exists()),
-            "resume_seconds": resume_sec
+            "resume_seconds": resume_sec,
+            "network_caching": caching_ms
         }
 
     def launch_batch(
@@ -421,7 +436,10 @@ class PlayerLauncher:
         items: list,
         title: str = "Season Playlist",
         player: str = "vlc",
-        host: str = "127.0.0.1:8088"
+        host: str = "127.0.0.1:8088",
+        network_caching: Optional[int] = None,
+        audio_lang: Optional[str] = None,
+        sub_lang: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Launches host player with an entire TV series or multi-episode season queued.
@@ -452,6 +470,10 @@ class PlayerLauncher:
         desktop_env = get_desktop_env()
         launched = False
 
+        caching_ms = max(300, min(5000, network_caching or 1000))
+        sub_languages = sub_lang.strip() if sub_lang else "eng,tam,hin,all"
+        audio_languages = audio_lang.strip() if audio_lang else "tam,eng,hin,tel,mal,kan,all"
+
         try:
             cores = os.cpu_count() or 4
             safe_threads = min(2, max(1, cores // 4)) if cores <= 8 else min(3, cores // 4)
@@ -461,7 +483,8 @@ class PlayerLauncher:
                     chosen_bin,
                     *stream_urls,
                     "--hr-seek=no",
-                    "--slang=eng,tam,hin,all",
+                    f"--slang={sub_languages}",
+                    f"--alang={audio_languages}",
                     "--cache=yes",
                     f"--vd-lavc-threads={safe_threads}",
                     "--demuxer-max-bytes=128M",
@@ -477,15 +500,17 @@ class PlayerLauncher:
                     "--no-qt-privacy-ask",
                     "--no-qt-error-dialogs",
                     "--input-fast-seek",
-                    "--sub-language=eng,tam,hin,all",
-                    "--audio-language=tam,eng,hin,tel,mal,kan,all",
+                    f"--sub-language={sub_languages}",
+                    f"--audio-language={audio_languages}",
                     "--deinterlace=-1",
                     "--deinterlace-mode=auto",
                     f"--avcodec-threads={safe_threads}",
                     "--avcodec-hw=any",
                     "--avcodec-fast",
-                    "--network-caching=1000",
-                    "--file-caching=1000",
+                    f"--network-caching={caching_ms}",  # default: --network-caching=1000
+                    f"--file-caching={caching_ms}",
+                    f"--live-caching={caching_ms}",
+                    f"--disc-caching={caching_ms}",
                     "--http-reconnect",
                     "--no-video-title-show",
                     "--one-instance"
@@ -499,7 +524,7 @@ class PlayerLauncher:
                 start_new_session=True
             )
             launched = True
-            logger.info(f"Launched batch binge session for {len(stream_urls)} episodes: {title}")
+            logger.info(f"Launched batch binge session for {len(stream_urls)} episodes: {title} (caching={caching_ms}ms)")
 
             if "vlc" in chosen_bin and items:
                 first_item = items[0]
@@ -528,23 +553,35 @@ class PlayerLauncher:
             "title": title
         }
 
-    def build_single_playlist(self, filename: str, stream_url: str, sub_url: Optional[str] = None) -> str:
+    def build_single_playlist(
+        self,
+        filename: str,
+        stream_url: str,
+        sub_url: Optional[str] = None,
+        network_caching: Optional[int] = None,
+        audio_lang: Optional[str] = None,
+        sub_lang: Optional[str] = None
+    ) -> str:
         """Constructs an optimized single-stream .m3u playlist with safe VLC directives."""
         clean_filename = filename.replace(".m3u", "")
+        caching_ms = max(300, min(5000, network_caching or 1000))
+        sub_languages = sub_lang.strip() if sub_lang else "eng,tam,hin,all"
+        audio_languages = audio_lang.strip() if audio_lang else "tam,eng,hin,tel,mal,kan,all"
         lines = [
             "#EXTM3U",
             f"#EXTINF:-1,{clean_filename}",
-            "#EXTVLCOPT:network-caching=1000",
-            "#EXTVLCOPT:file-caching=1000",
+            f"#EXTVLCOPT:network-caching={caching_ms}",  # default: #EXTVLCOPT:network-caching=1000
+            f"#EXTVLCOPT:file-caching={caching_ms}",
+            f"#EXTVLCOPT:live-caching={caching_ms}",
             "#EXTVLCOPT:http-reconnect",
             "#EXTVLCOPT:input-fast-seek",
             "#EXTVLCOPT:avcodec-hw=any",
             "#EXTVLCOPT:avcodec-fast",
             "#EXTVLCOPT:deinterlace=-1",
             "#EXTVLCOPT:deinterlace-mode=auto",
-            "#EXTVLCOPT:sub-language=eng,tam,hin,all",
+            f"#EXTVLCOPT:sub-language={sub_languages}",
             "#EXTVLCOPT:sub-track=0",
-            "#EXTVLCOPT:audio-language=tam,eng,hin,tel,mal,kan,all",
+            f"#EXTVLCOPT:audio-language={audio_languages}",
             "#EXTVLCOPT:avcodec-threads=2"
         ]
         if sub_url:
@@ -552,9 +589,20 @@ class PlayerLauncher:
         lines.append(stream_url)
         return "\n".join(lines) + "\n"
 
-    def build_playlist(self, items: list, host: str, title: str = "Season_Playlist") -> str:
+    def build_playlist(
+        self,
+        items: list,
+        host: str,
+        title: str = "Season_Playlist",
+        network_caching: Optional[int] = None,
+        audio_lang: Optional[str] = None,
+        sub_lang: Optional[str] = None
+    ) -> str:
         """Constructs a multi-item .m3u playlist for series/seasons with hardware acceleration."""
         import urllib.parse
+        caching_ms = max(300, min(5000, network_caching or 1000))
+        sub_languages = sub_lang.strip() if sub_lang else "eng,tam,hin,all"
+        audio_languages = audio_lang.strip() if audio_lang else "tam,eng,hin,tel,mal,kan,all"
         m3u_lines = ["#EXTM3U"]
         for item in items:
             cid = item.get("chat_id")
@@ -563,13 +611,17 @@ class PlayerLauncher:
             enc = urllib.parse.quote(fn)
             url = f"http://{host}/dl/{cid}/{mid}/{enc}"
             m3u_lines.append(f"#EXTINF:-1,{fn}")
-            m3u_lines.append("#EXTVLCOPT:network-caching=1000")
-            m3u_lines.append("#EXTVLCOPT:file-caching=1000")
+            m3u_lines.append(f"#EXTVLCOPT:network-caching={caching_ms}")  # default: #EXTVLCOPT:network-caching=1000
+            m3u_lines.append(f"#EXTVLCOPT:file-caching={caching_ms}")
+            m3u_lines.append(f"#EXTVLCOPT:live-caching={caching_ms}")
             m3u_lines.append("#EXTVLCOPT:http-reconnect")
             m3u_lines.append("#EXTVLCOPT:input-fast-seek")
             m3u_lines.append("#EXTVLCOPT:avcodec-hw=any")
+            m3u_lines.append("#EXTVLCOPT:avcodec-fast")
             m3u_lines.append("#EXTVLCOPT:deinterlace=-1")
             m3u_lines.append("#EXTVLCOPT:deinterlace-mode=auto")
+            m3u_lines.append(f"#EXTVLCOPT:sub-language={sub_languages}")
+            m3u_lines.append(f"#EXTVLCOPT:audio-language={audio_languages}")
             m3u_lines.append(url)
         return "\n".join(m3u_lines) + "\n"
 
@@ -590,6 +642,14 @@ class PlayerLauncher:
                     fullscreen = bool(data.get("fullscreen", False))
                     meta = data.get("information", {}).get("category", {}).get("meta", {})
                     fn = meta.get("filename") or self._active_media_info.get("filename", "")
+                    items = self._active_media_info.get("items", [])
+                    cur_mid = self._active_media_info.get("message_id")
+                    cur_idx = None
+                    if items and cur_mid:
+                        for idx, it in enumerate(items):
+                            if it.get("message_id") == cur_mid or str(it.get("message_id")) == str(cur_mid):
+                                cur_idx = idx + 1
+                                break
                     return {
                         "active": True,
                         "state": state,
@@ -598,9 +658,13 @@ class PlayerLauncher:
                         "volume": vol,
                         "volume_percent": vol_pct,
                         "fullscreen": fullscreen,
+                        "rate": float(data.get("rate", 1.0)),
                         "filename": fn,
                         "chat_id": self._active_media_info.get("chat_id"),
-                        "message_id": self._active_media_info.get("message_id")
+                        "message_id": self._active_media_info.get("message_id"),
+                        "has_batch": len(items) > 1,
+                        "episode_index": cur_idx,
+                        "total_episodes": len(items) if items else None,
                     }
         except Exception as e:
             logger.debug(f"VLC status poll error: {e}")
@@ -630,7 +694,8 @@ class PlayerLauncher:
                         "length": data.get("length"),
                         "volume": vol,
                         "volume_percent": min(200, max(0, round((vol / 256.0) * 100))),
-                        "fullscreen": data.get("fullscreen")
+                        "fullscreen": data.get("fullscreen"),
+                        "rate": float(data.get("rate", 1.0))
                     }
         except Exception as e:
             return {"success": False, "error": str(e)}

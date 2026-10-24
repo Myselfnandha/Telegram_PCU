@@ -40,7 +40,7 @@ export const SettingsView: React.FC = () => {
     return Number(localStorage.getItem('tg_buffer_mb') || 4);
   });
   const [networkCachingMs, setNetworkCachingMs] = useState<number>(() => {
-    return Number(localStorage.getItem('tg_network_caching') || 300);
+    return Number(localStorage.getItem('tg_network_caching') || 1000);
   });
   const [subLanguage, setSubLanguage] = useState<string>(() => {
     return localStorage.getItem('tg_sub_lang') || 'eng,tam,hin,all';

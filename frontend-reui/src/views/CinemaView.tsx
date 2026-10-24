@@ -146,6 +146,10 @@ export const CinemaView: React.FC = () => {
       message: `Starting "${media.cleanTitle}" in ${playerType.toUpperCase()}...`,
     });
 
+    const cachingVal = Number(localStorage.getItem('tg_network_caching') || 1000);
+    const audioLang = localStorage.getItem('tg_audio_lang') || undefined;
+    const subLang = localStorage.getItem('tg_sub_lang') || undefined;
+
     try {
       const res = await api.playInVlc({
         chat_id: video.chat_id,
@@ -154,10 +158,13 @@ export const CinemaView: React.FC = () => {
         player: playerType,
         resume: true,
         start_time: video.playback_seconds && video.playback_seconds > 10 ? video.playback_seconds : undefined,
+        network_caching: cachingVal,
+        audio_lang: audioLang,
+        sub_lang: subLang,
       });
 
       if (res.launched) {
-        let msg = `Streaming in ${playerType.toUpperCase()}!`;
+        let msg = `Streaming in ${playerType.toUpperCase()}! (${res.network_caching || cachingVal}ms buffer)`;
         if (res.resume_seconds && res.resume_seconds > 0) {
           msg += ` (Resumed at ${formatDuration(res.resume_seconds)})`;
         }
@@ -192,12 +199,20 @@ export const CinemaView: React.FC = () => {
       message: `Enqueuing ${msgIds.length} video(s) into VLC playlist...`,
     });
 
+    const cachingVal = Number(localStorage.getItem('tg_network_caching') || 1000);
+    const audioLang = localStorage.getItem('tg_audio_lang') || undefined;
+    const subLang = localStorage.getItem('tg_sub_lang') || undefined;
+
     try {
-      await api.playBatchVlc(selectedChat.id, msgIds);
+      await api.playBatchVlc(selectedChat.id, msgIds, {
+        network_caching: cachingVal,
+        audio_lang: audioLang,
+        sub_lang: subLang,
+      });
       addToast({
         type: 'success',
         title: 'Batch Player Active',
-        message: `Playing ${msgIds.length} episodes in VLC!`,
+        message: `Playing ${msgIds.length} episodes in VLC! (${cachingVal}ms buffer)`,
       });
       setSelectedIds(new Set());
     } catch (err: any) {
@@ -210,22 +225,30 @@ export const CinemaView: React.FC = () => {
     const selectedVideos = filteredVideos.filter((v) => selectedIds.has(v.message_id));
     const lines = ['#EXTM3U'];
     const origin = window.location.origin;
+    const cachingVal = Number(localStorage.getItem('tg_network_caching') || 1000);
+    const audioLang = localStorage.getItem('tg_audio_lang') || 'tam,eng,hin,tel,mal,kan,all';
+    const subLang = localStorage.getItem('tg_sub_lang') || 'eng,tam,hin,all';
+
     for (const v of selectedVideos) {
       const streamUrl = `${origin}/dl/${encodeURIComponent(String(v.chat_id))}/${v.message_id}/${encodeURIComponent(v.filename)}`;
       const subUrl = `${origin}/api/media/subtitles/download/${encodeURIComponent(String(v.chat_id))}/${v.message_id}`;
       lines.push(`#EXTINF:-1,${cleanFileName(v.filename)}`);
-      lines.push('#EXTVLCOPT:network-caching=1000');
-      lines.push('#EXTVLCOPT:file-caching=1000');
+      lines.push(`#EXTVLCOPT:network-caching=${cachingVal}`);
+      lines.push(`#EXTVLCOPT:file-caching=${cachingVal}`);
+      lines.push(`#EXTVLCOPT:live-caching=${cachingVal}`);
+      lines.push('#EXTVLCOPT:clock-jitter=0');
+      lines.push('#EXTVLCOPT:clock-synchro=0');
+      lines.push('#EXTVLCOPT:drop-late-frames');
+      lines.push('#EXTVLCOPT:skip-frames');
       lines.push('#EXTVLCOPT:http-reconnect');
+      lines.push('#EXTVLCOPT:http-continuous');
       lines.push('#EXTVLCOPT:input-fast-seek');
-      lines.push('#EXTVLCOPT:prefetch-seek-threshold=4194304');
-      lines.push('#EXTVLCOPT:no-mkv-preload-clusters');
-      lines.push('#EXTVLCOPT:prefetch-buffer-size=16777216');
       lines.push('#EXTVLCOPT:avcodec-hw=any');
+      lines.push('#EXTVLCOPT:avcodec-fast');
       lines.push('#EXTVLCOPT:deinterlace=-1');
       lines.push('#EXTVLCOPT:deinterlace-mode=auto');
-      lines.push('#EXTVLCOPT:sub-language=eng,tam,hin,all');
-      lines.push('#EXTVLCOPT:audio-language=tam,eng,hin,tel,mal,kan,all');
+      lines.push(`#EXTVLCOPT:sub-language=${subLang}`);
+      lines.push(`#EXTVLCOPT:audio-language=${audioLang}`);
       lines.push(`#EXTVLCOPT:input-slave=${subUrl}`);
       lines.push(`#EXTVLCOPT:sub-file=${subUrl}`);
       lines.push(streamUrl);
