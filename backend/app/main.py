@@ -162,6 +162,23 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down TG Power Suite backend...")
     telemetry_task.cancel()
     maintenance_task.cancel()
+    try:
+        await asyncio.gather(telemetry_task, maintenance_task, return_exceptions=True)
+    except Exception:
+        pass
+
+    try:
+        from app.services.fast_stream_engine import fast_stream_engine
+        await fast_stream_engine.shutdown()
+    except Exception as e:
+        logger.debug(f"Fast stream engine shutdown error: {e}")
+
+    try:
+        from app.services.network_service import network_service
+        await network_service.stop_cloudflare_tunnel()
+    except Exception as e:
+        logger.debug(f"Network service tunnel shutdown error: {e}")
+
     await queue_manager.stop_workers()
     await TelegramClientManager.disconnect()
     try:
@@ -248,7 +265,29 @@ class ClientDisconnectSuppressorMiddleware:
             raise
 
 
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+class MediaExcludingGZipMiddleware:
+    """
+    Applies GZip compression exclusively to web assets and JSON/text APIs.
+    Strictly bypasses compression for streaming media (/dl/, /stream/, /api/media/)
+    to guarantee 100% byte-accurate HTTP Range requests and prevent video demuxer corruption.
+    """
+    def __init__(self, app, minimum_size: int = 1000):
+        self.app = app
+        self.gzip_app = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if (
+                path.startswith(("/dl/", "/stream/", "/api/media/"))
+                or path.endswith((".mp4", ".mkv", ".webm", ".avi", ".ts", ".m4v", ".mp3", ".flac", ".part", ".tmp"))
+            ):
+                await self.app(scope, receive, send)
+                return
+        await self.gzip_app(scope, receive, send)
+
+
+app.add_middleware(MediaExcludingGZipMiddleware, minimum_size=1000)
 app.add_middleware(ClientDisconnectSuppressorMiddleware)
 app.add_middleware(SmartStaticCacheASGIMiddleware)
 

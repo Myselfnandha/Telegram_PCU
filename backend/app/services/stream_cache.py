@@ -3,6 +3,8 @@ import shutil
 import asyncio
 import logging
 import time
+import uuid
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List, BinaryIO
 
@@ -25,6 +27,8 @@ class StreamCacheManager:
     _instance: Optional["StreamCacheManager"] = None
     _lock = asyncio.Lock()
     _file_info: Dict[str, dict] = {}
+    _merge_locks: Dict[str, threading.Lock] = {}
+    _locks_lock = threading.Lock()
 
     def __init__(self):
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -68,67 +72,89 @@ class StreamCacheManager:
             return None
 
     def save_block(self, chat_id: str, message_id: int, block_idx: int, data: bytes):
-        """Saves a discrete 10MB chunk part to disk."""
+        """Saves a discrete 10MB chunk part to disk atomically."""
         p = self.get_block_path(chat_id, message_id, block_idx)
-        tmp = p.with_suffix(".tmp")
+        tmp = p.with_suffix(f".tmp.{uuid.uuid4().hex[:8]}")
         try:
             with open(tmp, "wb") as f:
                 f.write(data)
-            tmp.rename(p)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, p)
             self.evict_if_needed()
         except Exception as e:
             logger.debug(f"Could not save stream block {block_idx}: {e}")
+            if tmp.exists():
+                tmp.unlink(missing_ok=True)
 
     def merge_blocks_if_complete(self, chat_id: str, message_id: int, total_file_size: int, filename: Optional[str] = None) -> Optional[Path]:
         """If all discrete blocks are present on disk, merges them into the final full movie file."""
-        total_blocks = (total_file_size + BLOCK_SIZE - 1) // BLOCK_SIZE
-        for i in range(total_blocks):
-            expected = min(BLOCK_SIZE, total_file_size - (i * BLOCK_SIZE))
-            if not self.has_block(chat_id, message_id, i, expected):
-                return None
+        key = self._get_cache_key(chat_id, message_id)
+        with self._locks_lock:
+            if key not in self._merge_locks:
+                self._merge_locks[key] = threading.Lock()
+            lock = self._merge_locks[key]
 
-        # All blocks present -> Assemble into full cached file
-        target_path = self.get_cache_path(chat_id, message_id, filename)
-        tmp_target = target_path.with_suffix(".merging")
-        try:
-            with open(tmp_target, "wb") as out_f:
-                for i in range(total_blocks):
-                    block_file = self.get_block_path(chat_id, message_id, i)
-                    with open(block_file, "rb") as bf:
-                        shutil.copyfileobj(bf, out_f, length=1024 * 1024)
-            tmp_target.rename(target_path)
-            logger.info(f"Assembled complete movie from {total_blocks} blocks: {target_path.name}")
+        with lock:
+            # Check if already completed by another thread/request
+            cached = self.get_cached_file(chat_id, message_id, expected_size=total_file_size)
+            if cached:
+                return cached
 
-            # Clean block fragments
+            total_blocks = (total_file_size + BLOCK_SIZE - 1) // BLOCK_SIZE
             for i in range(total_blocks):
-                self.get_block_path(chat_id, message_id, i).unlink(missing_ok=True)
+                expected = min(BLOCK_SIZE, total_file_size - (i * BLOCK_SIZE))
+                if not self.has_block(chat_id, message_id, i, expected):
+                    return None
 
-            self._file_info[self._get_cache_key(chat_id, message_id)] = {
-                "path": target_path,
-                "size": total_file_size,
-                "completed": True
-            }
-
-            # Automatically trigger offline stream saver if enabled
+            # All blocks present -> Assemble into full cached file
+            target_path = self.get_cache_path(chat_id, message_id, filename)
+            tmp_target = target_path.with_suffix(f".merging.{uuid.uuid4().hex[:8]}")
             try:
-                from app.services.stream_saver import stream_saver_service
-                if stream_saver_service.is_enabled and filename:
-                    stream_saver_service.save_completed_stream(str(chat_id), message_id, total_file_size, filename)
-            except Exception as se:
-                logger.debug(f"Offline stream saver notice: {se}")
+                with open(tmp_target, "wb") as out_f:
+                    for i in range(total_blocks):
+                        block_file = self.get_block_path(chat_id, message_id, i)
+                        with open(block_file, "rb") as bf:
+                            shutil.copyfileobj(bf, out_f, length=1024 * 1024)
+                        out_f.flush()
+                    os.fsync(out_f.fileno())
 
-            return target_path
-        except Exception as me:
-            logger.warning(f"Error assembling stream blocks: {me}")
-            if tmp_target.exists():
-                tmp_target.unlink(missing_ok=True)
-            return None
+                if tmp_target.stat().st_size != total_file_size:
+                    raise IOError(f"Merged size {tmp_target.stat().st_size} != expected {total_file_size}")
+
+                os.replace(tmp_target, target_path)
+                logger.info(f"Assembled complete movie from {total_blocks} blocks: {target_path.name}")
+
+                # Clean block fragments only after successful assembly and verification
+                for i in range(total_blocks):
+                    self.get_block_path(chat_id, message_id, i).unlink(missing_ok=True)
+
+                self._file_info[key] = {
+                    "path": target_path,
+                    "size": total_file_size,
+                    "completed": True
+                }
+
+                # Automatically trigger offline stream saver if enabled
+                try:
+                    from app.services.stream_saver import stream_saver_service
+                    if stream_saver_service.is_enabled and filename:
+                        stream_saver_service.save_completed_stream(str(chat_id), message_id, total_file_size, filename)
+                except Exception as se:
+                    logger.debug(f"Offline stream saver notice: {se}")
+
+                return target_path
+            except Exception as me:
+                logger.warning(f"Error assembling stream blocks: {me}")
+                if tmp_target.exists():
+                    tmp_target.unlink(missing_ok=True)
+                return None
 
     def _scan_existing_cache(self):
         """Scans fully cached completed files on startup."""
         try:
             for p in CACHE_DIR.glob("*_*.*"):
-                if p.is_file() and p.suffix not in (".part", ".tmp", ".merging"):
+                if p.is_file() and p.suffix not in (".part", ".tmp", ".merging") and ".tmp." not in p.name and not p.name.endswith(".merging"):
                     name_parts = p.stem.split("_", 1)
                     if len(name_parts) == 2:
                         key = p.stem
@@ -140,28 +166,40 @@ class StreamCacheManager:
         except Exception as e:
             logger.warning(f"Error scanning stream cache: {e}")
 
-    def is_cached(self, chat_id: str, message_id: int) -> bool:
+    def is_cached(self, chat_id: str, message_id: int, expected_size: Optional[int] = None) -> bool:
         """Returns True if the complete media file is cached locally."""
         key = self._get_cache_key(chat_id, message_id)
         info = self._file_info.get(key)
-        if info and info.get("path") and info["path"].exists() and info["path"].suffix not in (".part", ".tmp"):
-            return True
+        if info and info.get("path") and info["path"].exists() and info["path"].is_file():
+            if info["path"].suffix not in (".part", ".tmp", ".merging") and ".tmp." not in info["path"].name and not info["path"].name.endswith(".merging"):
+                if expected_size is None or expected_size <= 0 or info["path"].stat().st_size == expected_size:
+                    return True
         for p in CACHE_DIR.glob(f"{chat_id}_{message_id}.*"):
-            if p.exists() and p.is_file() and p.suffix not in (".part", ".tmp") and p.stat().st_size > 0:
-                self._file_info[key] = {"path": p, "size": p.stat().st_size, "completed": True}
-                return True
+            if p.exists() and p.is_file() and p.suffix not in (".part", ".tmp", ".merging") and ".tmp." not in p.name and not p.name.endswith(".merging"):
+                if expected_size is not None and expected_size > 0:
+                    if p.stat().st_size != expected_size:
+                        continue
+                if p.stat().st_size > 0:
+                    self._file_info[key] = {"path": p, "size": p.stat().st_size, "completed": True}
+                    return True
         return False
 
-    def get_cached_file(self, chat_id: str, message_id: int) -> Optional[Path]:
+    def get_cached_file(self, chat_id: str, message_id: int, expected_size: Optional[int] = None) -> Optional[Path]:
         """Returns the local path only if fully cached."""
         key = self._get_cache_key(chat_id, message_id)
         info = self._file_info.get(key)
-        if info and info.get("path") and info["path"].exists() and info["path"].suffix not in (".part", ".tmp"):
-            return info["path"]
+        if info and info.get("path") and info["path"].exists() and info["path"].is_file():
+            if info["path"].suffix not in (".part", ".tmp", ".merging") and ".tmp." not in info["path"].name and not info["path"].name.endswith(".merging"):
+                if expected_size is None or expected_size <= 0 or info["path"].stat().st_size == expected_size:
+                    return info["path"]
         for p in CACHE_DIR.glob(f"{chat_id}_{message_id}.*"):
-            if p.exists() and p.is_file() and p.suffix not in (".part", ".tmp") and p.stat().st_size > 0:
-                self._file_info[key] = {"path": p, "size": p.stat().st_size, "completed": True}
-                return p
+            if p.exists() and p.is_file() and p.suffix not in (".part", ".tmp", ".merging") and ".tmp." not in p.name and not p.name.endswith(".merging"):
+                if expected_size is not None and expected_size > 0:
+                    if p.stat().st_size != expected_size:
+                        continue
+                if p.stat().st_size > 0:
+                    self._file_info[key] = {"path": p, "size": p.stat().st_size, "completed": True}
+                    return p
         return None
 
     def get_cache_stats(self) -> dict:

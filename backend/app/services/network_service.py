@@ -35,6 +35,8 @@ class NetworkService:
         self._tunnel_url: Optional[str] = None
         self._tunnel_error: Optional[str] = None
         self._tunnel_task: Optional[asyncio.Task] = None
+        self._tunnel_lock = asyncio.Lock()
+        self._reader_tasks: List[asyncio.Task] = []
 
     def get_local_ip(self) -> str:
         """Finds primary local IPv4 address connected to default gateway / Wi-Fi."""
@@ -120,84 +122,15 @@ class NetworkService:
             "error": self._tunnel_error if not is_running else None
         }
 
-    async def start_cloudflare_tunnel(self, local_port: int = 8088) -> Dict[str, Any]:
-        """
-        Launches cloudflared quick tunnel to expose http://127.0.0.1:<local_port>
-        over a secure public HTTPS trycloudflare.com URL without port forwarding.
-        """
-        if self._tunnel_proc and self._tunnel_proc.returncode is None and self._tunnel_url:
-            return self.get_tunnel_status()
+    async def _internal_stop(self):
+        """Internal helper to clean up tunnel and reader tasks without locking."""
+        for task in self._reader_tasks:
+            if not task.done():
+                task.cancel()
+        if self._reader_tasks:
+            await asyncio.gather(*self._reader_tasks, return_exceptions=True)
+        self._reader_tasks.clear()
 
-        await self.stop_cloudflare_tunnel()
-        self._tunnel_error = None
-        self._tunnel_url = None
-
-        bin_path = CLOUDFLARED_BIN
-        if not bin_path.exists() or not os.access(bin_path, os.X_OK):
-            # Check system path
-            import shutil
-            sys_bin = shutil.which("cloudflared")
-            if sys_bin:
-                bin_path = Path(sys_bin)
-            else:
-                self._tunnel_error = "cloudflared binary not available"
-                return {"active": False, "url": None, "error": self._tunnel_error}
-
-        cmd = [
-            str(bin_path),
-            "tunnel",
-            "--url",
-            f"http://127.0.0.1:{local_port}",
-            "--no-autoupdate"
-        ]
-
-        logger.info(f"Starting Cloudflare Quick Tunnel: {' '.join(cmd)}")
-        try:
-            self._tunnel_proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-        except Exception as e:
-            self._tunnel_error = f"Failed to spawn cloudflared: {e}"
-            logger.error(self._tunnel_error)
-            return {"active": False, "url": None, "error": self._tunnel_error}
-
-        # Monitor output to extract https://*.trycloudflare.com URL
-        url_future: asyncio.Future[str] = asyncio.get_event_loop().create_future()
-
-        async def read_stream(stream, name):
-            url_pattern = re.compile(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com")
-            while True:
-                line = await stream.readline()
-                if not line:
-                    break
-                decoded = line.decode("utf-8", errors="replace")
-                match = url_pattern.search(decoded)
-                if match and not url_future.done():
-                    url_future.set_result(match.group(0))
-                if "error" in decoded.lower():
-                    logger.debug(f"[cloudflared {name}] {decoded.strip()}")
-
-        stdout_task = asyncio.create_task(read_stream(self._tunnel_proc.stdout, "stdout"))
-        stderr_task = asyncio.create_task(read_stream(self._tunnel_proc.stderr, "stderr"))
-
-        try:
-            extracted_url = await asyncio.wait_for(url_future, timeout=12.0)
-            self._tunnel_url = extracted_url
-            logger.info(f"Cloudflare Tunnel active: {extracted_url}")
-        except asyncio.TimeoutError:
-            self._tunnel_error = "Timeout waiting for trycloudflare.com URL"
-            logger.warning(self._tunnel_error)
-            await self.stop_cloudflare_tunnel()
-        except Exception as e:
-            self._tunnel_error = str(e)
-            await self.stop_cloudflare_tunnel()
-
-        return self.get_tunnel_status()
-
-    async def stop_cloudflare_tunnel(self) -> Dict[str, Any]:
-        """Terminates active Cloudflare Quick Tunnel."""
         if self._tunnel_proc:
             try:
                 self._tunnel_proc.terminate()
@@ -205,13 +138,98 @@ class NetworkService:
                     await asyncio.wait_for(self._tunnel_proc.wait(), timeout=2.0)
                 except asyncio.TimeoutError:
                     self._tunnel_proc.kill()
+                    await self._tunnel_proc.wait()
             except Exception as e:
                 logger.debug(f"Tunnel termination notice: {e}")
             finally:
                 self._tunnel_proc = None
 
         self._tunnel_url = None
-        return {"active": False, "url": None, "error": None}
+
+    async def start_cloudflare_tunnel(self, local_port: int = 8088) -> Dict[str, Any]:
+        """
+        Launches cloudflared quick tunnel to expose http://127.0.0.1:<local_port>
+        over a secure public HTTPS trycloudflare.com URL without port forwarding.
+        """
+        async with self._tunnel_lock:
+            if self._tunnel_proc and self._tunnel_proc.returncode is None and self._tunnel_url:
+                return self.get_tunnel_status()
+
+            await self._internal_stop()
+            self._tunnel_error = None
+            self._tunnel_url = None
+
+            bin_path = CLOUDFLARED_BIN
+            if not bin_path.exists() or not os.access(bin_path, os.X_OK):
+                # Check system path
+                import shutil
+                sys_bin = shutil.which("cloudflared")
+                if sys_bin:
+                    bin_path = Path(sys_bin)
+                else:
+                    self._tunnel_error = "cloudflared binary not available"
+                    return {"active": False, "url": None, "error": self._tunnel_error}
+
+            cmd = [
+                str(bin_path),
+                "tunnel",
+                "--url",
+                f"http://127.0.0.1:{local_port}",
+                "--no-autoupdate"
+            ]
+
+            logger.info(f"Starting Cloudflare Quick Tunnel: {' '.join(cmd)}")
+            try:
+                self._tunnel_proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+            except Exception as e:
+                self._tunnel_error = f"Failed to spawn cloudflared: {e}"
+                logger.error(self._tunnel_error)
+                return {"active": False, "url": None, "error": self._tunnel_error}
+
+            # Monitor output to extract https://*.trycloudflare.com URL
+            url_future: asyncio.Future[str] = asyncio.get_event_loop().create_future()
+
+            async def read_stream(stream, name):
+                url_pattern = re.compile(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com")
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    decoded = line.decode("utf-8", errors="replace")
+                    match = url_pattern.search(decoded)
+                    if match and not url_future.done():
+                        url_future.set_result(match.group(0))
+                    if "error" in decoded.lower():
+                        logger.debug(f"[cloudflared {name}] {decoded.strip()}")
+
+            self._reader_tasks = [
+                asyncio.create_task(read_stream(self._tunnel_proc.stdout, "stdout")),
+                asyncio.create_task(read_stream(self._tunnel_proc.stderr, "stderr"))
+            ]
+
+            try:
+                extracted_url = await asyncio.wait_for(url_future, timeout=12.0)
+                self._tunnel_url = extracted_url
+                logger.info(f"Cloudflare Tunnel active: {extracted_url}")
+            except asyncio.TimeoutError:
+                self._tunnel_error = "Timeout waiting for trycloudflare.com URL"
+                logger.warning(self._tunnel_error)
+                await self._internal_stop()
+            except Exception as e:
+                self._tunnel_error = str(e)
+                await self._internal_stop()
+
+            return self.get_tunnel_status()
+
+    async def stop_cloudflare_tunnel(self) -> Dict[str, Any]:
+        """Terminates active Cloudflare Quick Tunnel and cancels reader tasks."""
+        async with self._tunnel_lock:
+            await self._internal_stop()
+            return {"active": False, "url": None, "error": None}
 
 
 network_service = NetworkService()

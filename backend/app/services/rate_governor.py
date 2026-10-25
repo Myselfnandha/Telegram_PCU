@@ -36,6 +36,7 @@ class RateGovernor:
         self._cooldown_reason: str = ""
         self._cooldown_event = asyncio.Event()
         self._cooldown_event.set()  # Set means NOT cooling down (allowed to proceed)
+        self._release_task: Optional[asyncio.Task] = None
 
         # Token Bucket parameters
         self._capacity: float = burst_capacity
@@ -66,12 +67,28 @@ class RateGovernor:
 
     @property
     def is_cooling_down(self) -> bool:
-        return time.time() < self._cooldown_until
+        if self._cooldown_until <= 0.0:
+            return False
+        if self._cooldown_until > 1_000_000_000:
+            if time.time() >= self._cooldown_until:
+                return False
+        if getattr(self, "_cooldown_until_mono", 0.0) > 0 and time.monotonic() >= self._cooldown_until_mono:
+            return False
+        return True
 
     @property
     def cooldown_seconds_remaining(self) -> int:
-        rem = self._cooldown_until - time.time()
-        return max(0, int(rem))
+        if not self.is_cooling_down:
+            return 0
+        mono = getattr(self, "_cooldown_until_mono", 0.0)
+        if mono > 0:
+            rem_mono = mono - time.monotonic()
+            if rem_mono > 0:
+                return max(0, int(rem_mono))
+        if self._cooldown_until > 1_000_000_000:
+            rem_wall = self._cooldown_until - time.time()
+            return max(0, int(rem_wall))
+        return 0
 
     @property
     def reason(self) -> str:
@@ -87,19 +104,34 @@ class RateGovernor:
         pausing all active workers cleanly until the cooldown expires.
         Applies Multiplicative Decrease (MD) to safely adapt to server limits.
         """
-        now = time.time()
+        now_mono = time.monotonic()
+        now_wall = time.time()
         cooldown_sec = max(2, int(seconds) + 1)  # 1s safety buffer
-        until = now + cooldown_sec
-        self._cooldown_until = max(self._cooldown_until, until)
+        until_mono = now_mono + cooldown_sec
+        until_wall = now_wall + cooldown_sec
+        
+        self._cooldown_until_mono = max(getattr(self, "_cooldown_until_mono", 0.0), until_mono)
+        self._cooldown_until = max(self._cooldown_until, until_wall)
         self._cooldown_reason = reason
         self._cooldown_event.clear()
 
+        # Cancel any previous release task so stale timers cannot prematurely reopen gate
+        if self._release_task and not self._release_task.done():
+            self._release_task.cancel()
+
+        # Ensure single auto_release_gate loop is running to safely reopen gate across concurrent extensions
+        try:
+            loop = asyncio.get_running_loop()
+            self._release_task = loop.create_task(self._auto_release_gate())
+        except RuntimeError:
+            pass
+
         # Debounce: if multiple workers hit FloodWait during the same burst, avoid double backoff
-        if (now - self._last_flood_time) < 1.5:
+        if (now_mono - self._last_flood_time) < 1.5:
             return
 
         self._total_flood_events += 1
-        self._last_flood_time = now
+        self._last_flood_time = now_mono
 
         # Multiplicative decrease: back off target dispatch rate by 20%
         old_rate = self._rate
@@ -107,41 +139,43 @@ class RateGovernor:
         self._tokens = 0.0
         self._target_time = time.monotonic() + cooldown_sec
 
-        # Clear Telethon's internal cached flood wait dict so Telethon doesn't do a secondary hidden freeze
-        if client and hasattr(client, "_flood_waited_requests"):
-            try:
-                client._flood_waited_requests.clear()
-            except Exception:
-                pass
-
         logger.warning(
             f"⚠️ RateGovernor: Telegram FloodWait triggered ({seconds}s)! "
             f"Pausing transfers for {cooldown_sec}s. Backing off rate: {old_rate:.1f} -> {self._rate:.1f} MB/s. "
             f"Reason: {reason}"
         )
 
+    async def _auto_release_gate(self):
+        """
+        Dynamically waits until all active cooldown periods have expired.
+        Safely accommodates late FloodWait extensions from concurrent workers
+        without dropping gate reopening.
+        """
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self._auto_release_gate(cooldown_sec))
-        except RuntimeError:
+            while self.is_cooling_down:
+                rem = max(0.1, float(self.cooldown_seconds_remaining))
+                await asyncio.sleep(rem)
+            if not self.is_cooling_down:
+                self._cooldown_event.set()
+                self._last_ramp_time = time.monotonic()
+                logger.info("✅ RateGovernor: Cooldown expired. Gate reopened. Resuming active transfers seamlessly.")
+        except asyncio.CancelledError:
             pass
-
-    async def _auto_release_gate(self, delay: float):
-        await asyncio.sleep(delay)
-        if time.time() >= self._cooldown_until:
-            self._cooldown_event.set()
-            self._last_ramp_time = time.monotonic()
-            logger.info("✅ RateGovernor: Cooldown expired. Gate reopened. Resuming active transfers seamlessly.")
 
     async def wait_if_cooling_down(self):
         """Workers call this before executing MTProto requests to pause cleanly if cooldown is active."""
-        if not self.is_cooling_down:
+        while self.is_cooling_down:
             if not self._cooldown_event.is_set():
-                self._cooldown_event.set()
-            return
-        if not self._cooldown_event.is_set():
-            logger.debug(f"Worker waiting on RateGovernor gate ({self.cooldown_seconds_remaining}s remaining)...")
-            await self._cooldown_event.wait()
+                rem = max(0.2, float(self.cooldown_seconds_remaining))
+                logger.debug(f"Worker waiting on RateGovernor gate ({rem:.1f}s remaining)...")
+                try:
+                    await asyncio.wait_for(self._cooldown_event.wait(), timeout=rem + 0.5)
+                except asyncio.TimeoutError:
+                    pass
+            else:
+                break
+        if not self.is_cooling_down and not self._cooldown_event.is_set():
+            self._cooldown_event.set()
 
     async def acquire_chunk_slot(self, chunk_size_bytes: int = 1024 * 1024):
         """

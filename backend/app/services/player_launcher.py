@@ -71,6 +71,12 @@ class PlayerLauncher:
             finally:
                 self._active_proc = None
 
+        # Clean up any orphaned VLC processes from earlier backend sessions
+        try:
+            subprocess.run(["pkill", "-f", "vlc.*--http-password=tgsuite"], timeout=1.0, capture_output=True)
+        except Exception:
+            pass
+
     def _start_vlc_monitor(
         self,
         proc: subprocess.Popen,
@@ -250,16 +256,20 @@ class PlayerLauncher:
         stream_url: str,
         filename: str = "video.mp4",
         player: str = "vlc",
-        resume_sec: int = 0,
+        resume_sec: Optional[int] = None,
         chat_id: Optional[Union[int, str]] = None,
         message_id: Optional[int] = None,
         network_caching: Optional[int] = None,
         audio_lang: Optional[str] = None,
-        sub_lang: Optional[str] = None
+        sub_lang: Optional[str] = None,
+        duration: Optional[int] = None,
+        items: Optional[List[Dict[str, Any]]] = None,
+        resume: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
         Launches host media player (VLC or MPV) with direct streaming, instant seek flags,
-        embedded/cached subtitles, configurable network caching, and automated two-way playback progress tracking.
+        embedded/cached subtitles, configurable network caching, automated two-way playback progress tracking,
+        and auto-queued series binge playlist support.
         """
         vlc_bin = shutil.which("vlc") or "/usr/bin/vlc"
         mpv_bin = shutil.which("mpv") or "/usr/bin/mpv"
@@ -284,16 +294,18 @@ class PlayerLauncher:
 
         self.kill_previous_player()
 
-        # If resume_sec not explicitly provided, look up saved progress from SQLite
-        if resume_sec <= 0 and chat_id and message_id:
-            try:
-                prog = playback_tracker.get_playback_progress(str(chat_id), int(message_id))
-                if prog and prog.get("progress_percent", 0) < 96.0:
-                    pos = prog.get("last_position_seconds", 0)
-                    if pos and pos > 10:
-                        resume_sec = int(pos)
-            except Exception:
-                pass
+        # If resume_sec not explicitly provided, look up saved progress from SQLite only if resume is not disabled
+        if resume_sec is None:
+            if resume is not False and chat_id and message_id:
+                try:
+                    prog = playback_tracker.get_playback_progress(str(chat_id), int(message_id))
+                    if prog and prog.get("progress_percent", 0) < 96.0:
+                        pos = prog.get("last_position_seconds", 0)
+                        if pos and pos > 10:
+                            resume_sec = int(pos)
+                except Exception:
+                    pass
+            resume_sec = resume_sec or 0
 
         # Check for cached subtitle
         sub_file = subtitle_service.get_cached_subtitle(filename)
@@ -310,7 +322,14 @@ class PlayerLauncher:
         player_name = "mpv" if "mpv" in chosen_bin else "vlc"
         launched = False
         vlc_port = get_free_port(8089)
-        mpv_sock = f"/tmp/tg_mpv_{message_id or os.getpid()}.sock"
+        import tempfile
+        mpv_dir = os.path.join(tempfile.gettempdir(), f"tg_mpv_{os.getuid() if hasattr(os, 'getuid') else 'user'}")
+        os.makedirs(mpv_dir, mode=0o700, exist_ok=True)
+        try:
+            os.chmod(mpv_dir, 0o700)
+        except Exception:
+            pass
+        mpv_sock = os.path.join(mpv_dir, f"{message_id or os.getpid()}.sock")
 
         try:
             if player_name == "mpv":
@@ -359,10 +378,13 @@ class PlayerLauncher:
                     f"--avcodec-threads={safe_threads}",
                     "--avcodec-hw=any",
                     "--avcodec-fast",
+                    "--avcodec-skiploopfilter=1",
+                    "--clock-synchro=1",
                     f"--network-caching={caching_ms}",  # default: --network-caching=1000
                     f"--file-caching={caching_ms}",
                     f"--live-caching={caching_ms}",
                     f"--disc-caching={caching_ms}",
+                    f"--sout-mux-caching={caching_ms}",
                     "--http-reconnect",
                     "--no-video-title-show",
                     "--one-instance"
@@ -375,6 +397,19 @@ class PlayerLauncher:
                 if resume_sec > 10:
                     cmd.append(f"--start-time={resume_sec}")
                     logger.info(f"Resuming {filename} at {resume_sec}s in VLC")
+
+                # Auto-Queue upcoming series episodes into VLC playlist for seamless continuous playback
+                if items and len(items) > 1:
+                    from app.config import PROXY_PORT
+                    for it in items[1:]:
+                        c = it.get("chat_id")
+                        m = it.get("message_id")
+                        f = it.get("filename", "video.mp4")
+                        if c and m:
+                            enc = urllib.parse.quote(str(f))
+                            next_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{c}/{m}/{enc}"
+                            cmd.append(next_url)
+                    logger.info(f"VLC Binge Queue: appended {len(items)-1} upcoming episode(s) to VLC playlist")
 
             self._active_proc = subprocess.Popen(
                 cmd,
@@ -392,7 +427,9 @@ class PlayerLauncher:
                     "chat_id": str(chat_id) if chat_id else "",
                     "message_id": int(message_id) if message_id else 0,
                     "filename": filename,
-                    "stream_url": stream_url
+                    "stream_url": stream_url,
+                    "duration": int(duration) if duration else 0,
+                    "items": items or []
                 }
 
             if chat_id and message_id:
@@ -408,7 +445,7 @@ class PlayerLauncher:
 
                 # Start real-time background monitor to sync VLC progress back to TG Power Suite
                 if player_name == "vlc":
-                    self._start_vlc_monitor(self._active_proc, chat_id, int(message_id), filename, vlc_port)
+                    self._start_vlc_monitor(self._active_proc, chat_id, int(message_id), filename, vlc_port, items=items)
                 elif player_name == "mpv":
                     self._start_mpv_monitor(self._active_proc, chat_id, int(message_id), filename, mpv_sock)
 
@@ -462,7 +499,11 @@ class PlayerLauncher:
             if raw_url:
                 stream_urls.append(raw_url)
 
-        chosen_bin = vlc_bin if os.path.exists(vlc_bin) else (mpv_bin if os.path.exists(mpv_bin) else None)
+        if player == "mpv":
+            chosen_bin = mpv_bin if (mpv_bin and os.path.exists(mpv_bin)) else (vlc_bin if (vlc_bin and os.path.exists(vlc_bin)) else None)
+        else:
+            chosen_bin = vlc_bin if (vlc_bin and os.path.exists(vlc_bin)) else (mpv_bin if (mpv_bin and os.path.exists(mpv_bin)) else None)
+
         if not chosen_bin or not stream_urls:
             return {"success": False, "launched": False, "episodes_count": 0, "title": title}
 
@@ -507,10 +548,13 @@ class PlayerLauncher:
                     f"--avcodec-threads={safe_threads}",
                     "--avcodec-hw=any",
                     "--avcodec-fast",
+                    "--avcodec-skiploopfilter=1",
+                    "--clock-synchro=1",
                     f"--network-caching={caching_ms}",  # default: --network-caching=1000
                     f"--file-caching={caching_ms}",
                     f"--live-caching={caching_ms}",
                     f"--disc-caching={caching_ms}",
+                    f"--sout-mux-caching={caching_ms}",
                     "--http-reconnect",
                     "--no-video-title-show",
                     "--one-instance"
@@ -547,9 +591,9 @@ class PlayerLauncher:
             logger.warning(f"Could not launch batch player subprocess: {e}")
 
         return {
-            "success": True,
+            "success": launched,
             "launched": launched,
-            "episodes_count": len(stream_urls),
+            "episodes_count": len(stream_urls) if launched else 0,
             "title": title
         }
 
@@ -573,10 +617,13 @@ class PlayerLauncher:
             f"#EXTVLCOPT:network-caching={caching_ms}",  # default: #EXTVLCOPT:network-caching=1000
             f"#EXTVLCOPT:file-caching={caching_ms}",
             f"#EXTVLCOPT:live-caching={caching_ms}",
+            f"#EXTVLCOPT:sout-mux-caching={caching_ms}",
             "#EXTVLCOPT:http-reconnect",
             "#EXTVLCOPT:input-fast-seek",
+            "#EXTVLCOPT:clock-synchro=1",
             "#EXTVLCOPT:avcodec-hw=any",
             "#EXTVLCOPT:avcodec-fast",
+            "#EXTVLCOPT:avcodec-skiploopfilter=1",
             "#EXTVLCOPT:deinterlace=-1",
             "#EXTVLCOPT:deinterlace-mode=auto",
             f"#EXTVLCOPT:sub-language={sub_languages}",
@@ -614,10 +661,13 @@ class PlayerLauncher:
             m3u_lines.append(f"#EXTVLCOPT:network-caching={caching_ms}")  # default: #EXTVLCOPT:network-caching=1000
             m3u_lines.append(f"#EXTVLCOPT:file-caching={caching_ms}")
             m3u_lines.append(f"#EXTVLCOPT:live-caching={caching_ms}")
+            m3u_lines.append(f"#EXTVLCOPT:sout-mux-caching={caching_ms}")
             m3u_lines.append("#EXTVLCOPT:http-reconnect")
             m3u_lines.append("#EXTVLCOPT:input-fast-seek")
+            m3u_lines.append("#EXTVLCOPT:clock-synchro=1")
             m3u_lines.append("#EXTVLCOPT:avcodec-hw=any")
             m3u_lines.append("#EXTVLCOPT:avcodec-fast")
+            m3u_lines.append("#EXTVLCOPT:avcodec-skiploopfilter=1")
             m3u_lines.append("#EXTVLCOPT:deinterlace=-1")
             m3u_lines.append("#EXTVLCOPT:deinterlace-mode=auto")
             m3u_lines.append(f"#EXTVLCOPT:sub-language={sub_languages}")
@@ -636,6 +686,8 @@ class PlayerLauncher:
                     data = json.loads(resp.read().decode("utf-8"))
                     time_sec = int(data.get("time", 0))
                     len_sec = int(data.get("length", 0))
+                    if len_sec == 0 and self._active_media_info.get("duration", 0) > 0:
+                        len_sec = self._active_media_info["duration"]
                     vol = int(data.get("volume", 256))
                     vol_pct = min(200, max(0, round((vol / 256.0) * 100)))
                     state = data.get("state", "unknown")
@@ -645,11 +697,54 @@ class PlayerLauncher:
                     items = self._active_media_info.get("items", [])
                     cur_mid = self._active_media_info.get("message_id")
                     cur_idx = None
+                    next_ep = None
+                    prev_ep = None
                     if items and cur_mid:
                         for idx, it in enumerate(items):
                             if it.get("message_id") == cur_mid or str(it.get("message_id")) == str(cur_mid):
                                 cur_idx = idx + 1
+                                if idx + 1 < len(items):
+                                    next_ep = items[idx + 1].get("filename")
+                                if idx > 0:
+                                    prev_ep = items[idx - 1].get("filename")
                                 break
+
+                    # Parse streams: video, audio, and subtitle tracks
+                    category = data.get("information", {}).get("category", {})
+                    audio_tracks = []
+                    subtitle_tracks = []
+                    video_info = None
+                    for stream_name, stream_info in category.items():
+                        if not isinstance(stream_info, dict):
+                            continue
+                        stype = str(stream_info.get("Type") or "").lower()
+                        if "video" in stype and not video_info:
+                            video_info = {
+                                "codec": stream_info.get("Codec") or "",
+                                "resolution": stream_info.get("Video resolution") or stream_info.get("Resolution") or "",
+                                "frame_rate": stream_info.get("Frame rate") or "",
+                                "decoded_format": stream_info.get("Decoded format") or "",
+                            }
+                        elif "audio" in stype:
+                            lang = stream_info.get("Language") or ""
+                            codec = stream_info.get("Codec") or ""
+                            channels = stream_info.get("Channels") or ""
+                            label = stream_name
+                            details = [x for x in (lang, codec, channels) if x]
+                            if details:
+                                label = f"{stream_name} ({', '.join(details)})"
+                            s_id = stream_name.replace("Stream ", "").strip()
+                            audio_tracks.append({"id": s_id, "name": stream_name, "label": label, "language": lang})
+                        elif "subtitle" in stype:
+                            lang = stream_info.get("Language") or ""
+                            codec = stream_info.get("Codec") or ""
+                            label = stream_name
+                            details = [x for x in (lang, codec) if x]
+                            if details:
+                                label = f"{stream_name} ({', '.join(details)})"
+                            s_id = stream_name.replace("Stream ", "").strip()
+                            subtitle_tracks.append({"id": s_id, "name": stream_name, "label": label, "language": lang})
+
                     return {
                         "active": True,
                         "state": state,
@@ -665,16 +760,36 @@ class PlayerLauncher:
                         "has_batch": len(items) > 1,
                         "episode_index": cur_idx,
                         "total_episodes": len(items) if items else None,
+                        "next_episode": next_ep,
+                        "prev_episode": prev_ep,
+                        "audiodelay": float(data.get("audiodelay", 0.0)),
+                        "subtitledelay": float(data.get("subtitledelay", 0.0)),
+                        "aspectratio": data.get("aspectratio") or "default",
+                        "audio_tracks": audio_tracks,
+                        "subtitle_tracks": subtitle_tracks,
+                        "video_info": video_info,
                     }
         except Exception as e:
             logger.debug(f"VLC status poll error: {e}")
         return {"active": False}
 
-    def send_vlc_control(self, command: str, val: Optional[Union[str, int]] = None) -> Dict[str, Any]:
-        """Dispatches playback, seek, and volume control commands directly to VLC."""
+    def send_vlc_control(self, command: str, val: Optional[Union[str, int, float]] = None) -> Dict[str, Any]:
+        """Dispatches playback, seek, volume, track, and sync control commands directly to VLC."""
         if command == "pl_stop":
             self.kill_previous_player()
             return {"success": True, "state": "stopped", "active": False}
+
+        # Normalize aliases to VLC Lua HTTP syntax
+        if command == "aspect_ratio":
+            command = "aspectratio"
+        elif command == "subdelay":
+            command = "subdelay"
+        elif command == "audiodelay":
+            command = "audiodelay"
+
+        # Normalize numeric float seeks to integer seconds
+        if command == "seek" and isinstance(val, (int, float)):
+            val = round(val)
 
         port = self._vlc_port or 8089
         auth_header = "Basic " + base64.b64encode(f":{self._vlc_password}".encode("ascii")).decode("ascii")
@@ -687,15 +802,21 @@ class PlayerLauncher:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     vol = int(data.get("volume", 256))
+                    len_sec = int(data.get("length", 0))
+                    if len_sec == 0 and self._active_media_info.get("duration", 0) > 0:
+                        len_sec = self._active_media_info["duration"]
                     return {
                         "success": True,
                         "state": data.get("state"),
                         "time": data.get("time"),
-                        "length": data.get("length"),
+                        "length": len_sec,
                         "volume": vol,
                         "volume_percent": min(200, max(0, round((vol / 256.0) * 100))),
                         "fullscreen": data.get("fullscreen"),
-                        "rate": float(data.get("rate", 1.0))
+                        "rate": float(data.get("rate", 1.0)),
+                        "audiodelay": float(data.get("audiodelay", 0.0)),
+                        "subtitledelay": float(data.get("subtitledelay", 0.0)),
+                        "aspectratio": data.get("aspectratio")
                     }
         except Exception as e:
             return {"success": False, "error": str(e)}

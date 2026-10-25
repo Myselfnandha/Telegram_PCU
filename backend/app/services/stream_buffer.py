@@ -18,6 +18,8 @@ class StreamSlidingBuffer:
        backward seek segments simultaneously in RAM, allowing instant scrubbing without
        re-downloading from Telegram MTProto.
     """
+    TOTAL_GLOBAL_RAM_BUDGET = 256 * 1024 * 1024  # 256MB global RAM ceiling across all streams
+    MAX_GLOBAL_RAM_BUDGET = TOTAL_GLOBAL_RAM_BUDGET
     MAX_RING_SIZE = 192 * 1024 * 1024  # 192MB per active stream window across segments
     MAX_ENTRIES = 8                    # Max concurrent streams cached
     HEADER_SIZE = 16 * 1024 * 1024     # 16MB header cache per video (instant playback start)
@@ -29,6 +31,38 @@ class StreamSlidingBuffer:
         self._segments: Dict[Tuple[str, int], List[dict]] = {}
         self._headers: Dict[Tuple[str, int], bytearray] = {}
         self._tails: Dict[Tuple[str, int], dict] = {}
+
+    def _get_total_ram_bytes(self) -> int:
+        total_header_bytes = sum(len(b) for b in self._headers.values())
+        total_tail_bytes = sum(len(b.get("data", b"")) for b in self._tails.values())
+        total_seg_bytes = sum(
+            sum(len(seg.get("data", b"")) for seg in segs)
+            for segs in self._segments.values()
+        )
+        return total_header_bytes + total_tail_bytes + total_seg_bytes
+
+    def _enforce_global_budget(self, current_key=None):
+        """Prune oldest non-active entries/segments when exceeding TOTAL_GLOBAL_RAM_BUDGET."""
+        if self._get_total_ram_bytes() <= self.TOTAL_GLOBAL_RAM_BUDGET:
+            return
+
+        candidate_keys = sorted(
+            [k for k in self._buffers if k != current_key],
+            key=lambda k: self._buffers[k].get("last_active", 0)
+        )
+        for k in candidate_keys:
+            self._buffers.pop(k, None)
+            self._segments.pop(k, None)
+            self._headers.pop(k, None)
+            self._tails.pop(k, None)
+            if self._get_total_ram_bytes() <= self.TOTAL_GLOBAL_RAM_BUDGET:
+                return
+
+        if current_key and current_key in self._segments:
+            segments = self._segments[current_key]
+            segments.sort(key=lambda s: s.get("last_active", 0))
+            while segments and self._get_total_ram_bytes() > self.TOTAL_GLOBAL_RAM_BUDGET:
+                segments.pop(0)
 
     def _evict_stale(self, current_key=None):
         """Evict idle entries and cap total to MAX_ENTRIES."""
@@ -56,6 +90,7 @@ class StreamSlidingBuffer:
                 self._tails.pop(oldest_key, None)
             else:
                 break
+        self._enforce_global_budget(current_key)
 
     def push(self, chat_id: str, message_id: int, offset: int, data: bytes):
         """Append streamed data to the RAM sliding window, multi-segment cache, and initial header cache."""
@@ -173,6 +208,7 @@ class StreamSlidingBuffer:
                 "data": most_recent["data"],
                 "last_active": most_recent["last_active"]
             }
+        self._enforce_global_budget(key)
 
     def push_tail(self, chat_id: str, message_id: int, offset: int, data: bytes):
         """Cache container tail metadata (e.g. MKV Cues / MP4 Moov)."""
@@ -198,6 +234,7 @@ class StreamSlidingBuffer:
                 self._tails[key] = {"start": min_start, "data": merged}
             else:
                 self._tails[key] = {"start": offset, "data": bytearray(data)}
+        self._enforce_global_budget(key)
 
     def get_slice(self, chat_id: str, message_id: int, start: int, length: int) -> Optional[bytes]:
         """
@@ -205,12 +242,15 @@ class StreamSlidingBuffer:
         Supports seamless contiguous multi-segment assembly across buffer boundaries.
         """
         key = (str(chat_id), message_id)
+        now = time.time()
 
         # Fast Path 1: Exact / Contained Header Cache Hit (0ms playback start)
         if key in self._headers and start < len(self._headers[key]):
             h = self._headers[key]
             available = len(h) - start
             if available >= length:
+                if key in self._buffers:
+                    self._buffers[key]["last_active"] = now
                 logger.info(f"BUFFER [{chat_id}:{message_id}] RAM Header Cache HIT: {length:,}B at offset {start:,} (instant 0ms playback start)")
                 return bytes(h[start:start + length])
 
@@ -223,6 +263,8 @@ class StreamSlidingBuffer:
                 offset_in_tail = start - t_start
                 available = len(t["data"]) - offset_in_tail
                 if available >= length:
+                    if key in self._buffers:
+                        self._buffers[key]["last_active"] = now
                     logger.info(f"BUFFER [{chat_id}:{message_id}] RAM Tail Cache HIT: {length:,}B at offset {start:,} (cues/moov metadata)")
                     return bytes(t["data"][offset_in_tail : offset_in_tail + length])
 
@@ -233,7 +275,9 @@ class StreamSlidingBuffer:
                     offset_in_seg = start - seg["start"]
                     available = len(seg["data"]) - offset_in_seg
                     if available >= length:
-                        seg["last_active"] = time.time()
+                        seg["last_active"] = now
+                        if key in self._buffers:
+                            self._buffers[key]["last_active"] = now
                         logger.info(f"BUFFER [{chat_id}:{message_id}] RAM Multi-Segment HIT: {length:,}B at offset {start:,} (instant scrub)")
                         return bytes(seg["data"][offset_in_seg : offset_in_seg + length])
 
@@ -262,7 +306,7 @@ class StreamSlidingBuffer:
                         take = min(end_offset - cur_offset, seg["end"] - cur_offset)
                         offset_in_seg = cur_offset - seg["start"]
                         assembled.extend(seg["data"][offset_in_seg : offset_in_seg + take])
-                        seg["last_active"] = time.time()
+                        seg["last_active"] = now
                         cur_offset += take
                         chunk_found = True
                         break
@@ -283,6 +327,8 @@ class StreamSlidingBuffer:
                 break
 
         if assembled:
+            if key in self._buffers:
+                self._buffers[key]["last_active"] = now
             logger.info(f"BUFFER [{chat_id}:{message_id}] RAM Stitched Buffer HIT: {len(assembled):,}B at offset {start:,} (instant scrub)")
             return bytes(assembled)
 
@@ -296,8 +342,11 @@ class StreamSlidingBuffer:
                 available = len(buf["data"]) - offset_in_buf
                 read_len = min(length, available)
                 if read_len > 0:
+                    buf["last_active"] = now
                     logger.info(f"BUFFER [{chat_id}:{message_id}] RAM Sliding Window HIT: {read_len:,}B at offset {start:,} (playback scrub)")
                     return bytes(buf["data"][offset_in_buf:offset_in_buf + read_len])
+
+        return None
 
         return None
 

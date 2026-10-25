@@ -180,6 +180,27 @@ async def test_rate_governor_standard_tier_and_debouncing():
 
 
 @pytest.mark.asyncio
+async def test_rate_governor_auto_release_resilient_to_extended_flood_waits():
+    """Verifies that RateGovernor auto-reopens gate even when multiple concurrent FloodWaits extend cooldown."""
+    from app.services.rate_governor import RateGovernor
+    gov = RateGovernor()
+
+    # Simulate fast FloodWait reports with short seconds (1s -> cooldown 2s)
+    gov.report_flood_wait(1, "Burst Worker 1")
+    assert gov.is_cooling_down is True
+    assert not gov._cooldown_event.is_set()
+
+    # Worker 2 reports slightly later and extends cooldown
+    gov.report_flood_wait(1, "Burst Worker 2")
+
+    # Fast forward: manually set cooldown_until to past and verify wait_if_cooling_down auto-recovers
+    gov._cooldown_until = time.time() - 0.1
+    await gov.wait_if_cooling_down()
+    assert gov._cooldown_event.is_set()
+    assert gov.is_cooling_down is False
+
+
+@pytest.mark.asyncio
 async def test_sender_pool_borrow_cancellation_marks_unhealthy():
     """Verifies that cancellation inside sender_pool.borrow cleanly disconnects and drops the sender."""
     from app.telegram_client import MTProtoSenderPool

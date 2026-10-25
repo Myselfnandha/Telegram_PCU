@@ -97,32 +97,45 @@ class FastStreamEngine:
     def __init__(self):
         self._sessions: Dict[Tuple[str, int], MediaStreamSession] = {}
         self._lock = asyncio.Lock()
-        
-        # Start aggressive memory cleanup task
-        async def cleanup_loop():
-            import gc
-            while True:
-                await asyncio.sleep(30)
-                now = time.time()
-                stale_keys = []
-                for key, session in list(self._sessions.items()):
-                    if now - session.last_active_time > 20:  # 20s idle - fast eviction
-                        stale_keys.append(key)
-                if stale_keys:
-                    for key in stale_keys:
-                        self._sessions.pop(key, None)
-                    gc.collect()
-        
-        # Fire and forget the cleanup loop
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(cleanup_loop())
-        except RuntimeError:
-            pass
+        self._cleanup_task: Optional[asyncio.Task] = None
+
+    async def _cleanup_loop(self):
+        import gc
+        while True:
+            await asyncio.sleep(30)
+            now = time.time()
+            stale_keys = []
+            for key, session in list(self._sessions.items()):
+                if now - session.last_active_time > 20:  # 20s idle - fast eviction
+                    stale_keys.append(key)
+            if stale_keys:
+                for key in stale_keys:
+                    self._sessions.pop(key, None)
+                gc.collect()
+
+    def _ensure_cleanup_task(self):
+        if self._cleanup_task is None or self._cleanup_task.done():
+            try:
+                loop = asyncio.get_running_loop()
+                self._cleanup_task = loop.create_task(self._cleanup_loop())
+            except RuntimeError:
+                pass
+
+    async def shutdown(self):
+        """Cancels and awaits background cleanup tasks on application shutdown."""
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+            self._cleanup_task = None
+        self._sessions.clear()
 
     def get_or_create_session(
         self, chat_id: str, message_id: int, file_size: int, filename: str
     ) -> MediaStreamSession:
+        self._ensure_cleanup_task()
         key = (str(chat_id), message_id)
         if key not in self._sessions:
             self._sessions[key] = MediaStreamSession(chat_id, message_id, file_size, filename)
@@ -233,6 +246,7 @@ class FastStreamEngine:
         bytes_written = 0
         curr_offset = start
 
+        self._ensure_cleanup_task()
         try:
             async for raw_chunk in client.iter_download(
                 message.media,
@@ -242,6 +256,8 @@ class FastStreamEngine:
             ):
                 if not raw_chunk:
                     continue
+
+                await rate_governor.acquire_chunk_slot(len(raw_chunk))
 
                 remaining = length - bytes_written
                 if len(raw_chunk) > remaining:
@@ -260,12 +276,18 @@ class FastStreamEngine:
                 if bytes_written >= length:
                     break
 
+            if bytes_written < length:
+                raise ConnectionResetError(f"Stream ended prematurely: sent {bytes_written}/{length} bytes")
+
         except errors.FloodWaitError as fwe:
             rate_governor.report_flood_wait(fwe.seconds, reason="Stream FloodWait")
+            raise
         except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError) as ce:
             logger.warning(f"Stream connection reset at {bytes_written}/{length}: {ce}")
+            raise
         except Exception as e:
-            logger.debug(f"Stream notice at {bytes_written}/{length}: {e}")
+            logger.debug(f"Stream error at {bytes_written}/{length}: {e}")
+            raise
 
 
     async def _download_range_bytes(

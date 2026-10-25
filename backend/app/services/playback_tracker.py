@@ -72,7 +72,8 @@ class PlaybackTracker:
         file_size: int = 0,
         thumbnail_url: Optional[str] = None,
         last_chunk_index: int = 0,
-        last_byte_offset: int = 0
+        last_byte_offset: int = 0,
+        is_reset: bool = False
     ):
         """Updates playback position, chunk index, and calculates progress percentage."""
         if not filename or filename == "thumb":
@@ -94,9 +95,13 @@ class PlaybackTracker:
         if duration_seconds <= 0 and file_size > 0:
             duration_seconds = max(60.0, file_size / (350 * 1024))  # ~2.8 Mbps average
 
-        progress_percent = 0.0
-        if duration_seconds > 0 and last_position_seconds > 0:
+        if is_reset:
+            last_position_seconds = 0.0
+            progress_percent = 0.0
+        elif duration_seconds > 0 and last_position_seconds > 0:
             progress_percent = min(100.0, (last_position_seconds / duration_seconds) * 100.0)
+        else:
+            progress_percent = 0.0
 
         record_id = f"{chat_id}_{message_id}"
         now = time.time()
@@ -114,9 +119,17 @@ class PlaybackTracker:
                 ON CONFLICT(id) DO UPDATE SET
                     filename = CASE WHEN excluded.filename NOT LIKE 'tg_media_%' AND excluded.filename != 'thumb' THEN excluded.filename ELSE playback_history.filename END,
                     display_title = CASE WHEN excluded.filename NOT LIKE 'tg_media_%' AND excluded.filename != 'thumb' THEN excluded.display_title ELSE playback_history.display_title END,
-                    last_position_seconds = CASE WHEN excluded.last_position_seconds > 0 THEN excluded.last_position_seconds ELSE playback_history.last_position_seconds END,
+                    last_position_seconds = CASE 
+                        WHEN ? THEN 0.0
+                        WHEN excluded.last_position_seconds > 0 THEN excluded.last_position_seconds 
+                        ELSE playback_history.last_position_seconds 
+                    END,
                     duration_seconds = CASE WHEN excluded.duration_seconds > 0 THEN excluded.duration_seconds ELSE playback_history.duration_seconds END,
-                    progress_percent = CASE WHEN excluded.progress_percent > 0 THEN excluded.progress_percent ELSE playback_history.progress_percent END,
+                    progress_percent = CASE 
+                        WHEN ? THEN 0.0
+                        WHEN excluded.progress_percent > 0 THEN excluded.progress_percent 
+                        ELSE playback_history.progress_percent 
+                    END,
                     last_watched_at = excluded.last_watched_at,
                     thumbnail_url = COALESCE(excluded.thumbnail_url, playback_history.thumbnail_url),
                     last_chunk_index = CASE WHEN excluded.last_chunk_index > 0 THEN excluded.last_chunk_index ELSE playback_history.last_chunk_index END,
@@ -126,7 +139,9 @@ class PlaybackTracker:
                 file_size, duration_seconds, last_position_seconds,
                 progress_percent, now, is_series,
                 series_title, season_num, episode_num, thumbnail_url,
-                last_chunk_index, last_byte_offset
+                last_chunk_index, last_byte_offset,
+                1 if is_reset else 0,
+                1 if is_reset else 0
             ))
             conn.commit()
 
@@ -142,6 +157,7 @@ class PlaybackTracker:
         """
         Updates chunk-aligned progress derived from VLC/browser byte-range streaming requests.
         Protects existing progress from being wiped by initial container header probes (0..16MB).
+        Only updates last_byte_offset and last_chunk_index without altering real playback position.
         """
         if not filename or filename == "thumb":
             return
@@ -153,21 +169,25 @@ class PlaybackTracker:
             return
 
         chunk_index = streamed_byte_offset // chunk_size
-        ratio = min(1.0, streamed_byte_offset / total_file_size)
-        # Estimate duration if unknown (e.g. 5400s / 90 mins average)
-        estimated_duration = max(300.0, total_file_size / (350 * 1024))
-        position_seconds = ratio * estimated_duration
+        record_id = f"{chat_id}_{message_id}"
+        now = time.time()
 
-        self.update_progress(
-            chat_id=str(chat_id),
-            message_id=message_id,
-            filename=filename,
-            last_position_seconds=position_seconds,
-            duration_seconds=estimated_duration,
-            file_size=total_file_size,
-            last_chunk_index=chunk_index,
-            last_byte_offset=streamed_byte_offset
-        )
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO playback_history (
+                    id, chat_id, message_id, filename, display_title,
+                    file_size, last_watched_at, last_chunk_index, last_byte_offset
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    last_chunk_index = excluded.last_chunk_index,
+                    last_byte_offset = excluded.last_byte_offset,
+                    last_watched_at = excluded.last_watched_at
+            """, (
+                record_id, str(chat_id), message_id, filename, filename,
+                total_file_size, now, chunk_index, streamed_byte_offset
+            ))
+            conn.commit()
 
     def get_playback_progress(self, chat_id: str, message_id: int) -> Optional[Dict[str, Any]]:
         """Returns watch progress and chunk offsets for a specific video."""

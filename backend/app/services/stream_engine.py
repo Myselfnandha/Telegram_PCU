@@ -50,6 +50,11 @@ class StreamEngine:
         first_chunk_sent = False
         effective_start = start
 
+        # 0. Fast Path: Abort immediately if already superseded by a subsequent seek
+        if external_stop_event and external_stop_event.is_set():
+            logger.debug(f"STREAM [{clean_name}] Aborted stream before start (superseded by seek)")
+            return
+
         # 1. Fast Path: Full RAM prefix coverage (e.g. tiny probe or complete cached slice)
         if cached_prefix and len(cached_prefix) >= length:
             logger.info(f"STREAM [{clean_name}] Complete (RAM prefix only): {length:,}B delivered in {time.time() - t0:.3f}s (0ms TTFB)")
@@ -61,13 +66,10 @@ class StreamEngine:
         remaining_length = length - cached_prefix_len
 
         # 2. Compute optimal chunk size:
-        # - 128KB for tiny probes / container metadata tails
-        # - 512KB for media player seeks (cuts seek TTFB & alignment discard waste in half)
-        # - 1024KB for bulk continuous media downloads
+        # - 128KB for tiny probes / container metadata tails (<= 256KB or within last 4MB)
+        # - 1024KB for continuous media streaming (halves wire request frequency and prevents MTProto RPS flood)
         if length <= 256 * 1024 or (file_size > 0 and effective_start >= (file_size - 4 * 1024 * 1024)):
             chunk_size = 128 * 1024
-        elif is_media_player and start > 0:
-            chunk_size = 512 * 1024
         else:
             chunk_size = 1024 * 1024
 
@@ -89,7 +91,7 @@ class StreamEngine:
             f"chunk_size={chunk_size // 1024}KB, total_chunks={total_chunks}, DC={dc_id}"
         )
 
-        queue: asyncio.Queue = asyncio.Queue(maxsize=128)
+        queue: asyncio.Queue = asyncio.Queue(maxsize=12 if is_media_player else 64)
         stop_event = external_stop_event or asyncio.Event()
 
         async def fetch_one_chunk(c_idx: int):
@@ -106,6 +108,7 @@ class StreamEngine:
 
             req = GetFileRequest(file_loc, offset=c_offset, limit=chunk_size)
 
+            file_ref_attempts = 0
             for attempt in range(6):
                 if stop_event.is_set():
                     raise asyncio.CancelledError()
@@ -161,7 +164,10 @@ class StreamEngine:
                     continue
 
                 except FILE_REF_ERRORS:
-                    logger.info(f"STREAM [{clean_name}] File ref expired on chunk {c_idx+1}/{total_chunks}, refreshing...")
+                    file_ref_attempts += 1
+                    logger.info(f"STREAM [{clean_name}] File ref expired on chunk {c_idx+1}/{total_chunks} (refresh {file_ref_attempts}/2)...")
+                    if file_ref_attempts > 2:
+                        raise RuntimeError(f"File ref refresh limit exceeded for chunk {c_idx+1}")
                     if get_fresh_message_fn:
                         refreshed = await get_fresh_message_fn(client, chat_id, message_id, force_refresh=True)
                         if refreshed and hasattr(refreshed, "media"):
@@ -184,6 +190,8 @@ class StreamEngine:
                         logger.debug(f"STREAM [{clean_name}] Chunk {c_idx+1}/{total_chunks} retry {attempt+1}: {err_str}")
                     await asyncio.sleep(0.4)
 
+            raise RuntimeError(f"STREAM [{clean_name}] Chunk {c_idx+1}/{total_chunks} failed after 6 attempts")
+
         last_progress_log = time.time()
         delivered_chunks = 0
 
@@ -191,13 +199,16 @@ class StreamEngine:
         producer_task = None
         if remaining_length > 0 and total_chunks > 0:
             async def pipelined_chunk_producer():
+                from collections import defaultdict
+                chunk_retries = defaultdict(int)
+
                 is_premium_rate = rate_governor.current_rate_limit_mbs > 15.0
                 if is_media_player:
                     # Media Player Smooth Cruise Control:
-                    # 14-24MB lookahead runway is optimal (~30-60s of video).
-                    # Avoids wire burst flooding while keeping steady, stutter-free playback.
-                    max_in_flight = 4 if is_premium_rate else 3
-                    max_lookahead = 48 if is_premium_rate else 28
+                    # 1 concurrent worker during normal cruise delivers ~1.4-1.8 MB/s (140-160% of VLC bitrate)
+                    # strictly pacing requests (~1.6 req/s) to permanently eliminate Telegram MTProto FloodWaits.
+                    max_in_flight = 2 if is_premium_rate else 1
+                    max_lookahead = 12 if is_premium_rate else 8
                 else:
                     max_in_flight = 6 if is_premium_rate else 3
                     max_lookahead = 96 if is_premium_rate else 48
@@ -219,23 +230,16 @@ class StreamEngine:
                             break
 
                         # 2. Adaptive Buffer-Aware Concurrency:
-                        # If runway is deep (>= 10 chunks in RAM, ~5MB / 25-50s of video), cruise with 1 worker.
-                        # If recovering from a seek or buffer is thin (< 4 chunks), burst with 3 workers
-                        # (or 4 for premium) to immediately re-establish the safety cushion.
-                        runway = next_to_fetch - next_to_deliver
+                        # True player runway = ready chunks in RAM queue + out-of-order buffer
+                        runway = queue.qsize() + len(buffered)
                         if is_media_player:
-                            if runway >= 10:
-                                allowed_in_flight = 1
-                            elif runway >= 5:
-                                allowed_in_flight = min(2, max_in_flight)
-                            else:
-                                allowed_in_flight = 3 if not is_premium_rate else 4
+                            allowed_in_flight = 1 if not is_premium_rate else (1 if runway >= 4 else 2)
                         else:
                             allowed_in_flight = max_in_flight
 
                         while (
                             len(in_flight) < allowed_in_flight
-                            and (next_to_fetch - next_to_deliver) < max_lookahead
+                            and (queue.qsize() + len(in_flight) + len(buffered)) < max_lookahead
                             and next_to_fetch < total_chunks
                             and not stop_event.is_set()
                         ):
@@ -249,13 +253,24 @@ class StreamEngine:
                             for d in done:
                                 c_idx = in_flight.pop(d, None)
                                 try:
-                                    _, data = d.result()
+                                    res = d.result()
+                                    if res is None:
+                                        raise RuntimeError(f"fetch_one_chunk({c_idx}) returned None")
+                                    _, data = res
                                     buffered[c_idx] = data
                                 except asyncio.CancelledError:
                                     stop_event.set()
                                     break
                                 except Exception as e:
-                                    logger.warning(f"STREAM [{clean_name}] Chunk {c_idx} failed: {type(e).__name__} ({e or 'timeout'}). Retrying...")
+                                    chunk_retries[c_idx] += 1
+                                    if chunk_retries[c_idx] >= 3:
+                                        logger.error(
+                                            f"STREAM [{clean_name}] Chunk {c_idx} permanently failed after {chunk_retries[c_idx]} retries: {e}. Terminating stream."
+                                        )
+                                        stop_event.set()
+                                        await queue.put(e)
+                                        break
+                                    logger.warning(f"STREAM [{clean_name}] Chunk {c_idx} failed (attempt {chunk_retries[c_idx]}/3): {type(e).__name__} ({e or 'timeout'}). Retrying...")
                                     if not stop_event.is_set():
                                         t = asyncio.create_task(fetch_one_chunk(c_idx))
                                         in_flight[t] = c_idx
@@ -309,6 +324,8 @@ class StreamEngine:
             feed_pos = aligned_offset
             while bytes_sent < length:
                 chunk = await queue.get()
+                if isinstance(chunk, Exception):
+                    raise chunk
                 if chunk is None:
                     if bytes_sent < length:
                         logger.debug(f"STREAM [{clean_name}] Pipeline stopped early: sent {bytes_sent:,}/{length:,} bytes")
@@ -375,15 +392,11 @@ class StreamEngine:
         finally:
             stop_event.set()
             if producer_task and not producer_task.done():
+                producer_task.cancel()
                 try:
-                    await asyncio.wait_for(asyncio.shield(producer_task), timeout=0.20)
+                    await asyncio.wait_for(producer_task, timeout=0.15)
                 except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
-                    if not producer_task.done():
-                        producer_task.cancel()
-                        try:
-                            await producer_task
-                        except (asyncio.CancelledError, Exception):
-                            pass
+                    pass
 
 
 stream_engine = StreamEngine()

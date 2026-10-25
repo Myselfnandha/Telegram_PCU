@@ -73,6 +73,32 @@ def test_player_launcher_vlc_telemetry_flags_and_resume():
         # Verify Enhancement 3: Network Subtitle Auto-Loading
         assert any(a.startswith("--sub-file=http://127.0.0.1:") or a.startswith("--input-slave=http://127.0.0.1:") for a in args)
 
+        # Launch WITH resume=False -> should start at 00:00:00 with NO --start-time flag
+        res_fresh = launcher.launch(
+            stream_url="http://127.0.0.1:8088/dl/test_chat/999/telemetry_test.mkv",
+            filename="telemetry_test.mkv",
+            player="vlc",
+            chat_id="test_chat",
+            message_id=999,
+            resume=False
+        )
+        assert res_fresh["success"] is True
+        args_fresh = mock_popen.call_args[0][0]
+        assert not any(a.startswith("--start-time=") for a in args_fresh)
+
+        # Launch WITH explicit resume_sec=0 -> should also not have --start-time flag
+        res_zero = launcher.launch(
+            stream_url="http://127.0.0.1:8088/dl/test_chat/999/telemetry_test.mkv",
+            filename="telemetry_test.mkv",
+            player="vlc",
+            resume_sec=0,
+            chat_id="test_chat",
+            message_id=999
+        )
+        assert res_zero["success"] is True
+        args_zero = mock_popen.call_args[0][0]
+        assert not any(a.startswith("--start-time=") for a in args_zero)
+
 
 def test_vlc_batch_binge_launch_and_playlists():
     launcher = PlayerLauncher()
@@ -146,5 +172,168 @@ def test_vlc_live_remote_control_methods():
         assert seek_res["length"] == 1800
         req = mock_urlopen.call_args[0][0]
         assert "command=seek&val=%2B30s" in req.full_url
+
+
+def test_vlc_single_launch_with_auto_queued_episodes():
+    launcher = PlayerLauncher()
+    items = [
+        {"chat_id": "100", "message_id": 1, "filename": "S01E01.mkv"},
+        {"chat_id": "100", "message_id": 2, "filename": "S01E02.mkv"},
+        {"chat_id": "100", "message_id": 3, "filename": "S01E03.mkv"},
+    ]
+
+    with patch("shutil.which", return_value="/usr/bin/vlc"), \
+         patch("os.path.exists", return_value=True), \
+         patch("subprocess.Popen") as mock_popen, \
+         patch("app.services.subtitle_service.subtitle_service.get_cached_subtitle", return_value=None):
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        mock_popen.return_value = mock_proc
+
+        res = launcher.launch(
+            stream_url="http://127.0.0.1:8088/dl/100/1/S01E01.mkv",
+            filename="S01E01.mkv",
+            player="vlc",
+            chat_id="100",
+            message_id=1,
+            items=items
+        )
+
+        assert res["success"] is True
+        args = mock_popen.call_args[0][0]
+        # Current stream is first
+        assert "http://127.0.0.1:8088/dl/100/1/S01E01.mkv" in args
+        # Subsequent episodes are auto-queued in VLC command args
+        assert any("100/2/S01E02.mkv" in a for a in args)
+        assert any("100/3/S01E03.mkv" in a for a in args)
+        assert launcher._active_media_info.get("items") == items
+
+
+def test_vlc_remote_control_track_switching_and_delays():
+    launcher = PlayerLauncher()
+    launcher._vlc_port = 8089
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b'{"state": "playing", "time": 100, "length": 2000, "volume": 320, "fullscreen": true, "audiodelay": 0.05, "subtitledelay": -0.25, "aspectratio": "16:9"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        # 1. Audio track
+        res1 = launcher.send_vlc_control("audio_track", 2)
+        assert res1["success"] is True
+        assert "command=audio_track&val=2" in mock_urlopen.call_args[0][0].full_url
+
+        # 2. Subtitle track
+        res2 = launcher.send_vlc_control("subtitle_track", 1)
+        assert res2["success"] is True
+        assert "command=subtitle_track&val=1" in mock_urlopen.call_args[0][0].full_url
+
+        # 3. Audio delay
+        res3 = launcher.send_vlc_control("audiodelay", "+0.05")
+        assert res3["success"] is True
+        assert "command=audiodelay" in mock_urlopen.call_args[0][0].full_url
+        assert res3["audiodelay"] == 0.05
+
+        # 4. Aspect ratio alias normalization
+        res4 = launcher.send_vlc_control("aspect_ratio", "16:9")
+        assert res4["success"] is True
+        assert "command=aspectratio&val=16%3A9" in mock_urlopen.call_args[0][0].full_url
+
+
+def test_vlc_live_status_parsing_extended():
+    launcher = PlayerLauncher()
+    launcher._vlc_port = 8089
+    launcher._active_media_info = {
+        "chat_id": "100",
+        "message_id": 1,
+        "filename": "S01E01.mkv",
+        "duration": 2400,
+        "items": [
+            {"chat_id": "100", "message_id": 1, "filename": "S01E01.mkv"},
+            {"chat_id": "100", "message_id": 2, "filename": "S01E02.mkv"},
+        ]
+    }
+
+    mock_vlc_json = {
+        "state": "playing",
+        "time": 250,
+        "length": 2400,
+        "volume": 384,  # 150% volume
+        "fullscreen": False,
+        "rate": 1.25,
+        "audiodelay": 0.05,
+        "subtitledelay": -0.25,
+        "aspectratio": "16:9",
+        "information": {
+            "category": {
+                "meta": {"filename": "S01E01.mkv"},
+                "Stream 0": {"Type": "Video", "Codec": "H264", "Resolution": "1920x1080"},
+                "Stream 1": {"Type": "Audio", "Language": "English", "Codec": "aac", "Channels": "Stereo"},
+                "Stream 2": {"Type": "Audio", "Language": "Tamil", "Codec": "ac3", "Channels": "5.1"},
+                "Stream 3": {"Type": "Subtitle", "Language": "English", "Codec": "subrip"},
+            }
+        }
+    }
+
+    import json
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(mock_vlc_json).encode("utf-8")
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        status = launcher.get_vlc_live_status()
+        assert status["active"] is True
+        assert status["volume_percent"] == 150
+        assert status["rate"] == 1.25
+        assert status["audiodelay"] == 0.05
+        assert status["subtitledelay"] == -0.25
+        assert status["aspectratio"] == "16:9"
+        assert status["episode_index"] == 1
+        assert status["total_episodes"] == 2
+        assert status["next_episode"] == "S01E02.mkv"
+        assert len(status["audio_tracks"]) == 2
+        assert status["audio_tracks"][0]["language"] == "English"
+        assert status["audio_tracks"][1]["language"] == "Tamil"
+        assert len(status["subtitle_tracks"]) == 1
+        assert status["subtitle_tracks"][0]["language"] == "English"
+        assert status["video_info"] is not None
+        assert status["video_info"]["codec"] == "H264"
+        assert status["video_info"]["resolution"] == "1920x1080"
+
+
+def test_proxy_vlc_dedicated_rest_endpoints():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+
+    with patch.object(PlayerLauncher, "send_vlc_control", return_value={"success": True, "state": "playing"}):
+        # 1. Track endpoint
+        r1 = client.post("/api/media/vlc/track", json={"type": "audio", "track_id": 2})
+        assert r1.status_code == 200
+        assert r1.json()["success"] is True
+
+        r2 = client.post("/api/media/vlc/track", json={"type": "subtitle", "track_id": 1})
+        assert r2.status_code == 200
+        assert r2.json()["success"] is True
+
+        # 2. Sync endpoint
+        r3 = client.post("/api/media/vlc/sync", json={"type": "audio", "delta_seconds": 0.05})
+        assert r3.status_code == 200
+        assert r3.json()["success"] is True
+
+        # 3. Aspect ratio endpoint
+        r4 = client.post("/api/media/vlc/aspect_ratio", json={"ratio": "16:9"})
+        assert r4.status_code == 200
+        assert r4.json()["success"] is True
+
+        # 4. Volume endpoint
+        r5 = client.post("/api/media/vlc/volume", json={"volume_percent": 150})
+        assert r5.status_code == 200
+        assert r5.json()["success"] is True
+
 
 

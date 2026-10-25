@@ -2,8 +2,9 @@ import time
 import os
 import psutil
 import logging
-from typing import Dict, Any
-from fastapi import APIRouter
+from typing import Dict, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.auth import verify_auth, API_AUTH_TOKEN, ENABLE_API_AUTH
 from app.services.queue_manager import queue_manager
 from app.services.sniffer_service import sniffer_service
 from app.telegram_client import TelegramClientManager
@@ -96,15 +97,33 @@ async def get_qrcode(text: str):
 
 
 @router.post("/tunnel/start")
-async def start_tunnel():
+async def start_tunnel(request: Request, _auth = Depends(verify_auth)):
     """Starts Cloudflare Quick Tunnel for 1-click remote cellular streaming."""
     from app.services.network_service import network_service
     from app.config import PORT
+
+    # Enforce authentication guard: Cloudflare tunnel exposes the backend to the public internet
+    payload = {}
+    try:
+        body = await request.body()
+        if body:
+            import json
+            payload = json.loads(body)
+    except Exception:
+        payload = {}
+
+    allow_unauth = payload.get("allow_unauthenticated", False) if isinstance(payload, dict) else False
+    if not API_AUTH_TOKEN and not ENABLE_API_AUTH and not allow_unauth:
+        raise HTTPException(
+            status_code=403,
+            detail="Remote Cloudflare tunnel cannot be started without authentication. Set API_AUTH_TOKEN or pass allow_unauthenticated=true."
+        )
+
     return await network_service.start_cloudflare_tunnel(local_port=int(PORT or 8088))
 
 
 @router.post("/tunnel/stop")
-async def stop_tunnel():
+async def stop_tunnel(_auth = Depends(verify_auth)):
     """Stops active Cloudflare Quick Tunnel."""
     from app.services.network_service import network_service
     return await network_service.stop_cloudflare_tunnel()

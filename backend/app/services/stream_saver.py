@@ -71,10 +71,12 @@ class StreamSaverService:
         try:
             cached_sub = subtitle_service.get_cached_subtitle(filename)
             if cached_sub and cached_sub.exists():
-                dest_sub = target_dir / f"{os.path.splitext(filename)[0]}.srt"
-                if not dest_sub.exists():
-                    shutil.copy2(cached_sub, dest_sub)
-                    logger.info(f"📝 Synced subtitle to offline library: {dest_sub.name}")
+                clean_stem = "".join([c for c in Path(filename).stem if (c.isalnum() or c in " .-_()")]).strip() or "subtitle"
+                dest_sub = target_dir / f"{clean_stem}.srt"
+                if dest_sub.resolve().is_relative_to(self._library_dir.resolve()):
+                    if not dest_sub.exists():
+                        shutil.copy2(cached_sub, dest_sub)
+                        logger.info(f"📝 Synced subtitle to offline library: {dest_sub.name}")
         except Exception as e:
             logger.debug(f"Subtitle sync notice: {e}")
 

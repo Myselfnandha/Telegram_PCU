@@ -78,14 +78,15 @@ class SubtitleService:
 
     def get_cached_subtitle_path(self, filename: str, lang: str = "eng") -> Path:
         """Returns local path for cached subtitle."""
-        clean_base = re.sub(r"[^\w\-]", "_", os.path.splitext(filename)[0])
-        return SUBTITLES_DIR / f"{clean_base}.{lang}.srt"
+        clean_base = re.sub(r"[^\w\-]", "_", Path(filename).stem)
+        clean_lang = re.sub(r"[^\w\-]", "", lang) or "eng"
+        return SUBTITLES_DIR / f"{clean_base}.{clean_lang}.srt"
 
     def get_cached_subtitle(self, filename: str, lang: str = "") -> Optional[Path]:
         """Instant (<0.1ms) check if subtitle is already cached on disk for requested or default languages."""
-        target_langs = [l.strip().lower() for l in (lang or DEFAULT_SUBTITLE_LANG).split(",") if l.strip()]
-        clean_base = re.sub(r"[^\w\-]", "_", os.path.splitext(filename)[0])
-        raw_base = os.path.splitext(filename)[0]
+        target_langs = [re.sub(r"[^\w\-]", "", l.strip().lower()) for l in (lang or DEFAULT_SUBTITLE_LANG).split(",") if l.strip()]
+        clean_base = re.sub(r"[^\w\-]", "_", Path(filename).stem)
+        raw_base = Path(filename).stem
 
         for l in target_langs:
             for b in (clean_base, raw_base):
@@ -112,7 +113,7 @@ class SubtitleService:
         Returns a dictionary of language -> extracted subtitle Path.
         """
         extracted = {}
-        clean_base = re.sub(r"[^\w\-]", "_", os.path.splitext(filename)[0])
+        clean_base = re.sub(r"[^\w\-]", "_", Path(filename).stem)
         probe_cmd = [
             "ffprobe",
             "-v", "error",
@@ -128,14 +129,24 @@ class SubtitleService:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL
             )
-            stdout_data, _ = await asyncio.wait_for(proc.communicate(), timeout=4.0)
+            try:
+                stdout_data, _ = await asyncio.wait_for(proc.communicate(), timeout=4.0)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
+                return extracted
+
             if not stdout_data:
                 return extracted
 
             data = json.loads(stdout_data.decode("utf-8", errors="ignore"))
             streams = data.get("streams", [])
             for s_idx, s in enumerate(streams):
-                lang = s.get("tags", {}).get("language", f"sub{s_idx}").lower().strip()
+                raw_lang = s.get("tags", {}).get("language", f"sub{s_idx}").lower().strip()
+                lang = re.sub(r"[^\w\-]", "", raw_lang) or f"sub{s_idx}"
                 out_path = SUBTITLES_DIR / f"{clean_base}.{lang}.srt"
                 if out_path.exists() and out_path.stat().st_size > 10:
                     extracted[lang] = out_path
@@ -154,7 +165,14 @@ class SubtitleService:
                 ]
                 try:
                     ext_proc = await asyncio.create_subprocess_exec(*extract_cmd)
-                    await asyncio.wait_for(ext_proc.wait(), timeout=6.0)
+                    try:
+                        await asyncio.wait_for(ext_proc.wait(), timeout=6.0)
+                    except asyncio.TimeoutError:
+                        try:
+                            ext_proc.kill()
+                            await ext_proc.wait()
+                        except Exception:
+                            pass
                     if out_path.exists() and out_path.stat().st_size > 10:
                         extracted[lang] = out_path
                         logger.info(f"✅ Extracted embedded '{lang}' subtitle from stream: {out_path.name}")
@@ -233,7 +251,7 @@ class SubtitleService:
                                 headers={"User-Agent": "TGPowerSuite v3.4.0"}
                             )
                             with urllib.request.urlopen(sub_req, timeout=8) as sub_res:
-                                raw_bytes = sub_res.read()
+                                raw_bytes = sub_res.read(2 * 1024 * 1024)
                                 try:
                                     srt_content = gzip.decompress(raw_bytes)
                                 except Exception:
@@ -250,6 +268,10 @@ class SubtitleService:
 
     def trigger_prefetch(self, filename: str, stream_url: Optional[str] = None):
         """Non-blocking background prefetcher."""
+        done_keys = [k for k, t in self._active_prefetches.items() if t.done()]
+        for k in done_keys:
+            self._active_prefetches.pop(k, None)
+
         if filename in self._active_prefetches and not self._active_prefetches[filename].done():
             return
         task = asyncio.create_task(self.get_or_download_subtitle(filename, stream_url=stream_url))

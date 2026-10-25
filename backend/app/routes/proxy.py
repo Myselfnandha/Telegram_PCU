@@ -7,9 +7,10 @@ import email.utils
 from collections import defaultdict
 from typing import Optional, Dict, Any, List, Union, cast, Tuple, Set, DefaultDict
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, Depends
 from fastapi.responses import StreamingResponse
 from starlette.requests import ClientDisconnect
+from app.auth import verify_auth
 from app.telegram_client import TelegramClientManager, sender_pool
 from app.services.sniffer_service import auto_rename, sniffer_service
 from app.services.manager_detector import trigger_manager, detect_managers
@@ -74,6 +75,84 @@ class StreamIteratorHandle:
                 pass
 
 
+def parse_http_range(range_header: str, file_size: int) -> Tuple[int, int, int, Optional[Response]]:
+    """
+    Parses single HTTP Range header per RFC 9110 / RFC 7233.
+    Returns: (start, end, status_code, error_response)
+    - If no Range header: (0, file_size - 1, 200, None)
+    - If valid range: (start, end, 206, None)
+    - If unsatisfiable / malformed: returns 416 Range Not Satisfiable response
+    """
+    if not range_header or file_size <= 0:
+        return 0, max(0, file_size - 1), 200, None
+
+    range_str = range_header.strip()
+    if not range_str.startswith("bytes="):
+        return 0, file_size - 1, 416, Response(
+            status_code=416,
+            headers={
+                "Content-Range": f"bytes */{file_size}",
+                "Accept-Ranges": "bytes"
+            }
+        )
+
+    ranges_spec = range_str[6:].strip()
+    if not ranges_spec:
+        return 0, file_size - 1, 416, Response(
+            status_code=416,
+            headers={"Content-Range": f"bytes */{file_size}", "Accept-Ranges": "bytes"}
+        )
+
+    # Multi-range is not supported for media streaming; use first range specification
+    if "," in ranges_spec:
+        ranges_spec = ranges_spec.split(",")[0].strip()
+
+    # Case 1: Suffix range bytes=-500 (last 500 bytes of the file)
+    suffix_match = re.fullmatch(r"-(\d+)", ranges_spec)
+    if suffix_match:
+        suffix_len = int(suffix_match.group(1))
+        if suffix_len <= 0:
+            return 0, file_size - 1, 416, Response(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}", "Accept-Ranges": "bytes"}
+            )
+        start = max(0, file_size - suffix_len)
+        end = file_size - 1
+        return start, end, 206, None
+
+    # Case 2: Standard range bytes=start-end or bytes=start-
+    std_match = re.fullmatch(r"(\d+)-(\d*)", ranges_spec)
+    if not std_match:
+        return 0, file_size - 1, 416, Response(
+            status_code=416,
+            headers={"Content-Range": f"bytes */{file_size}", "Accept-Ranges": "bytes"}
+        )
+
+    start = int(std_match.group(1))
+    end_str = std_match.group(2)
+
+    # Unsatisfiable if start is past EOF
+    if start >= file_size:
+        return 0, file_size - 1, 416, Response(
+            status_code=416,
+            headers={"Content-Range": f"bytes */{file_size}", "Accept-Ranges": "bytes"}
+        )
+
+    if end_str:
+        end = int(end_str)
+        if end < start:
+            return 0, file_size - 1, 416, Response(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}", "Accept-Ranges": "bytes"}
+            )
+        end = min(end, file_size - 1)
+    else:
+        end = file_size - 1
+
+    return start, end, 206, None
+
+
+
 async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id: int, file_size: int, filename: str, start_block: int = 0):
     """Disabled during playback: pure streaming without background disk downloading."""
     return
@@ -81,7 +160,7 @@ async def _prefetch_non_watched_blocks(client, message, chat_id: str, message_id
 
 async def prewarm_media_stream(client, chat_id: Union[str, int], message_id: int, message: Any):
     """
-    Asynchronously pre-warms the media file header (0..512KB) and tail (cues/moov) into RAM
+    Asynchronously pre-warms the media file header (up to 1MB in parallel) and tail (cues/moov) into RAM
     concurrently so that VLC's initial probing requests hit memory with <0.001s latency.
     """
     try:
@@ -94,25 +173,34 @@ async def prewarm_media_stream(client, chat_id: Union[str, int], message_id: int
         if f_size > 2 * 1024 * 1024 and key not in _SLIDING_STREAM_BUFFER._tails:
             asyncio.create_task(_SLIDING_STREAM_BUFFER.prewarm_tail(client, chat_id, message_id, message, f_size))
 
-        # 2. Prewarm header chunk 0 (512KB) into RAM buffer if not already in headers
+        # 2. Prewarm header chunks 0 and 1 (up to 1MB total in parallel) into RAM buffer
         if key not in _SLIDING_STREAM_BUFFER._headers:
             chunk_size = 512 * 1024
             file_info = utils._get_file_info(message.media) if hasattr(message, "media") else None
             file_loc = getattr(file_info, "location", None)
             dc_id = getattr(file_info, "dc_id", None) or getattr(getattr(client, "session", None), "dc_id", 5)
             if file_loc:
-                req = GetFileRequest(file_loc, offset=0, limit=chunk_size)
-                res = None
-                try:
-                    async with sender_pool.borrow(client, dc_id) as s:
-                        res = await asyncio.wait_for(client._call(s, req, flood_sleep_threshold=0), timeout=6.0)
-                except Exception:
-                    res = await asyncio.wait_for(client(req, flood_sleep_threshold=0), timeout=6.0)
-                data = getattr(res, "bytes", None) or (bytes(res) if isinstance(res, (bytes, bytearray)) else b"")
-                if data:
-                    _SLIDING_STREAM_BUFFER.push(str(chat_id), int(message_id), 0, data)
-                    fn = getattr(message.file, "name", "media")
-                    logger.info(f"STREAM [{fn}] Prewarmed {len(data):,}B header into RAM for instant VLC playback.")
+                async def _fetch_chunk(offset: int):
+                    req = GetFileRequest(file_loc, offset=offset, limit=chunk_size)
+                    res = None
+                    try:
+                        async with sender_pool.borrow(client, dc_id) as s:
+                            res = await asyncio.wait_for(client._call(s, req, flood_sleep_threshold=0), timeout=6.0)
+                    except Exception:
+                        res = await asyncio.wait_for(client(req, flood_sleep_threshold=0), timeout=6.0)
+                    data = getattr(res, "bytes", None) or (bytes(res) if isinstance(res, (bytes, bytearray)) else b"")
+                    if data:
+                        _SLIDING_STREAM_BUFFER.push(str(chat_id), int(message_id), offset, data)
+                        return len(data)
+                    return 0
+
+                tasks = [_fetch_chunk(0)]
+                if f_size > chunk_size:
+                    tasks.append(_fetch_chunk(chunk_size))
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                total_warmed = sum(r for r in results if isinstance(r, int))
+                fn = getattr(message.file, "name", "media")
+                logger.info(f"STREAM [{fn}] Prewarmed {total_warmed:,}B header (up to 1MB) into RAM for instant VLC playback.")
     except Exception as e:
         logger.debug(f"Media prewarm notice: {e}")
 
@@ -338,17 +426,9 @@ async def handle_proxy_download(
         clean_name = real_name
 
     range_header = request.headers.get("Range", "")
-    start = 0
-    end = file_size - 1
-    status_code = 200
-
-    if range_header:
-        match = re.search(r"bytes=(\d+)-(\d*)", range_header)
-        if match:
-            start = int(match.group(1))
-            if match.group(2):
-                end = int(match.group(2))
-        status_code = 206
+    start, end, status_code, err_resp = parse_http_range(range_header, file_size)
+    if err_resp:
+        return err_resp
 
     length = int(end - start + 1)
     media_key = (str(chat_id), message_id)
@@ -389,7 +469,10 @@ async def handle_proxy_download(
     # Only record progress on actual playback reads (not tiny probe requests or tail index probes)
     if length > 2 * 1024 * 1024 and (file_size <= 0 or start < (file_size - 10 * 1024 * 1024)):
         try:
-            playback_tracker.update_byte_progress(str(chat_id), message_id, clean_name, start, file_size)
+            asyncio.create_task(asyncio.to_thread(
+                playback_tracker.update_byte_progress,
+                str(chat_id), message_id, clean_name, start, file_size
+            ))
         except Exception as track_err:
             logger.debug(f"Playback tracking notice: {track_err}")
 
@@ -406,13 +489,21 @@ async def handle_proxy_download(
     elif hasattr(message.file, "mime_type") and message.file.mime_type:
         content_type = message.file.mime_type
 
+    # RFC 5987 / 6266 standard content disposition: ASCII fallback + UTF-8 percent-encoded filename
+    safe_ascii = re.sub(r'[^\x20-\x7E]', '_', clean_name).replace('"', '\\"')
+    safe_utf8 = urllib.parse.quote(clean_name, encoding="utf-8")
+    content_disp = f'inline; filename="{safe_ascii}"; filename*=UTF-8\'\'{safe_utf8}'
+
     headers = {
         "Content-Type": content_type,
-        "Content-Disposition": f'inline; filename="{clean_name}"',
+        "Content-Disposition": content_disp,
         "Accept-Ranges": "bytes",
         "Content-Length": str(length),
         "ETag": f'"{chat_id}_{message_id}_{file_size}"',
         "X-Accel-Buffering": "no",
+        "X-Content-Type-Options": "nosniff",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges, Content-Disposition, ETag",
         "Cache-Control": "public, max-age=3600",
         "Connection": "keep-alive",
         "Keep-Alive": "timeout=60, max=1000",
@@ -510,15 +601,34 @@ async def handle_proxy_download(
     if start == 0 and file_size > 2 * 1024 * 1024 and media_key not in _SLIDING_STREAM_BUFFER._tails:
         asyncio.create_task(_SLIDING_STREAM_BUFFER.prewarm_tail(client, chat_id, message_id, message, file_size))
 
+    stop_event = asyncio.Event()
+    handle = StreamIteratorHandle(stop_event=stop_event)
+
     curr_task = asyncio.current_task()
     if curr_task and not is_probe_request:
+        if is_media_player:
+            for k in list(_ACTIVE_STREAM_ITERS.keys()):
+                if k != media_key:
+                    other_h = _ACTIVE_STREAM_ITERS.pop(k, None)
+                    if other_h:
+                        other_h.stop_event.set()
+                        asyncio.create_task(other_h.close())
+
         # Atomic cancellation of preceding stream: halts obsolete MTProto in-flight requests in 0ms!
-        old_handle = _ACTIVE_STREAM_ITERS.pop(media_key, None)
+        old_handle = _ACTIVE_STREAM_ITERS.get(media_key)
         if old_handle:
-            logger.info(
-                f"STREAM [{clean_name}] Fast seek detected ({start:,}): "
-                f"Instantly cancelling previous stream iterator to free MTProto senders."
-            )
+            old_task_entry = _ACTIVE_STREAM_TASKS.get(media_key)
+            old_start = old_task_entry[1] if old_task_entry else 0
+            is_real_seek = (start > 2 * 1024 * 1024 and abs(start - old_start) > 2 * 1024 * 1024)
+            if is_real_seek:
+                logger.info(
+                    f"STREAM [{clean_name}] Fast seek detected ({start:,}): "
+                    f"Instantly cancelling previous stream iterator to free MTProto senders."
+                )
+            else:
+                logger.debug(
+                    f"STREAM [{clean_name}] Superseded initial container stream at offset {start:,}."
+                )
             old_handle.stop_event.set()
             asyncio.create_task(old_handle.close())
 
@@ -529,10 +639,13 @@ async def handle_proxy_download(
                 old_task.cancel()
         _ACTIVE_STREAM_TASKS[media_key] = (curr_task, start)
         _ACTIVE_MEDIA_CONNS[media_key].add(curr_task)
-
-    stop_event = asyncio.Event()
+        _ACTIVE_STREAM_ITERS[media_key] = handle
 
     async def stream_wrapper():
+        handle.task = asyncio.current_task()
+        if stop_event.is_set():
+            raise ClientDisconnect()
+
         gen = stream_engine.stream_media(
             client=client,
             chat_id=chat_id,
@@ -547,7 +660,7 @@ async def handle_proxy_download(
             get_fresh_message_fn=get_streamable_message,
             external_stop_event=stop_event
         )
-        handle = StreamIteratorHandle(stop_event=stop_event, task=asyncio.current_task(), it=gen)
+        handle.it = gen
         if not is_probe_request:
             _ACTIVE_STREAM_ITERS[media_key] = handle
 
@@ -1199,8 +1312,8 @@ async def get_stream_cache_status():
     return stream_cache_service.get_cache_stats()
 
 
-@router.post("/api/media/cache/clear")
-@router.post("/api/media/cache_clear")
+@router.post("/api/media/cache/clear", dependencies=[Depends(verify_auth)])
+@router.post("/api/media/cache_clear", dependencies=[Depends(verify_auth)])
 async def clear_stream_cache():
     """Clears all local cached media chunks."""
     cleared = stream_cache_service.clear_cache()
@@ -1215,7 +1328,7 @@ async def get_stream_buffer_stats():
 
 
 
-@router.post("/api/media/vlc/play")
+@router.post("/api/media/vlc/play", dependencies=[Depends(verify_auth)])
 async def launch_vlc_stream(payload: Dict[str, Any]):
     """Launch VLC Player directly on host machine with high-speed MTProto stream."""
     import shutil
@@ -1226,6 +1339,33 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
     message_id = payload.get("message_id")
     raw_url = payload.get("stream_url")
     filename = payload.get("filename", "video.mp4")
+
+    # Security: validate stream_url to disallow file://, dangerous schemes, or arbitrary remote hosts
+    if raw_url:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(raw_url)
+        if parsed.scheme in ("file", "gopher", "data", "javascript"):
+            raise HTTPException(status_code=400, detail=f"Scheme '{parsed.scheme}' is not allowed for stream_url")
+        if parsed.scheme in ("http", "https"):
+            allowed_hosts = {"127.0.0.1", "localhost", "testserver"}
+            from app.config import PROXY_HOST
+            if PROXY_HOST:
+                allowed_hosts.add(PROXY_HOST.split(":")[0])
+            try:
+                from app.services.network_service import network_service
+                lan_ip = network_service.get_lan_ip()
+                if lan_ip:
+                    allowed_hosts.add(lan_ip)
+            except Exception:
+                pass
+            hostname = parsed.hostname or ""
+            if hostname not in allowed_hosts and not hostname.startswith("192.168.") and not hostname.startswith("10.") and not hostname.startswith("172."):
+                raise HTTPException(status_code=400, detail=f"Host '{hostname}' is not allowed for stream_url")
+            if not parsed.path.startswith(("/dl/", "/stream/")):
+                raise HTTPException(status_code=400, detail="Path must start with /dl/ or /stream/")
+        elif raw_url.startswith("/"):
+            if not raw_url.startswith(("/dl/", "/stream/")):
+                raise HTTPException(status_code=400, detail="Path must start with /dl/ or /stream/")
 
     # If filename is generic or missing, try resolving from sniffer cache
     if chat_id and message_id:
@@ -1266,18 +1406,26 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
     network_caching = payload.get("network_caching")
     audio_lang = payload.get("audio_lang")
     sub_lang = payload.get("sub_lang")
-    resume_sec = 0
+    duration = payload.get("duration")
+    resume_flag = payload.get("resume")
+    resume_sec = None
+
     if "start_time" in payload and payload["start_time"] is not None:
         resume_sec = max(0, int(payload["start_time"]))
-    elif chat_id and message_id:
+    elif resume_flag is True and chat_id and message_id:
         try:
             prog = playback_tracker.get_playback_progress(str(chat_id), message_id)
-            if prog and prog.get("progress_percent", 0) < 96.0:
-                pos = prog.get("last_position_seconds", 0)
-                if pos and pos > 10:
-                    resume_sec = max(0, int(pos))
+            if prog:
+                if not duration and prog.get("duration_seconds"):
+                    duration = int(prog["duration_seconds"])
+                if prog.get("progress_percent", 0) < 96.0:
+                    pos = prog.get("last_position_seconds", 0)
+                    if pos and pos > 10:
+                        resume_sec = max(0, int(pos))
         except Exception as pe:
             logger.debug(f"Progress check notice: {pe}")
+    elif resume_flag is False:
+        resume_sec = 0
 
     _ACTIVE_STREAM_TASKS.clear()
     for k in list(_ACTIVE_STREAM_ITERS.keys()):
@@ -1288,7 +1436,8 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
             except Exception:
                 pass
 
-    logger.info(f"PLAYER LAUNCH: player={target_player}, file='{filename}', resume_sec={resume_sec}s, stream_url={raw_url}, caching={network_caching}ms")
+    items = payload.get("items")
+    logger.info(f"PLAYER LAUNCH: player={target_player}, file='{filename}', resume_sec={resume_sec}s, stream_url={raw_url}, caching={network_caching}ms, queued_items={len(items) if items else 0}")
     res = player_launcher.launch(
         stream_url=raw_url,
         filename=filename,
@@ -1298,7 +1447,10 @@ async def launch_vlc_stream(payload: Dict[str, Any]):
         message_id=message_id,
         network_caching=network_caching,
         audio_lang=audio_lang,
-        sub_lang=sub_lang
+        sub_lang=sub_lang,
+        duration=duration,
+        items=items,
+        resume=resume_flag
     )
 
     import urllib.parse
@@ -1415,17 +1567,65 @@ async def get_vlc_live_status():
     return player_launcher.get_vlc_live_status()
 
 
-@router.post("/api/media/vlc/control")
+ALLOWED_VLC_COMMANDS = {
+    "play", "pause", "pl_pause", "pl_stop", "pl_next", "pl_previous",
+    "seek", "volume", "fullscreen", "rate", "audiodelay", "subdelay",
+    "aspectratio", "audio_track", "subtitle_track"
+}
+
+
+@router.post("/api/media/vlc/control", dependencies=[Depends(verify_auth)])
 async def control_vlc(payload: Dict[str, Any]):
     """Dispatches remote control commands (play/pause, seek, volume, fullscreen, stop) to VLC."""
     command = payload.get("command", "")
     val = payload.get("val")
     if not command:
         raise HTTPException(status_code=400, detail="Command is required")
+    if command not in ALLOWED_VLC_COMMANDS:
+        raise HTTPException(status_code=400, detail=f"Command '{command}' is not allowed")
     return player_launcher.send_vlc_control(command, val)
 
 
-@router.post("/api/media/vlc/play_batch")
+@router.post("/api/media/vlc/track", dependencies=[Depends(verify_auth)])
+async def set_vlc_track(payload: Dict[str, Any]):
+    """Selects an audio or subtitle track by index/id in active VLC player."""
+    track_type = payload.get("type", "audio")
+    track_id = payload.get("track_id")
+    if track_id is None:
+        raise HTTPException(status_code=400, detail="track_id is required")
+    cmd = "subtitle_track" if track_type in ("subtitle", "sub") else "audio_track"
+    return player_launcher.send_vlc_control(cmd, track_id)
+
+
+@router.post("/api/media/vlc/sync", dependencies=[Depends(verify_auth)])
+async def sync_vlc_delay(payload: Dict[str, Any]):
+    """Adjusts audio or subtitle delay offset (in seconds) in active VLC player."""
+    delay_type = payload.get("type", "audio")
+    delta = payload.get("delta_seconds", 0.0)
+    cmd = "subdelay" if delay_type in ("subtitle", "sub") else "audiodelay"
+    return player_launcher.send_vlc_control(cmd, delta)
+
+
+@router.post("/api/media/vlc/aspect_ratio", dependencies=[Depends(verify_auth)])
+async def set_vlc_aspect_ratio(payload: Dict[str, Any]):
+    """Sets display aspect ratio ('default', '16:9', '4:3', '2.35:1', '1:1') in active VLC player."""
+    ratio = payload.get("ratio", "default")
+    return player_launcher.send_vlc_control("aspectratio", ratio)
+
+
+@router.post("/api/media/vlc/volume", dependencies=[Depends(verify_auth)])
+async def set_vlc_volume_endpoint(payload: Dict[str, Any]):
+    """Sets VLC volume directly by percent (0 to 200%)."""
+    vol_pct = payload.get("volume_percent", 100)
+    try:
+        vol_pct = max(0, min(200, int(vol_pct)))
+    except (ValueError, TypeError):
+        vol_pct = 100
+    raw_vol = round((vol_pct / 100.0) * 256)
+    return player_launcher.send_vlc_control("volume", raw_vol)
+
+
+@router.post("/api/media/vlc/play_batch", dependencies=[Depends(verify_auth)])
 async def launch_vlc_batch(payload: Dict[str, Any], request: Request):
     """Launch VLC Player with an entire TV Series / Season playlist queued for seamless binge watching."""
     from app.config import PROXY_PORT
@@ -1524,7 +1724,7 @@ async def get_continue_watching():
     return playback_tracker.get_continue_watching(limit=12)
 
 
-@router.delete("/api/media/continue_watching/{chat_id}/{message_id}")
+@router.delete("/api/media/continue_watching/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
 async def dismiss_continue_watching(chat_id: str, message_id: int):
     """Dismisses an item from continue watching."""
     playback_tracker.remove_progress(chat_id, message_id)
@@ -1542,7 +1742,7 @@ class PlaybackProgressPayload(BaseModel):
     last_byte_offset: Optional[int] = 0
 
 
-@router.post("/api/media/playback_progress")
+@router.post("/api/media/playback_progress", dependencies=[Depends(verify_auth)])
 async def update_playback_progress_api(payload: PlaybackProgressPayload):
     """Updates watch progress for a video with chunk coordinates."""
     playback_tracker.update_progress(
@@ -1570,7 +1770,7 @@ async def get_offline_saver_settings():
     }
 
 
-@router.post("/api/settings/offline_saver")
+@router.post("/api/settings/offline_saver", dependencies=[Depends(verify_auth)])
 async def set_offline_saver_settings(payload: OfflineSaverPayload):
     stream_saver_service.set_enabled(payload.enabled)
     return {
