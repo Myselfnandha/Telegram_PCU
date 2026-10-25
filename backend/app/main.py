@@ -46,6 +46,39 @@ file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(name
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] %(message)s"))
 
+import re
+
+class SensitiveDataFilter(logging.Filter):
+    """
+    Sanitizes tokens, API keys, and credentials from log messages
+    to prevent credentials from leaking into log files, console, or telemetry.
+    """
+    TOKEN_REGEX = re.compile(r'([?&](?:token|apiKey|api_key)=)[^&\s"\']+', re.IGNORECASE)
+    BEARER_REGEX = re.compile(r'(Bearer\s+)[A-Za-z0-9._~+/-]{6,}', re.IGNORECASE)
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = self.TOKEN_REGEX.sub(r'\1[REDACTED]', record.msg)
+            record.msg = self.BEARER_REGEX.sub(r'\1[REDACTED]', record.msg)
+        if record.args:
+            if isinstance(record.args, dict):
+                clean_args = {}
+                for k, v in record.args.items():
+                    if isinstance(v, str):
+                        v = self.TOKEN_REGEX.sub(r'\1[REDACTED]', v)
+                        v = self.BEARER_REGEX.sub(r'\1[REDACTED]', v)
+                    clean_args[k] = v
+                record.args = clean_args
+            elif isinstance(record.args, tuple):
+                clean_args = []
+                for v in record.args:
+                    if isinstance(v, str):
+                        v = self.TOKEN_REGEX.sub(r'\1[REDACTED]', v)
+                        v = self.BEARER_REGEX.sub(r'\1[REDACTED]', v)
+                    clean_args.append(v)
+                record.args = tuple(clean_args)
+        return True
+
 class EndpointFilter(logging.Filter):
     SILENT_PATHS = (
         "/api/governor/status",
@@ -59,12 +92,18 @@ class EndpointFilter(logging.Filter):
         msg = record.getMessage()
         return not any(path in msg for path in self.SILENT_PATHS)
 
+sensitive_filter = SensitiveDataFilter()
+file_handler.addFilter(sensitive_filter)
+stream_handler.addFilter(sensitive_filter)
+
 logging.basicConfig(
     level=logging.INFO,
     handlers=[file_handler, stream_handler],
     force=True
 )
-logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+uvicorn_access = logging.getLogger("uvicorn.access")
+uvicorn_access.addFilter(EndpointFilter())
+uvicorn_access.addFilter(sensitive_filter)
 logger = logging.getLogger("main")
 
 def cleanup_stale_temp_files():

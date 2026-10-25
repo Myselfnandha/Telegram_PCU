@@ -371,7 +371,8 @@ async def handle_proxy_download(
     chat_id: str,
     message_id: int,
     request: Request,
-    filename: Optional[str] = None
+    filename: Optional[str] = None,
+    _auth = Depends(verify_auth)
 ):
     if filename == "thumb":
         return await get_media_thumbnail(chat_id, message_id)
@@ -705,7 +706,8 @@ async def handle_transmux_stream(
     request: Request,
     filename: Optional[str] = None,
     audio: int = 0,
-    ss: float = 0.0
+    ss: float = 0.0,
+    _auth = Depends(verify_auth)
 ):
     if filename == "thumb":
         return await get_media_thumbnail(chat_id, message_id)
@@ -887,7 +889,7 @@ async def handle_transmux_stream(
 
 _STREAM_PROBE_CACHE = {}
 
-@router.get("/api/media/streams/{chat_id}/{message_id}")
+@router.get("/api/media/streams/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
 async def probe_media_streams(chat_id: str, message_id: int):
     """
     Probes audio languages, video codecs, and embedded subtitle tracks for the player toolbar.
@@ -1276,7 +1278,7 @@ async def get_media_preview_frame(chat_id: str, message_id: int, frame_idx: int 
     return await get_media_thumbnail(chat_id, message_id)
 
 
-@router.get("/api/media/videos/{chat_id}")
+@router.get("/api/media/videos/{chat_id}", dependencies=[Depends(verify_auth)])
 async def get_chat_videos(chat_id: str, limit: int = 250, offset_id: int = 0, force_refresh: bool = False):
     """
     Fetches video archives from a Telegram channel, group, or Saved Messages for the Cinema tab.
@@ -1718,7 +1720,7 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
     )
 
 
-@router.get("/api/media/continue_watching")
+@router.get("/api/media/continue_watching", dependencies=[Depends(verify_auth)])
 async def get_continue_watching():
     """Returns list of recently watched media ready for 1-click resume."""
     return playback_tracker.get_continue_watching(limit=12)
