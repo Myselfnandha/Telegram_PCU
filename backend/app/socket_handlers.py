@@ -15,9 +15,62 @@ sio = socketio.AsyncServer(
     ping_interval=25
 )
 
+
+def is_loopback_socket_environ(environ: dict) -> bool:
+    """Checks if the WebSocket connection originates strictly from local loopback."""
+    for h in ("HTTP_CF_CONNECTING_IP", "HTTP_X_FORWARDED_FOR", "HTTP_X_REAL_IP"):
+        if environ.get(h):
+            return False
+    remote_addr = environ.get("REMOTE_ADDR", "")
+    return remote_addr in ("127.0.0.1", "::1", "localhost", "testserver", "testclient")
+
+
+def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
+    """
+    Validates WebSocket connections. Rejects if:
+    1. Connection is non-loopback and API_AUTH_TOKEN is missing or mismatch
+    2. API_AUTH_TOKEN / ENABLE_API_AUTH is configured and credentials are missing or invalid
+    """
+    from app.auth import API_AUTH_TOKEN, ENABLE_API_AUTH
+    is_loopback = is_loopback_socket_environ(environ)
+    must_authenticate = bool(API_AUTH_TOKEN) or ENABLE_API_AUTH or not is_loopback
+
+    if not must_authenticate:
+        return True
+
+    if not API_AUTH_TOKEN:
+        return False
+
+    # 1. Socket.IO auth dict
+    if isinstance(auth, dict):
+        if auth.get("token") == API_AUTH_TOKEN or auth.get("apiKey") == API_AUTH_TOKEN:
+            return True
+
+    # 2. Query parameter
+    from urllib.parse import parse_qs
+    qs = parse_qs(environ.get("QUERY_STRING", ""))
+    tokens = qs.get("token", [])
+    if API_AUTH_TOKEN in tokens:
+        return True
+
+    # 3. HTTP headers
+    auth_header = environ.get("HTTP_AUTHORIZATION", "")
+    if auth_header.startswith("Bearer "):
+        if auth_header[7:].strip() == API_AUTH_TOKEN:
+            return True
+    if environ.get("HTTP_X_API_KEY", "").strip() == API_AUTH_TOKEN:
+        return True
+
+    return False
+
+
 # Connect & Disconnect handlers
 @sio.event
-async def connect(sid, environ):
+async def connect(sid, environ, auth=None):
+    if not verify_socket_auth(environ, auth):
+        logger.warning(f"Rejecting unauthenticated WebSocket connection: {sid} from {environ.get('REMOTE_ADDR')}")
+        raise socketio.exceptions.ConnectionRefusedError("Authentication required")
+
     logger.debug(f"Socket client connected: {sid}")
     # Send current queue snapshot to client
     tasks = queue_manager.get_all_tasks()

@@ -9,6 +9,20 @@ ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "false").lower() in ("1", "true",
 security = HTTPBearer(auto_error=False)
 
 
+def is_loopback_request(request: Request) -> bool:
+    """
+    Checks if the request is strictly from local loopback (127.0.0.1 / ::1 / localhost / testserver)
+    and did NOT arrive through an external proxy, tunnel, or forwarded header.
+    """
+    # Any forwarding proxy headers indicate external routing (e.g. Cloudflare Tunnel, ngrok, reverse proxy)
+    for header in ("cf-connecting-ip", "x-forwarded-for", "x-real-ip"):
+        if header in request.headers:
+            return False
+
+    client_host = getattr(request.client, "host", None) if request.client else None
+    return client_host in ("127.0.0.1", "::1", "localhost", "testserver", "testclient")
+
+
 def is_authenticated(request: Request) -> bool:
     """
     Validates whether the incoming request contains a valid API authentication token.
@@ -18,9 +32,15 @@ def is_authenticated(request: Request) -> bool:
     3. Query parameter ?token=<token>
     """
     token_to_check = API_AUTH_TOKEN
-    if not token_to_check and not ENABLE_API_AUTH:
-        # Auth disabled / not configured in local single-user mode
+    is_loopback = is_loopback_request(request)
+
+    # In local single-user mode (loopback only and auth not explicitly required), allow access
+    if not token_to_check and not ENABLE_API_AUTH and is_loopback:
         return True
+
+    if not token_to_check:
+        # Non-loopback request or auth enabled, but server has no secret token configured
+        return False
 
     # 1. Bearer Header
     auth_header = request.headers.get("Authorization", "")
@@ -45,10 +65,23 @@ def is_authenticated(request: Request) -> bool:
 async def verify_auth(request: Request):
     """
     FastAPI dependency for private APIs, playback controls, cache mutations, and system actions.
-    If API_AUTH_TOKEN is configured or ENABLE_API_AUTH is true, verifies caller token.
+    Authentication is required if:
+    1. API_AUTH_TOKEN is configured, OR
+    2. ENABLE_API_AUTH is true, OR
+    3. The request is non-loopback (LAN, Cloudflare tunnel, remote proxy)
     """
-    if (API_AUTH_TOKEN or ENABLE_API_AUTH) and not is_authenticated(request):
-        raise HTTPException(
-            status_code=401,
-            detail="Unauthorized: Valid API authentication token required."
-        )
+    is_loopback = is_loopback_request(request)
+    must_authenticate = bool(API_AUTH_TOKEN) or ENABLE_API_AUTH or not is_loopback
+
+    if must_authenticate:
+        if not API_AUTH_TOKEN:
+            # Non-loopback / remote access attempted without configured API_AUTH_TOKEN
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Non-loopback or remote requests require API_AUTH_TOKEN to be configured on the server."
+            )
+        if not is_authenticated(request):
+            raise HTTPException(
+                status_code=401,
+                detail="Unauthorized: Valid API authentication token required."
+            )

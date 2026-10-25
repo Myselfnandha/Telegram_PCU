@@ -4,7 +4,8 @@ import psutil
 import logging
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.auth import verify_auth, API_AUTH_TOKEN, ENABLE_API_AUTH
+from app.auth import verify_auth
+import app.auth as auth_service
 from app.services.queue_manager import queue_manager
 from app.services.sniffer_service import sniffer_service
 from app.telegram_client import TelegramClientManager
@@ -102,21 +103,11 @@ async def start_tunnel(request: Request, _auth = Depends(verify_auth)):
     from app.services.network_service import network_service
     from app.config import PORT
 
-    # Enforce authentication guard: Cloudflare tunnel exposes the backend to the public internet
-    payload = {}
-    try:
-        body = await request.body()
-        if body:
-            import json
-            payload = json.loads(body)
-    except Exception:
-        payload = {}
-
-    allow_unauth = payload.get("allow_unauthenticated", False) if isinstance(payload, dict) else False
-    if not API_AUTH_TOKEN and not ENABLE_API_AUTH and not allow_unauth:
+    # Strict security guard: Cloudflare tunnel exposes the backend to the public internet
+    if not auth_service.API_AUTH_TOKEN:
         raise HTTPException(
             status_code=403,
-            detail="Remote Cloudflare tunnel cannot be started without authentication. Set API_AUTH_TOKEN or pass allow_unauthenticated=true."
+            detail="Remote Cloudflare tunnel cannot be exposed without authentication. Set API_AUTH_TOKEN in server configuration before starting tunnel."
         )
 
     return await network_service.start_cloudflare_tunnel(local_port=int(PORT or 8088))
