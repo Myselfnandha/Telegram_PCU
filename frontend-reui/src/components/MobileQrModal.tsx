@@ -79,10 +79,10 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
         <DialogHeader className="space-y-1">
           <div className="flex items-center gap-2 text-amber-400">
             <Tv className="w-5 h-5" />
-            <DialogTitle className="text-base font-semibold">Stream to Mobile / Smart TV (VLC)</DialogTitle>
+            <DialogTitle className="text-base font-semibold">Stream to Mobile / Smart TV</DialogTitle>
           </div>
           <DialogDescription className="text-xs text-zinc-400">
-            Stream directly over your local Wi-Fi with hardware acceleration and audio normalization.
+            Stream directly over your local Wi-Fi with instant seeking and hardware acceleration.
           </DialogDescription>
         </DialogHeader>
 
@@ -99,7 +99,7 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
                 {mobileInfo.lan_qrcode_url ? (
                   <img
                     src={mobileInfo.lan_qrcode_url}
-                    alt="VLC Stream QR Code"
+                    alt="Stream QR Code"
                     className="w-48 h-48 object-contain"
                   />
                 ) : (
@@ -109,7 +109,7 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
                 )}
               </div>
               <p className="text-[11px] text-zinc-400 text-center max-w-xs">
-                Scan with your phone's camera, tablet, or Android TV QR scanner to open directly in VLC.
+                Scan with your phone's camera, tablet, or TV QR scanner to open stream immediately.
               </p>
               {mobileInfo.lan_ip && (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -131,30 +131,17 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
               </Button>
 
               <a
-                href={mobileInfo.lan_playlist_url}
-                download={`${mobileInfo.filename || 'stream'}.m3u`}
+                href={mobileInfo.lan_stream_url}
+                target="_blank"
+                rel="noreferrer"
                 className="inline-flex"
               >
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-9 text-xs gap-1.5 border-white/15 bg-white/5 hover:bg-white/10 text-white cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download .M3U</span>
-                </Button>
-              </a>
-            </div>
-
-            {/* Direct Open in VLC app */}
-            <div className="pt-1">
-              <a href={mobileInfo.lan_vlc_url} className="block w-full">
                 <Button
                   size="sm"
                   className="w-full h-9 text-xs gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-semibold hover:opacity-95 shadow-md shadow-amber-500/20 cursor-pointer"
                 >
                   <Smartphone className="w-4 h-4 fill-current" />
-                  <span>Open in VLC (This Device)</span>
+                  <span>Open Stream</span>
                 </Button>
               </a>
             </div>

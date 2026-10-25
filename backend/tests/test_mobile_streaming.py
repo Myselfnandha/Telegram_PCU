@@ -79,10 +79,8 @@ async def test_api_mobile_info_endpoint():
         assert data["message_id"] == 678
         assert data["filename"] == "Movie.2024.1080p.mkv"
         assert data["stream_url"].startswith("http://10.74.171.142:8088/dl/12345/678/")
-        assert data["vlc_url"].startswith("vlc://http://10.74.171.142:8088/dl/12345/678/")
-        assert data["android_intent"].startswith("intent://10.74.171.142:8088/dl/12345/678/")
-        assert "package=org.videolan.vlc" in data["android_intent"]
-        assert data["playlist_url"] == "/api/media/vlc/playlist/12345/678/Movie.2024.1080p.mkv.m3u"
-        assert data["transmux_url"] == "/stream/12345/678/Movie.2024.1080p.mp4"
+        assert data["lan_stream_url"].startswith("http://")
+        assert "/dl/12345/678/" in data["lan_stream_url"]
+        assert data["lan_qrcode_url"].startswith("/api/system/qrcode?text=")
         assert "has_subtitles" in data
         assert data["host"] == "10.74.171.142:8088"

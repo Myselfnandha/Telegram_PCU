@@ -259,18 +259,6 @@ async def test_sender_pool_foreign_dc_serialized_creation():
     client._return_exported_sender.assert_called_once_with(fake_s1)
 
 
-def test_vlc_playlist_and_flags_enable_seeking():
-    """Verifies that VLC arguments and playlists favor fast seeking and avoid http-continuous."""
-    import inspect
-    from app.routes import proxy
-    from app.services import player_launcher
-    src = inspect.getsource(proxy) + inspect.getsource(player_launcher)
-    assert "--http-continuous" not in src
-    assert "#EXTVLCOPT:http-continuous" not in src
-    assert "--input-fast-seek" in src
-    assert "#EXTVLCOPT:input-fast-seek" in src
-    assert "--network-caching=1000" in src
-    assert "#EXTVLCOPT:network-caching=1000" in src
 
 
 @pytest.mark.asyncio
@@ -968,33 +956,6 @@ async def test_prewarm_tail_dc_id_resolved_without_name_error():
         assert borrow_called_with_dc == 2
 
 
-@pytest.mark.asyncio
-async def test_launch_vlc_batch_resolves_chat_id_and_message_ids():
-    """Verifies that launch_vlc_batch supports payload with chat_id and message_ids."""
-    from app.routes.proxy import launch_vlc_batch
-    from starlette.requests import Request
-
-    payload = {
-        "chat_id": "test_chat_batch",
-        "message_ids": [101, 102, 103],
-        "title": "Season 1"
-    }
-    scope = {
-        "type": "http",
-        "method": "POST",
-        "path": "/api/media/vlc/play_batch",
-        "headers": [(b"host", b"localhost:8088")]
-    }
-    req = Request(scope)
-
-    with patch("app.services.player_launcher.player_launcher.launch_batch") as mock_launch:
-        mock_launch.return_value = {"success": True, "launched": True, "episodes_count": 3}
-        res = await launch_vlc_batch(payload, req)
-        assert res["success"] is True
-        mock_launch.assert_called_once()
-        call_kwargs = mock_launch.call_args[1]
-        assert len(call_kwargs["items"]) == 3
-        assert call_kwargs["items"][0]["message_id"] == 101
 
 
 def test_tgweb_router_registered_in_fastapi():

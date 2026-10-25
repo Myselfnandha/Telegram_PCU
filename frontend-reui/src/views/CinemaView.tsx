@@ -58,7 +58,6 @@ export const CinemaView: React.FC = () => {
   const [isChatPickerOpen, setChatPickerOpen] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<CinemaVideo | null>(null);
   const [qrModalVideo, setQrModalVideo] = useState<CinemaVideo | null>(null);
-  const [launchingVideoId, setLaunchingVideoId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const handleSetViewMode = (mode: 'large' | 'dense' | 'files') => {
@@ -134,91 +133,6 @@ export const CinemaView: React.FC = () => {
     };
   }, [selectedChat.id]);
 
-  const handleLaunchVlc = async (
-    video: { chat_id: string | number; message_id: number; filename: string; playback_seconds?: number },
-    playerType = 'vlc'
-  ) => {
-    setLaunchingVideoId(video.message_id);
-    const media = parseMediaInfo(video.filename);
-    addToast({
-      type: 'info',
-      title: 'Launching Player',
-      message: `Starting "${media.cleanTitle}" in ${playerType.toUpperCase()}...`,
-    });
-
-    const cachingVal = Number(localStorage.getItem('tg_network_caching') || 1000);
-    const audioLang = localStorage.getItem('tg_audio_lang') || undefined;
-    const subLang = localStorage.getItem('tg_sub_lang') || undefined;
-
-    try {
-      const res = await api.playInVlc({
-        chat_id: video.chat_id,
-        message_id: video.message_id,
-        filename: video.filename,
-        player: playerType,
-        resume: true,
-        start_time: video.playback_seconds && video.playback_seconds > 10 ? video.playback_seconds : undefined,
-        network_caching: cachingVal,
-        audio_lang: audioLang,
-        sub_lang: subLang,
-      });
-
-      if (res.launched) {
-        let msg = `Streaming in ${playerType.toUpperCase()}! (${res.network_caching || cachingVal}ms buffer)`;
-        if (res.resume_seconds && res.resume_seconds > 0) {
-          msg += ` (Resumed at ${formatDuration(res.resume_seconds)})`;
-        }
-        addToast({ type: 'success', title: 'Player Active', message: msg });
-        setTimeout(() => loadContinueWatching(), 1500);
-      } else if (res.playlist_url) {
-        const a = document.createElement('a');
-        a.href = res.playlist_url;
-        a.download = `${video.filename}.m3u`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        addToast({
-          type: 'info',
-          title: 'Playlist Generated',
-          message: 'Local player not detected. Downloaded M3U playlist file.',
-        });
-      }
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'Launch Error', message: err.message });
-    } finally {
-      setLaunchingVideoId(null);
-    }
-  };
-
-  const handlePlayBatchVlc = async () => {
-    if (selectedIds.size === 0) return;
-    const msgIds = Array.from(selectedIds);
-    addToast({
-      type: 'info',
-      title: 'Batch Playlist',
-      message: `Enqueuing ${msgIds.length} video(s) into VLC playlist...`,
-    });
-
-    const cachingVal = Number(localStorage.getItem('tg_network_caching') || 1000);
-    const audioLang = localStorage.getItem('tg_audio_lang') || undefined;
-    const subLang = localStorage.getItem('tg_sub_lang') || undefined;
-
-    try {
-      await api.playBatchVlc(selectedChat.id, msgIds, {
-        network_caching: cachingVal,
-        audio_lang: audioLang,
-        sub_lang: subLang,
-      });
-      addToast({
-        type: 'success',
-        title: 'Batch Player Active',
-        message: `Playing ${msgIds.length} episodes in VLC! (${cachingVal}ms buffer)`,
-      });
-      setSelectedIds(new Set());
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'Batch Error', message: err.message });
-    }
-  };
 
   const handleExportPlaylist = () => {
     if (selectedIds.size === 0) return;
@@ -513,15 +427,6 @@ export const CinemaView: React.FC = () => {
           <div className="flex items-center gap-2">
             <Button
               size="sm"
-              variant="default"
-              onClick={handlePlayBatchVlc}
-              className="h-8 text-xs gap-1.5 cursor-pointer"
-            >
-              <ListVideo className="w-3.5 h-3.5" />
-              <span>Play Playlist in VLC</span>
-            </Button>
-            <Button
-              size="sm"
               variant="outline"
               onClick={handleExportPlaylist}
               className="h-8 text-xs gap-1.5 cursor-pointer"
@@ -585,7 +490,6 @@ export const CinemaView: React.FC = () => {
               {filteredVideos.map((video) => {
                 const media = parseMediaInfo(video.filename);
                 const thumbUrl = `/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/thumb`;
-                const isLaunching = launchingVideoId === video.message_id;
                 const isSelected = selectedIds.has(video.message_id);
                 const isDense = viewMode === 'dense';
                 const fileSize = video.size || video.file_size || 0;
@@ -693,25 +597,24 @@ export const CinemaView: React.FC = () => {
                       {/* Center Hover Action Controls */}
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 bg-black/50 backdrop-blur-[2px] gap-2 z-30">
                         <button
-                          onClick={() => handleLaunchVlc(video, 'vlc')}
-                          disabled={isLaunching}
-                          aria-label={`Stream ${media.cleanTitle} instantly in VLC`}
+                          onClick={() => setPreviewVideo(video)}
+                          aria-label={`Stream ${media.cleanTitle} in browser`}
                           className={`${
                             isDense ? 'w-10 h-10' : 'w-12 h-12'
                           } rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none`}
-                          title="Stream instantly in VLC"
+                          title="Stream in Browser"
                         >
                           <Play className={`${isDense ? 'w-4 h-4' : 'w-5 h-5'} fill-current ml-0.5`} />
                         </button>
                         <button
-                          onClick={() => setPreviewVideo(video)}
-                          aria-label={`Preview ${media.cleanTitle} in browser`}
+                          onClick={() => setQrModalVideo(video)}
+                          aria-label={`Stream ${media.cleanTitle} to mobile or smart TV via QR`}
                           className={`${
                             isDense ? 'w-8 h-8' : 'w-10 h-10'
                           } rounded-full bg-zinc-900/90 text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/20 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none`}
-                          title="Preview in Browser"
+                          title="Stream to Mobile / Smart TV (QR)"
                         >
-                          <Tv className={`${isDense ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                          <QrCode className={`${isDense ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-amber-400`} />
                         </button>
                       </div>
                     </div>
@@ -720,8 +623,9 @@ export const CinemaView: React.FC = () => {
                     <div className={`${isDense ? 'p-2.5 space-y-2' : 'p-3.5 space-y-3'} flex-1 flex flex-col justify-between`}>
                       <div>
                         <div
-                          className="text-xs font-semibold text-foreground line-clamp-1 leading-snug hover:text-primary transition-colors"
+                          className="text-xs font-semibold text-foreground line-clamp-1 leading-snug hover:text-primary transition-colors cursor-pointer"
                           title={video.filename}
+                          onClick={() => setPreviewVideo(video)}
                         >
                           {media.cleanTitle}
                         </div>
@@ -739,49 +643,43 @@ export const CinemaView: React.FC = () => {
                       </div>
 
                       {/* Action Button Row */}
-                      <div className={`grid grid-cols-5 gap-1 ${isDense ? 'pt-1.5' : 'pt-2'} border-t border-border/40`}>
+                      <div className={`grid grid-cols-4 gap-1.5 ${isDense ? 'pt-1.5' : 'pt-2'} border-t border-border/40`}>
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => handleLaunchVlc(video, 'vlc')}
-                          disabled={isLaunching}
-                          aria-label={`Play ${media.cleanTitle} in VLC`}
-                          className={`${isDense ? 'h-7 text-[10px] px-1' : 'h-8 text-[11px] px-1.5'} cursor-pointer col-span-2 gap-1 font-medium`}
+                          onClick={() => setPreviewVideo(video)}
+                          aria-label={`Stream ${media.cleanTitle}`}
+                          className={`${isDense ? 'h-7 text-[10px] px-2' : 'h-8 text-[11px] px-2.5'} cursor-pointer col-span-2 gap-1 font-medium bg-primary text-primary-foreground hover:opacity-90`}
                         >
                           <Play className="w-3 h-3 fill-current" />
-                          <span>{isLaunching ? 'Opening...' : 'Play VLC'}</span>
+                          <span>Stream Video</span>
                         </Button>
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => setPreviewVideo(video)}
-                          aria-label={`Preview ${media.cleanTitle} in browser`}
-                          className={`${isDense ? 'h-7 text-[10px] px-1' : 'h-8 text-[11px] px-1'} cursor-pointer font-medium gap-1 hover:bg-primary/10 hover:text-primary transition-colors`}
-                          title="Instant Browser Preview"
-                        >
-                          <Tv className="w-3 h-3 text-primary" />
-                          <span>Preview</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
                           onClick={() => setQrModalVideo(video)}
                           aria-label={`Stream ${media.cleanTitle} to mobile or smart TV via QR`}
-                          className={`${isDense ? 'h-7 w-7' : 'h-8 w-8'} p-0 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 cursor-pointer mx-auto`}
-                          title="Stream to Mobile / Smart TV (QR & VLC)"
+                          className={`${isDense ? 'h-7 text-[10px] px-1' : 'h-8 text-[11px] px-1'} cursor-pointer font-medium gap-1 hover:bg-amber-500/10 hover:text-amber-400 transition-colors`}
+                          title="Stream to Mobile / Smart TV (QR)"
                         >
-                          <QrCode className="w-3.5 h-3.5" />
+                          <QrCode className="w-3 h-3 text-amber-400" />
+                          <span>QR</span>
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleCopyStreamLink(video)}
-                          aria-label={`Copy stream link for ${media.cleanTitle}`}
-                          className={`${isDense ? 'h-7 w-7' : 'h-8 w-8'} p-0 text-muted-foreground hover:text-foreground cursor-pointer mx-auto`}
-                          title="Copy Direct Media Stream Link"
+                        <a
+                          href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
+                          download={video.filename}
+                          className="inline-flex"
                         >
-                          <Copy className="w-3.5 h-3.5" />
-                        </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Download ${media.cleanTitle}`}
+                            className={`${isDense ? 'h-7 text-[10px] w-full px-1' : 'h-8 text-[11px] w-full px-1'} cursor-pointer text-muted-foreground hover:text-foreground`}
+                            title="Direct Download"
+                          >
+                            <Download className="w-3 h-3" />
+                          </Button>
+                        </a>
                       </div>
                     </div>
                   </div>
@@ -817,7 +715,6 @@ export const CinemaView: React.FC = () => {
                     {filteredVideos.map((video) => {
                       const media = parseMediaInfo(video.filename);
                       const isSelected = selectedIds.has(video.message_id);
-                      const isLaunching = launchingVideoId === video.message_id;
                       const fileSize = video.size || video.file_size || 0;
                       const resolution =
                         media.resolution ||
@@ -908,29 +805,19 @@ export const CinemaView: React.FC = () => {
                               <Button
                                 size="sm"
                                 variant="default"
-                                onClick={() => handleLaunchVlc(video, 'vlc')}
-                                disabled={isLaunching}
-                                className="h-7 text-xs px-2.5 gap-1 cursor-pointer"
+                                onClick={() => setPreviewVideo(video)}
+                                className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
+                                title="Stream in Browser"
                               >
                                 <Play className="w-3 h-3 fill-current" />
-                                <span>VLC</span>
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => setPreviewVideo(video)}
-                                className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer font-medium hover:bg-primary/10 hover:text-primary transition-colors"
-                                title="Instant Browser Preview"
-                              >
-                                <Tv className="w-3.5 h-3.5 text-primary" />
-                                <span>Browser Preview</span>
+                                <span>Stream</span>
                               </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => setQrModalVideo(video)}
                                 className="h-7 w-7 p-0 cursor-pointer text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                                title="Stream to Mobile / Smart TV (QR & VLC)"
+                                title="Stream to Mobile / Smart TV (QR)"
                               >
                                 <QrCode className="w-3.5 h-3.5" />
                               </Button>
@@ -991,10 +878,14 @@ export const CinemaView: React.FC = () => {
                       {/* Compact Thumbnail with Progress Bar & Play Overlay */}
                       <div
                         onClick={() =>
-                          handleLaunchVlc({
+                          setPreviewVideo({
                             chat_id: item.chat_id,
                             message_id: item.message_id,
                             filename: item.filename,
+                            size: 0,
+                            duration: item.total_seconds,
+                            thumb_url: item.thumb_url,
+                            playback_seconds: item.playback_seconds,
                           })
                         }
                         className="relative w-20 h-12 shrink-0 rounded-lg overflow-hidden bg-zinc-950/80 border border-border/50 group/thumb cursor-pointer shadow-sm"
@@ -1028,10 +919,14 @@ export const CinemaView: React.FC = () => {
                           className="text-xs font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors leading-tight"
                           title={item.filename}
                           onClick={() =>
-                            handleLaunchVlc({
+                            setPreviewVideo({
                               chat_id: item.chat_id,
                               message_id: item.message_id,
                               filename: item.filename,
+                              size: 0,
+                              duration: item.total_seconds,
+                              thumb_url: item.thumb_url,
+                              playback_seconds: item.playback_seconds,
                             })
                           }
                         >
@@ -1050,22 +945,6 @@ export const CinemaView: React.FC = () => {
                           size="sm"
                           variant="default"
                           onClick={() =>
-                            handleLaunchVlc({
-                              chat_id: item.chat_id,
-                              message_id: item.message_id,
-                              filename: item.filename,
-                            })
-                          }
-                          className="h-7 px-2 text-[11px] gap-1 cursor-pointer font-medium"
-                          title="Resume in VLC"
-                        >
-                          <Play className="w-3 h-3 fill-current" />
-                          <span>VLC</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
                             setPreviewVideo({
                               chat_id: item.chat_id,
                               message_id: item.message_id,
@@ -1076,10 +955,11 @@ export const CinemaView: React.FC = () => {
                               playback_seconds: item.playback_seconds,
                             })
                           }
-                          className="h-7 w-7 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
-                          title="Preview in Browser"
+                          className="h-7 px-2 text-[11px] gap-1 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
+                          title="Resume in Browser"
                         >
-                          <Tv className="w-3.5 h-3.5 text-primary" />
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>Resume</span>
                         </Button>
                         <button
                           onClick={() => handleRemoveContinueWatching(item)}
@@ -1110,10 +990,6 @@ export const CinemaView: React.FC = () => {
         video={previewVideo}
         open={Boolean(previewVideo)}
         onOpenChange={(open) => !open && setPreviewVideo(null)}
-        onLaunchVlc={(v) => {
-          setPreviewVideo(null);
-          handleLaunchVlc(v, 'vlc');
-        }}
       />
 
       <MobileQrModal

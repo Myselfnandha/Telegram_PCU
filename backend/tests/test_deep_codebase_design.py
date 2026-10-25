@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, AsyncMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.services.stream_buffer import StreamSlidingBuffer
-from app.services.player_launcher import PlayerLauncher
 from app.services.stream_engine import StreamEngine
 
 
@@ -36,42 +35,6 @@ def test_stream_buffer_prefix_and_tail_slicing():
     buf.clear()
     assert buf.get_slice("123", 456, 0, 100) is None
     assert buf.get_slice("123", 456, 1000000, 10) is None
-
-
-def test_player_launcher_vlc_command_construction():
-    """Verifies that PlayerLauncher constructs optimal playback flags and manages processes."""
-    launcher = PlayerLauncher()
-    
-    with patch("shutil.which", return_value="/usr/bin/vlc"), \
-         patch("os.path.exists", return_value=True), \
-         patch("subprocess.Popen") as mock_popen, \
-         patch("app.services.subtitle_service.subtitle_service.get_cached_subtitle", return_value=Path("/tmp/test.srt")):
-        
-        mock_proc = MagicMock()
-        mock_proc.poll.return_value = None
-        mock_popen.return_value = mock_proc
-        
-        res = launcher.launch(
-            stream_url="http://127.0.0.1:8088/dl/123/456/test.mkv",
-            filename="test.mkv",
-            player="vlc",
-            resume_sec=120,
-            chat_id=123,
-            message_id=456
-        )
-        
-        assert res["success"] is True
-        assert res["launched"] is True
-        assert res["player"] == "vlc"
-        assert res["resume_seconds"] == 120
-        
-        # Verify CLI args passed to Popen
-        args = mock_popen.call_args[0][0]
-        assert "/usr/bin/vlc" in args[0]
-        assert "--input-fast-seek" in args
-        assert "--start-time=120" in args
-        assert "--sub-track=0" in args
-        assert "--one-instance" in args
 
 
 @pytest.mark.asyncio
@@ -119,25 +82,3 @@ async def test_cinema_catalog_caching_and_resolution():
     assert res2 == fake_msg
     fake_client.get_messages.assert_not_awaited()
 
-
-def test_player_launcher_batch_and_playlist():
-    """Verifies PlayerLauncher batch binge execution and M3U playlist generation."""
-    launcher = PlayerLauncher()
-
-    items = [
-        {"chat_id": "111", "message_id": 1, "filename": "Ep01.mkv"},
-        {"chat_id": "111", "message_id": 2, "filename": "Ep02.mkv"}
-    ]
-
-    # Test single playlist
-    single_m3u = launcher.build_single_playlist("Movie.mkv", "http://127.0.0.1:8088/dl/1/2/Movie.mkv")
-    assert "#EXTM3U" in single_m3u
-    assert "#EXTVLCOPT:input-fast-seek" in single_m3u
-    assert "Movie.mkv" in single_m3u
-
-    # Test multi-item playlist
-    batch_m3u = launcher.build_playlist(items, "127.0.0.1:8088", "Season_1")
-    assert "#EXTM3U" in batch_m3u
-    assert "Ep01.mkv" in batch_m3u
-    assert "Ep02.mkv" in batch_m3u
-    assert "http://127.0.0.1:8088/dl/111/1/Ep01.mkv" in batch_m3u

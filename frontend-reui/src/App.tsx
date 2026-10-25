@@ -5,7 +5,6 @@ import { FloodWaitBanner } from '@/components/FloodWaitBanner';
 import { AuthModal } from '@/components/AuthModal';
 import { ToastContainer } from '@/components/ToastContainer';
 import { MobileTelegramDock } from '@/components/MobileTelegramDock';
-import { VlcRemoteDock } from '@/components/VlcRemoteDock';
 import { Loader2 } from 'lucide-react';
 
 // Code-split top-level views via dynamic import() for instant initial paint
@@ -76,7 +75,6 @@ const MainLayout: React.FC = () => {
 
       <AuthModal />
       <ToastContainer />
-      <VlcRemoteDock />
     </div>
   );
 };

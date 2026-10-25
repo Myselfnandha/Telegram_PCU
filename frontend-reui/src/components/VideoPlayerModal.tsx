@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import type { CinemaVideo } from '@/types';
 import { api } from '@/services/api';
 import {
@@ -8,55 +8,73 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cleanFileName, formatBytes, formatDuration } from '@/lib/formatters';
 import {
   Clapperboard,
   Download,
-  ExternalLink,
   Play,
+  Pause,
+  RotateCcw,
+  RotateCw,
   Subtitles,
   Volume2,
-  X,
+  VolumeX,
+  Volume1,
+  Maximize2,
+  Minimize2,
   AlertCircle,
-  Zap,
 } from 'lucide-react';
 
 interface VideoPlayerModalProps {
   video: (CinemaVideo & { playback_seconds?: number }) | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onLaunchVlc: (video: CinemaVideo) => void;
 }
 
 export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   video,
   open,
   onOpenChange,
-  onLaunchVlc,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const isDraggingTimeline = useRef(false);
+
+  // Playback state
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [volume, setVolume] = useState<number>(1);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const prevVolumeRef = useRef<number>(1);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  // Time & Buffer tracking
+  const [currentTimeSec, setCurrentTimeSec] = useState<number>(0);
+  const [bufferedPercent, setBufferedPercent] = useState<number>(0);
+  const [bufferSecondsAhead, setBufferSecondsAhead] = useState<number>(0);
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [hoverPct, setHoverPct] = useState<number | null>(null);
+
+  // Subtitles & UI feedback
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState<boolean>(true);
+  const [osdMessage, setOsdMessage] = useState<string | null>(null);
+  const osdTimerRef = useRef<any>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+
   const initialSeekDone = useRef(false);
   const lastReportedTime = useRef(0);
 
-  // Buffer & Stream health state (Feature 4)
-  const [bufferedPercent, setBufferedPercent] = useState<number>(0);
-  const [bufferSecondsAhead, setBufferSecondsAhead] = useState<number>(0);
-  const [currentTimeSec, setCurrentTimeSec] = useState<number>(0);
+  const duration = (videoRef.current?.duration && isFinite(videoRef.current.duration) && videoRef.current.duration > 0)
+    ? videoRef.current.duration
+    : (video?.duration || 0);
 
-  // Subtitle Controls state (Feature 5)
-  const [subtitlesEnabled, setSubtitlesEnabled] = useState<boolean>(true);
-  const [subOffset, setSubOffset] = useState<number>(0);
-  const [subSize, setSubSize] = useState<'sm' | 'md' | 'lg'>('md');
-
-  // UI OSD & Codec error state
-  const [osdMessage, setOsdMessage] = useState<string | null>(null);
-  const osdTimerRef = useRef<any>(null);
-  const [codecError, setCodecError] = useState<boolean>(false);
-
-  const streamUrl = video ? `/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}` : '';
-  const subtitleUrl = video ? `/api/media/subtitles/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/0.vtt` : '';
+  // Direct MTProto range stream URL
+  const streamUrl = video
+    ? `/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`
+    : '';
+  const subtitleUrl = video
+    ? `/api/media/subtitles/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/0.vtt`
+    : '';
   const displayName = video ? cleanFileName(video.filename) : '';
 
   const showOsd = (msg: string) => {
@@ -72,17 +90,24 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     setBufferedPercent(0);
     setBufferSecondsAhead(0);
     setCurrentTimeSec(0);
-    setSubOffset(0);
-    setCodecError(false);
+    setPlaybackError(null);
+    setIsPlaying(true);
+    setHoverTime(null);
+    setHoverPct(null);
 
-    // Adaptive pre-warming: pre-load initial 10MB chunk in RAM cache
+    // Adaptive RAM buffer pre-warming on open
     if (open && video) {
       fetch(`/api/media/prewarm/${encodeURIComponent(String(video.chat_id))}/${video.message_id}`).catch(() => {});
     }
   }, [video?.chat_id, video?.message_id, open]);
 
   const handleLoadedMetadata = () => {
-    setCodecError(false);
+    setPlaybackError(null);
+    if (videoRef.current) {
+      videoRef.current.volume = volume;
+      videoRef.current.muted = isMuted;
+    }
+
     if (!initialSeekDone.current && video?.playback_seconds && video.playback_seconds > 5 && videoRef.current) {
       videoRef.current.currentTime = video.playback_seconds;
       initialSeekDone.current = true;
@@ -90,10 +115,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }
   };
 
-  const syncProgress = (seconds: number) => {
+  const syncProgress = useCallback((seconds: number) => {
     if (!video || seconds <= 0) return;
-    const duration = videoRef.current?.duration || video.duration || 0;
-    const ratio = duration > 0 ? seconds / duration : 0;
+    const dur = duration > 0 ? duration : 0;
+    const ratio = dur > 0 ? seconds / dur : 0;
     const approxBytes = Math.floor(ratio * (video.size || video.file_size || 0));
     const chunkIdx = Math.floor(approxBytes / (512 * 1024));
 
@@ -102,11 +127,22 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       message_id: video.message_id,
       filename: video.filename,
       position_seconds: seconds,
-      duration_seconds: duration,
+      duration_seconds: dur,
       thumbnail_url: video.thumb_url,
       last_chunk_index: chunkIdx,
       last_byte_offset: approxBytes,
     }).catch(() => {});
+  }, [video, duration]);
+
+  const updateBufferStatus = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const dur = duration > 0 ? duration : 1;
+    if (v.buffered.length > 0) {
+      const maxEnd = v.buffered.end(v.buffered.length - 1);
+      setBufferedPercent(Math.min(100, Math.round((maxEnd / dur) * 100)));
+      setBufferSecondsAhead(Math.max(0, Math.round(maxEnd - v.currentTime)));
+    }
   };
 
   const handleTimeUpdate = () => {
@@ -119,26 +155,77 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       syncProgress(current);
     }
 
-    // Update buffer visualization
     updateBufferStatus();
   };
 
-  const updateBufferStatus = () => {
+  const handleSeek = (targetSec: number) => {
+    const total = duration > 0 ? duration : 999999;
+    const bounded = Math.max(0, Math.min(total, targetSec));
+    setCurrentTimeSec(bounded);
+
+    if (videoRef.current) {
+      videoRef.current.currentTime = bounded;
+      videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    }
+    showOsd(`Seek: ${formatDuration(Math.floor(bounded))}`);
+  };
+
+  const handleSeekDelta = (deltaSec: number) => {
+    handleSeek(currentTimeSec + deltaSec);
+  };
+
+  const togglePlayPause = () => {
     const v = videoRef.current;
     if (!v) return;
-    const duration = v.duration || video?.duration || 0;
-    if (duration > 0 && v.buffered.length > 0) {
-      const maxEnd = v.buffered.end(v.buffered.length - 1);
-      setBufferedPercent(Math.min(100, Math.round((maxEnd / duration) * 100)));
-      setBufferSecondsAhead(Math.max(0, Math.round(maxEnd - v.currentTime)));
+    if (v.paused) {
+      v.play().catch(() => {});
+      setIsPlaying(true);
+      showOsd('Play');
+    } else {
+      v.pause();
+      setIsPlaying(false);
+      showOsd('Pause');
     }
   };
 
-  const handleSpeedChange = (speed: number) => {
-    setPlaybackRate(speed);
+  const handleVolumeChange = (newVol: number) => {
+    const bounded = Math.max(0, Math.min(1, Math.round(newVol * 100) / 100));
+    setVolume(bounded);
     if (videoRef.current) {
-      videoRef.current.playbackRate = speed;
-      showOsd(`${speed}x Speed`);
+      videoRef.current.volume = bounded;
+      videoRef.current.muted = bounded === 0;
+    }
+    setIsMuted(bounded === 0);
+    showOsd(`Volume ${Math.round(bounded * 100)}%`);
+  };
+
+  const toggleMute = () => {
+    if (!videoRef.current) return;
+    if (isMuted || volume === 0) {
+      const next = prevVolumeRef.current > 0 ? prevVolumeRef.current : 1;
+      videoRef.current.muted = false;
+      videoRef.current.volume = next;
+      setVolume(next);
+      setIsMuted(false);
+      showOsd(`Unmuted (${Math.round(next * 100)}%)`);
+    } else {
+      prevVolumeRef.current = volume;
+      videoRef.current.muted = true;
+      setIsMuted(true);
+      showOsd('Muted');
+    }
+  };
+
+  const toggleFullscreen = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    if (!document.fullscreenElement) {
+      container.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
     }
   };
 
@@ -154,22 +241,60 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }
   };
 
-  const handleAdjustSubOffset = (deltaSec: number) => {
-    const v = videoRef.current;
-    if (!v) return;
-    const track = v.textTracks[0];
-    if (track && track.cues) {
-      for (let i = 0; i < track.cues.length; i++) {
-        const cue = track.cues[i];
-        cue.startTime += deltaSec;
-        cue.endTime += deltaSec;
-      }
+  // Timeline Scrubbing Handlers
+  const calculateTimelineTime = (clientX: number) => {
+    if (!timelineRef.current || duration <= 0) return 0;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const pos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(pos * duration);
+  };
+
+  const handleTimelineMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current || duration <= 0) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    setHoverPct(pos * 100);
+    setHoverTime(Math.round(pos * duration));
+
+    if (isDraggingTimeline.current) {
+      handleSeek(Math.round(pos * duration));
     }
-    setSubOffset((prev) => {
-      const next = Math.round((prev + deltaSec) * 100) / 100;
-      showOsd(`Subtitles Sync: ${next > 0 ? '+' : ''}${next}s`);
-      return next;
-    });
+  };
+
+  const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    isDraggingTimeline.current = true;
+    const target = calculateTimelineTime(e.clientX);
+    handleSeek(target);
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (isDraggingTimeline.current) {
+        const t = calculateTimelineTime(moveEvent.clientX);
+        handleSeek(t);
+      }
+    };
+
+    const onMouseUp = () => {
+      isDraggingTimeline.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleTimelineMouseLeave = () => {
+    if (!isDraggingTimeline.current) {
+      setHoverTime(null);
+      setHoverPct(null);
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches[0]) {
+      const target = calculateTimelineTime(e.touches[0].clientX);
+      handleSeek(target);
+    }
   };
 
   // Keyboard navigation shortcuts
@@ -182,108 +307,76 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
       if (e.code === 'Space' || e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        if (v.paused) {
-          v.play();
-          showOsd('Play');
-        } else {
-          v.pause();
-          showOsd('Pause');
-        }
+        togglePlayPause();
       } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        v.currentTime = Math.max(0, v.currentTime - 5);
-        showOsd('-5s');
+        handleSeekDelta(e.shiftKey ? -30 : -10);
       } else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'l') {
         e.preventDefault();
-        v.currentTime = Math.min(v.duration || 0, v.currentTime + 5);
-        showOsd('+5s');
+        handleSeekDelta(e.shiftKey ? 30 : 10);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        v.volume = Math.min(1, Math.round((v.volume + 0.05) * 100) / 100);
-        showOsd(`Volume ${Math.round(v.volume * 100)}%`);
+        handleVolumeChange(volume + 0.05);
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        v.volume = Math.max(0, Math.round((v.volume - 0.05) * 100) / 100);
-        showOsd(`Volume ${Math.round(v.volume * 100)}%`);
+        handleVolumeChange(volume - 0.05);
       } else if (e.key.toLowerCase() === 'm') {
         e.preventDefault();
-        v.muted = !v.muted;
-        showOsd(v.muted ? 'Muted' : 'Unmuted');
+        toggleMute();
       } else if (e.key.toLowerCase() === 'f') {
         e.preventDefault();
-        if (!document.fullscreenElement) {
-          v.requestFullscreen().catch(() => {});
-        } else {
-          document.exitFullscreen().catch(() => {});
-        }
+        toggleFullscreen();
       } else if (e.key.toLowerCase() === 'c') {
         e.preventDefault();
         handleToggleSubtitles();
-      } else if (e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        handleAdjustSubOffset(-0.25);
-      } else if (e.key.toLowerCase() === 'x') {
-        e.preventDefault();
-        handleAdjustSubOffset(0.25);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, subtitlesEnabled, subOffset]);
+  }, [open, currentTimeSec, duration, volume, isMuted, subtitlesEnabled]);
 
   const handleDialogChange = (isOpen: boolean) => {
     if (!isOpen && videoRef.current) {
-      syncProgress(Math.floor(videoRef.current.currentTime));
+      syncProgress(Math.floor(currentTimeSec));
     }
     onOpenChange(isOpen);
   };
 
   if (!video) return null;
 
+  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTimeSec / duration) * 100)) : 0;
+
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="sm:max-w-4xl bg-black/95 border-border/60 p-0 overflow-hidden shadow-2xl">
-        {/* Custom CSS cue styling for subtitle font sizing */}
+        {/* Subtitle Cue Styling */}
         <style>{`
           .cinema-video-player::cue {
-            font-size: ${subSize === 'sm' ? '14px' : subSize === 'lg' ? '22px' : '18px'};
+            font-size: 17px;
             background: rgba(0, 0, 0, 0.85);
             color: #ffffff;
             border-radius: 4px;
-            padding: 2px 8px;
+            padding: 3px 10px;
             text-shadow: 0 1px 3px rgba(0,0,0,0.9);
           }
         `}</style>
 
-        <DialogHeader className="p-4 border-b border-white/10 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <Clapperboard className="w-5 h-5 text-primary shrink-0" />
-            <DialogTitle className="text-sm font-semibold text-white truncate max-w-lg" title={video.filename}>
+        {/* Modal Header */}
+        <DialogHeader className="p-3.5 border-b border-white/10 flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0 pr-6">
+            <Clapperboard className="w-4 h-4 text-primary shrink-0" />
+            <DialogTitle className="text-sm font-semibold text-white truncate max-w-xl" title={video.filename}>
               {displayName}
             </DialogTitle>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {/* VLC 2-way sync indicator */}
-            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              VLC 2-Way Sync
-            </span>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => onLaunchVlc(video)}
-              className="h-8 text-xs gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:opacity-90"
-              title="Launch in VLC (Progress syncs automatically)"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Launch in VLC</span>
-            </Button>
-          </div>
         </DialogHeader>
 
-        {/* Video Player Container with OSD and Codec Error Fallback */}
-        <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
+        {/* Video Player Container */}
+        <div
+          ref={containerRef}
+          className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group select-none"
+        >
           {/* OSD Feedback Badge */}
           {osdMessage && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1 rounded-full bg-black/85 text-white text-xs font-mono font-medium border border-white/20 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 pointer-events-none">
@@ -291,24 +384,30 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             </div>
           )}
 
-          {/* Codec Fallback Overlay */}
-          {codecError && (
+          {/* Playback Error Overlay */}
+          {playbackError && (
             <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center space-y-3 z-30 animate-in fade-in">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div className="space-y-1 max-w-md">
-                <h3 className="text-sm font-semibold text-white">Browser Codec Unsupported</h3>
+                <h3 className="text-sm font-semibold text-white">Playback Interrupted</h3>
                 <p className="text-xs text-zinc-400">
-                  This video uses 10-bit HEVC/x265 or multi-channel audio that your web browser cannot decode directly.
+                  {playbackError}
                 </p>
               </div>
               <Button
-                onClick={() => onLaunchVlc(video)}
-                className="bg-primary text-primary-foreground gap-1.5 text-xs h-9 cursor-pointer"
+                onClick={() => {
+                  setPlaybackError(null);
+                  if (videoRef.current) {
+                    videoRef.current.load();
+                    videoRef.current.play().catch(() => {});
+                  }
+                }}
+                className="bg-primary text-primary-foreground gap-1.5 text-xs h-8 cursor-pointer"
               >
-                <Play className="w-4 h-4 fill-current" />
-                <span>Launch in VLC Player (Resumes at current position)</span>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Retry Playback</span>
               </Button>
             </div>
           )}
@@ -316,18 +415,25 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           <video
             ref={videoRef}
             src={streamUrl}
-            controls
             autoPlay
-            className="w-full h-full object-contain cinema-video-player"
+            playsInline
+            onClick={togglePlayPause}
+            className="w-full h-full object-contain cinema-video-player cursor-pointer"
             preload="metadata"
             onLoadedMetadata={handleLoadedMetadata}
             onTimeUpdate={handleTimeUpdate}
             onProgress={updateBufferStatus}
-            onError={() => setCodecError(true)}
-            onPause={() => videoRef.current && syncProgress(Math.floor(videoRef.current.currentTime))}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => {
+              setIsPlaying(false);
+              syncProgress(Math.floor(currentTimeSec));
+            }}
+            onError={() => {
+              setPlaybackError('The browser could not decode this media stream. Check network connection or download the file directly.');
+            }}
           >
             <track
-              label="English / Default Subtitles"
+              label="Default Subtitles"
               kind="subtitles"
               srcLang="en"
               src={subtitleUrl}
@@ -337,146 +443,186 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           </video>
         </div>
 
-        {/* Dual-Layer Buffer & Progress Indicator Bar (Feature 4) */}
-        <div className="px-4 py-2 bg-zinc-950/95 border-t border-white/5 flex items-center justify-between text-[11px] font-mono select-none">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-zinc-300 font-semibold">MTProto Fast-Stream</span>
-            <span className="text-zinc-600">•</span>
-            <span className="text-emerald-400">
-              Buffer: {bufferSecondsAhead}s ({bufferedPercent}%)
-            </span>
-          </div>
+        {/* Interactive Scrubbing Timeline Bar */}
+        <div className="bg-zinc-950 px-4 pt-3 pb-1.5 border-t border-white/10 select-none">
+          <div
+            ref={timelineRef}
+            role="slider"
+            tabIndex={0}
+            aria-label="Video scrubber timeline"
+            aria-valuemin={0}
+            aria-valuemax={duration > 0 ? duration : 0}
+            aria-valuenow={currentTimeSec}
+            aria-valuetext={`${formatDuration(currentTimeSec)} of ${formatDuration(duration)}`}
+            onMouseDown={handleTimelineMouseDown}
+            onMouseMove={handleTimelineMouseMove}
+            onMouseLeave={handleTimelineMouseLeave}
+            onTouchStart={handleTouchStart}
+            className="group/timeline relative w-full h-3 flex items-center cursor-pointer"
+          >
+            {/* Timeline Hover Timestamp Tooltip */}
+            {hoverTime !== null && hoverPct !== null && (
+              <div
+                style={{ left: `${Math.min(94, Math.max(6, hoverPct))}%` }}
+                className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded bg-zinc-900 border border-white/20 text-white text-[10px] font-mono shadow-lg pointer-events-none z-30"
+              >
+                {formatDuration(hoverTime)}
+              </div>
+            )}
 
-          <div className="flex items-center gap-2">
-            <div className="w-32 sm:w-44 h-1.5 rounded-full bg-zinc-800 overflow-hidden relative">
-              {/* Lookahead MTProto Buffered Range */}
+            {/* Background Track */}
+            <div className="w-full h-1.5 group-hover/timeline:h-2 rounded-full bg-zinc-800 transition-all overflow-hidden relative">
+              {/* Buffer Range Indicator */}
               <div
                 className="absolute top-0 bottom-0 left-0 bg-emerald-500/40 transition-all duration-300"
                 style={{ width: `${bufferedPercent}%` }}
-                title={`Buffered ahead: ${bufferedPercent}%`}
+                title={`Buffered: ${bufferedPercent}%`}
               />
-              {/* Watched Progress */}
+              {/* Watched Progress Bar */}
               <div
-                className="absolute top-0 bottom-0 left-0 bg-primary h-full transition-all duration-150"
-                style={{
-                  width: `${
-                    videoRef.current && (videoRef.current.duration || video.duration)
-                      ? Math.min(100, (currentTimeSec / (videoRef.current.duration || video.duration || 1)) * 100)
-                      : 0
-                  }%`,
-                }}
+                className="absolute top-0 bottom-0 left-0 bg-primary h-full transition-all duration-75"
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <span className="text-zinc-400 text-[10px]">
-              {formatDuration(currentTimeSec)} / {formatDuration(video.duration || 0)}
-            </span>
+
+            {/* Scrubber Thumb */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-md ring-2 ring-primary transition-transform opacity-0 group-hover/timeline:opacity-100 group-hover/timeline:scale-110 pointer-events-none"
+              style={{ left: `calc(${progressPercent}% - 7px)` }}
+            />
           </div>
         </div>
 
-        {/* Video Controls & Meta Footer */}
-        <div className="p-4 bg-zinc-950/90 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-zinc-400">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="font-mono text-zinc-300">{formatBytes(video.size || video.file_size || 0)}</span>
+        {/* Transport Controls Toolbar */}
+        <div className="px-4 py-2.5 bg-zinc-950/95 flex flex-wrap items-center justify-between gap-3 text-xs border-t border-white/5 select-none">
+          {/* Left: Playback Transport Buttons */}
+          <div className="flex items-center gap-1.5">
+            {/* Play/Pause */}
+            <button
+              onClick={togglePlayPause}
+              aria-label={isPlaying ? 'Pause video (Space or K)' : 'Play video (Space or K)'}
+              className="w-8 h-8 rounded-lg bg-primary text-primary-foreground hover:opacity-90 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-md"
+              title={isPlaying ? 'Pause (Space or K)' : 'Play (Space or K)'}
+            >
+              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+            </button>
+
+            {/* Replay -10s */}
+            <button
+              onClick={() => handleSeekDelta(-10)}
+              aria-label="Seek back 10 seconds (Left Arrow or J)"
+              className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+              title="Seek back 10s (Left Arrow or J)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Forward +10s */}
+            <button
+              onClick={() => handleSeekDelta(10)}
+              aria-label="Seek forward 10 seconds (Right Arrow or L)"
+              className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+              title="Seek forward 10s (Right Arrow or L)"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Volume Control */}
+            <div className="flex items-center gap-1 pl-2 border-l border-white/10">
+              <button
+                onClick={toggleMute}
+                aria-label={isMuted ? 'Unmute (M)' : 'Mute (M)'}
+                className="w-7 h-7 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                title="Toggle Mute (M)"
+              >
+                {isMuted || volume === 0 ? (
+                  <VolumeX className="w-4 h-4 text-red-400" />
+                ) : volume < 0.5 ? (
+                  <Volume1 className="w-4 h-4" />
+                ) : (
+                  <Volume2 className="w-4 h-4" />
+                )}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isMuted ? 0 : volume}
+                onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                aria-label="Volume Slider"
+                className="w-16 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                title={`Volume: ${isMuted ? 0 : Math.round(volume * 100)}%`}
+              />
+            </div>
+
+            {/* Time Stamp Display */}
+            <div className="pl-2 font-mono text-[11px] text-zinc-400 select-none">
+              <span className="text-white font-medium">{formatDuration(currentTimeSec)}</span>
+              <span className="text-zinc-600 mx-1">/</span>
+              <span>{formatDuration(duration)}</span>
+            </div>
+          </div>
+
+          {/* Right: Subtitles CC, Fullscreen, Download */}
+          <div className="flex items-center gap-2">
+            {/* Subtitles CC Toggle */}
+            <button
+              onClick={handleToggleSubtitles}
+              className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                subtitlesEnabled
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white'
+              }`}
+              title="Toggle Subtitles (C)"
+            >
+              <Subtitles className="w-3.5 h-3.5" />
+              <span>CC</span>
+            </button>
+
+            {/* Fullscreen Button */}
+            <button
+              onClick={toggleFullscreen}
+              aria-label="Toggle Fullscreen (F)"
+              className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              title="Fullscreen (F)"
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+
+            {/* Direct Download Button */}
+            <a
+              href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
+              download={video.filename}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer text-xs"
+              title="Download file directly"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Download</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Stream Health & Meta Footer */}
+        <div className="px-4 py-2 bg-zinc-950/90 border-t border-white/10 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-zinc-300 font-semibold">
+              Direct MTProto Range Stream
+            </span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-emerald-400">
+              Buffer Ahead: {bufferSecondsAhead}s ({bufferedPercent}%)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-zinc-300">{formatBytes(video.size || video.file_size || 0)}</span>
             {video.resolution && (
               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-200">
                 {video.resolution}
               </span>
             )}
-
-            {/* Subtitle Sync & Size Controls (Feature 5) */}
-            <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
-              <button
-                onClick={handleToggleSubtitles}
-                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1 ${
-                  subtitlesEnabled
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                }`}
-                title="Toggle Subtitles (C)"
-              >
-                <Subtitles className="w-3 h-3" />
-                <span>CC</span>
-              </button>
-
-              {subtitlesEnabled && (
-                <>
-                  <div className="flex items-center rounded bg-zinc-900 border border-white/10 overflow-hidden text-[10px] font-mono">
-                    <button
-                      onClick={() => handleAdjustSubOffset(-0.25)}
-                      className="px-1.5 py-0.5 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                      title="Shift subtitles -250ms (Z)"
-                    >
-                      -0.25s
-                    </button>
-                    <span
-                      onClick={() => {
-                        handleAdjustSubOffset(-subOffset);
-                        showOsd('Subtitles Reset');
-                      }}
-                      className="px-1.5 py-0.5 text-zinc-300 hover:text-white cursor-pointer select-none"
-                      title="Click to reset subtitle sync"
-                    >
-                      {subOffset === 0 ? 'Sync' : `${subOffset > 0 ? '+' : ''}${subOffset}s`}
-                    </span>
-                    <button
-                      onClick={() => handleAdjustSubOffset(0.25)}
-                      className="px-1.5 py-0.5 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                      title="Shift subtitles +250ms (X)"
-                    >
-                      +0.25s
-                    </button>
-                  </div>
-
-                  {/* Subtitle Font Size */}
-                  <div className="flex items-center rounded bg-zinc-900 border border-white/10 overflow-hidden text-[10px] font-mono">
-                    {(['sm', 'md', 'lg'] as const).map((sz) => (
-                      <button
-                        key={sz}
-                        onClick={() => setSubSize(sz)}
-                        className={`px-1.5 py-0.5 transition-colors cursor-pointer uppercase ${
-                          subSize === sz
-                            ? 'bg-zinc-700 text-white font-bold'
-                            : 'text-zinc-500 hover:text-zinc-300'
-                        }`}
-                        title={`Subtitle size: ${sz}`}
-                      >
-                        {sz}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Playback Speed Chips */}
-            <div className="flex items-center gap-1 pl-2 border-l border-white/10">
-              <span className="text-[10px] text-zinc-500 font-mono">SPEED:</span>
-              {[0.75, 1, 1.25, 1.5, 2].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => handleSpeedChange(s)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer ${
-                    playbackRate === s
-                      ? 'bg-primary text-primary-foreground font-bold'
-                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  {s}x
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <a
-              href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
-              download={video.filename}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition-colors cursor-pointer text-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download File</span>
-            </a>
           </div>
         </div>
       </DialogContent>

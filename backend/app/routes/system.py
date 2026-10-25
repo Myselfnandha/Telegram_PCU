@@ -70,13 +70,19 @@ def get_system_telemetry() -> Dict[str, Any]:
         "server_time": time.time()
     }
 
-@router.get("/stats")
+@router.get("/health")
+async def health_check():
+    """Minimal public health probe with zero user, network, or telemetry exposure."""
+    return {"status": "ok"}
+
+
+@router.get("/stats", dependencies=[Depends(verify_auth)])
 async def get_stats():
     """Returns real-time system and throughput telemetry metrics."""
     return get_system_telemetry()
 
 
-@router.get("/network")
+@router.get("/network", dependencies=[Depends(verify_auth)])
 async def get_network_info():
     """Returns detected LAN IP, Wi-Fi addresses, and active remote tunnel status."""
     from app.services.network_service import network_service
@@ -84,7 +90,7 @@ async def get_network_info():
     return network_service.get_network_info(port=int(PORT or 8088))
 
 
-@router.get("/qrcode")
+@router.get("/qrcode", dependencies=[Depends(verify_auth)])
 async def get_qrcode(text: str):
     """Generates a PNG QR code for mobile scanning."""
     from app.services.network_service import network_service

@@ -52,31 +52,26 @@ class SensitiveDataFilter(logging.Filter):
     """
     Sanitizes tokens, API keys, and credentials from log messages
     to prevent credentials from leaking into log files, console, or telemetry.
+    Matches all query parameter variations and header patterns regardless of token length.
     """
-    TOKEN_REGEX = re.compile(r'([?&](?:token|apiKey|api_key)=)[^&\s"\']+', re.IGNORECASE)
-    BEARER_REGEX = re.compile(r'(Bearer\s+)[A-Za-z0-9._~+/-]{6,}', re.IGNORECASE)
+    TOKEN_REGEX = re.compile(r'([?&](?:token|apiKey|api_key|key|secret|auth|access_token)=)[^&\s"\']+', re.IGNORECASE)
+    BEARER_REGEX = re.compile(r'(Bearer\s+)\S+', re.IGNORECASE)
+    HEADER_REGEX = re.compile(r'((?:X-API-Key|Authorization)\s*[:=]\s*)[^\r\n,]+', re.IGNORECASE)
+
+    def _sanitize(self, text: str) -> str:
+        text = self.TOKEN_REGEX.sub(r'\1[REDACTED]', text)
+        text = self.BEARER_REGEX.sub(r'\1[REDACTED]', text)
+        text = self.HEADER_REGEX.sub(r'\1[REDACTED]', text)
+        return text
 
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.msg, str):
-            record.msg = self.TOKEN_REGEX.sub(r'\1[REDACTED]', record.msg)
-            record.msg = self.BEARER_REGEX.sub(r'\1[REDACTED]', record.msg)
+            record.msg = self._sanitize(record.msg)
         if record.args:
             if isinstance(record.args, dict):
-                clean_args = {}
-                for k, v in record.args.items():
-                    if isinstance(v, str):
-                        v = self.TOKEN_REGEX.sub(r'\1[REDACTED]', v)
-                        v = self.BEARER_REGEX.sub(r'\1[REDACTED]', v)
-                    clean_args[k] = v
-                record.args = clean_args
+                record.args = {k: self._sanitize(v) if isinstance(v, str) else v for k, v in record.args.items()}
             elif isinstance(record.args, tuple):
-                clean_args = []
-                for v in record.args:
-                    if isinstance(v, str):
-                        v = self.TOKEN_REGEX.sub(r'\1[REDACTED]', v)
-                        v = self.BEARER_REGEX.sub(r'\1[REDACTED]', v)
-                    clean_args.append(v)
-                record.args = tuple(clean_args)
+                record.args = tuple(self._sanitize(v) if isinstance(v, str) else v for v in record.args)
         return True
 
 class EndpointFilter(logging.Filter):
@@ -349,9 +344,7 @@ class GlobalAuthEnforcementMiddleware:
         "/docs",
         "/openapi.json",
         "/redoc",
-        "/api/system/stats",
-        "/api/system/network",
-        "/api/system/qrcode",
+        "/api/system/health",
         "/api/auth/status",
     }
 

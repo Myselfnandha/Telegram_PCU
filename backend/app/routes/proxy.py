@@ -42,14 +42,12 @@ from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_v
 
 from app.services.stream_buffer import stream_buffer, _SLIDING_STREAM_BUFFER, StreamSlidingBuffer
 from app.services.stream_engine import stream_engine
-from app.services.player_launcher import player_launcher, get_desktop_env
 _ACTIVE_STREAM_CLIENTS = 0
 _ACTIVE_STREAM_PRODUCERS: Dict[Tuple[str, int], asyncio.Task] = {}
 _ACTIVE_STREAM_TASKS: Dict[Tuple[str, int], Tuple[asyncio.Task, int]] = {}
 _ACTIVE_MEDIA_CONNS: DefaultDict[Tuple[str, int], Set[asyncio.Task]] = defaultdict(set)
 _ACTIVE_STREAM_ITERS: Dict[Tuple[str, int], Any] = {}
 _ACTIVE_PREFETCH_TASKS: Dict[Tuple[str, int], asyncio.Task] = {}
-_ACTIVE_PLAYER_PROC: Optional[Any] = None
 
 
 class StreamIteratorHandle:
@@ -79,12 +77,26 @@ def parse_http_range(range_header: str, file_size: int) -> Tuple[int, int, int, 
     """
     Parses single HTTP Range header per RFC 9110 / RFC 7233.
     Returns: (start, end, status_code, error_response)
+    - If no Range header and file_size <= 0: (0, 0, 200, None)
+    - If Range header on empty file (file_size <= 0): 416 Range Not Satisfiable (Content-Range: bytes */0)
     - If no Range header: (0, file_size - 1, 200, None)
     - If valid range: (start, end, 206, None)
     - If unsatisfiable / malformed: returns 416 Range Not Satisfiable response
     """
-    if not range_header or file_size <= 0:
-        return 0, max(0, file_size - 1), 200, None
+    if not range_header:
+        if file_size <= 0:
+            return 0, 0, 200, None
+        return 0, file_size - 1, 200, None
+
+    if file_size <= 0:
+        # RFC 9110 Section 14.1.2: Any range on a 0-length representation is unsatisfiable
+        return 0, 0, 416, Response(
+            status_code=416,
+            headers={
+                "Content-Range": "bytes */0",
+                "Accept-Ranges": "bytes"
+            }
+        )
 
     range_str = range_header.strip()
     if not range_str.startswith("bytes="):
@@ -1330,186 +1342,9 @@ async def get_stream_buffer_stats():
 
 
 
-@router.post("/api/media/vlc/play", dependencies=[Depends(verify_auth)])
-async def launch_vlc_stream(payload: Dict[str, Any]):
-    """Launch VLC Player directly on host machine with high-speed MTProto stream."""
-    import shutil
-    import subprocess
-    from app.config import PROXY_PORT
-
-    chat_id = payload.get("chat_id")
-    message_id = payload.get("message_id")
-    raw_url = payload.get("stream_url")
-    filename = payload.get("filename", "video.mp4")
-
-    # Security: validate stream_url to disallow file://, dangerous schemes, or arbitrary remote hosts
-    if raw_url:
-        import urllib.parse
-        parsed = urllib.parse.urlparse(raw_url)
-        if parsed.scheme in ("file", "gopher", "data", "javascript"):
-            raise HTTPException(status_code=400, detail=f"Scheme '{parsed.scheme}' is not allowed for stream_url")
-        if parsed.scheme in ("http", "https"):
-            allowed_hosts = {"127.0.0.1", "localhost", "testserver"}
-            from app.config import PROXY_HOST
-            if PROXY_HOST:
-                allowed_hosts.add(PROXY_HOST.split(":")[0])
-            try:
-                from app.services.network_service import network_service
-                lan_ip = network_service.get_lan_ip()
-                if lan_ip:
-                    allowed_hosts.add(lan_ip)
-            except Exception:
-                pass
-            hostname = parsed.hostname or ""
-            if hostname not in allowed_hosts and not hostname.startswith("192.168.") and not hostname.startswith("10.") and not hostname.startswith("172."):
-                raise HTTPException(status_code=400, detail=f"Host '{hostname}' is not allowed for stream_url")
-            if not parsed.path.startswith(("/dl/", "/stream/")):
-                raise HTTPException(status_code=400, detail="Path must start with /dl/ or /stream/")
-        elif raw_url.startswith("/"):
-            if not raw_url.startswith(("/dl/", "/stream/")):
-                raise HTTPException(status_code=400, detail="Path must start with /dl/ or /stream/")
-
-    # If filename is generic or missing, try resolving from sniffer cache
-    if chat_id and message_id:
-        try:
-            clean_cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
-            cached_msg = sniffer_service._message_cache.get((clean_cid, message_id)) or sniffer_service._message_cache.get((str(clean_cid), message_id))
-            if cached_msg and cached_msg.file and cached_msg.file.name:
-                if not filename or filename in ("thumb", "video.mp4") or filename.startswith("tg_media_"):
-                    filename = auto_rename(cached_msg.file.name)
-        except Exception:
-            pass
-
-    import urllib.parse
-    encoded_name = urllib.parse.quote(filename)
-
-    if not raw_url and chat_id and message_id:
-        raw_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{chat_id}/{message_id}/{encoded_name}"
-    elif raw_url and raw_url.startswith("/"):
-        raw_url = f"http://127.0.0.1:{PROXY_PORT}{raw_url}"
-
-    # If stream_url ended with /thumb, correct to proper media stream URL
-    if raw_url and raw_url.endswith("/thumb") and filename != "thumb":
-        raw_url = raw_url[:-6] + f"/{encoded_name}"
-
-    # Pre-resolve and warm message cache & RAM buffer before launching player so /dl/... never stalls
-    if chat_id and message_id:
-        try:
-            client = await TelegramClientManager.get_client()
-            if client and client.is_connected():
-                clean_cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
-                msg = await get_streamable_message(client, clean_cid, int(message_id))
-                if msg:
-                    asyncio.create_task(prewarm_media_stream(client, clean_cid, int(message_id), msg))
-        except Exception as pre_err:
-            logger.debug(f"Pre-warm streamable message notice: {pre_err}")
-
-    target_player = payload.get("player", "vlc")
-    network_caching = payload.get("network_caching")
-    audio_lang = payload.get("audio_lang")
-    sub_lang = payload.get("sub_lang")
-    duration = payload.get("duration")
-    resume_flag = payload.get("resume")
-    resume_sec = None
-
-    if "start_time" in payload and payload["start_time"] is not None:
-        resume_sec = max(0, int(payload["start_time"]))
-    elif resume_flag is True and chat_id and message_id:
-        try:
-            prog = playback_tracker.get_playback_progress(str(chat_id), message_id)
-            if prog:
-                if not duration and prog.get("duration_seconds"):
-                    duration = int(prog["duration_seconds"])
-                if prog.get("progress_percent", 0) < 96.0:
-                    pos = prog.get("last_position_seconds", 0)
-                    if pos and pos > 10:
-                        resume_sec = max(0, int(pos))
-        except Exception as pe:
-            logger.debug(f"Progress check notice: {pe}")
-    elif resume_flag is False:
-        resume_sec = 0
-
-    _ACTIVE_STREAM_TASKS.clear()
-    for k in list(_ACTIVE_STREAM_ITERS.keys()):
-        old_i = _ACTIVE_STREAM_ITERS.pop(k, None)
-        if old_i:
-            try:
-                await old_i.close()
-            except Exception:
-                pass
-
-    items = payload.get("items")
-    logger.info(f"PLAYER LAUNCH: player={target_player}, file='{filename}', resume_sec={resume_sec}s, stream_url={raw_url}, caching={network_caching}ms, queued_items={len(items) if items else 0}")
-    res = player_launcher.launch(
-        stream_url=raw_url,
-        filename=filename,
-        player=target_player,
-        resume_sec=resume_sec,
-        chat_id=chat_id,
-        message_id=message_id,
-        network_caching=network_caching,
-        audio_lang=audio_lang,
-        sub_lang=sub_lang,
-        duration=duration,
-        items=items,
-        resume=resume_flag
-    )
-
-    import urllib.parse
-    encoded_file = urllib.parse.quote(f"{filename}.m3u")
-    q_params = []
-    if network_caching:
-        q_params.append(f"caching={network_caching}")
-    if audio_lang:
-        q_params.append(f"audio={urllib.parse.quote(audio_lang)}")
-    if sub_lang:
-        q_params.append(f"sub={urllib.parse.quote(sub_lang)}")
-    qs = f"?{'&'.join(q_params)}" if q_params else ""
-    res["playlist_url"] = f"/api/media/vlc/playlist/{chat_id}/{message_id}/{encoded_file}{qs}"
-    return res
-
-
-@router.get("/api/media/vlc/playlist/{chat_id}/{message_id}/{filename}")
-async def generate_vlc_playlist(
-    chat_id: str,
-    message_id: int,
-    filename: str,
-    request: Request,
-    caching: Optional[int] = None,
-    audio: Optional[str] = None,
-    sub: Optional[str] = None
-):
-    """Generates an .m3u playlist file for 1-click opening in VLC on any device."""
-    from app.config import PROXY_PORT
-    host = request.headers.get("host", f"localhost:{PROXY_PORT}")
-    clean_filename = filename.replace(".m3u", "")
-    encoded_name = urllib.parse.quote(clean_filename)
-    stream_url = f"http://{host}/dl/{chat_id}/{message_id}/{encoded_name}"
-    sub_url = f"http://{host}/api/media/subtitles/download/{chat_id}/{message_id}"
-    m3u_content = player_launcher.build_single_playlist(
-        clean_filename,
-        stream_url,
-        sub_url=sub_url,
-        network_caching=caching,
-        audio_lang=audio,
-        sub_lang=sub
-    )
-    return Response(
-        content=m3u_content,
-        media_type="audio/x-mpegurl",
-        headers={
-            "Content-Disposition": f'attachment; filename="{clean_filename}.m3u"',
-            "Content-Type": "audio/x-mpegurl; charset=utf-8"
-        }
-    )
-
-
-@router.get("/api/media/mobile_info/{chat_id}/{message_id}")
+@router.get("/api/media/mobile_info/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
 async def get_mobile_playback_info(chat_id: str, message_id: int, request: Request, filename: Optional[str] = None):
-    """
-    Returns complete multi-platform playback metadata formatted for mobile VLC.
-    Includes vlc:// protocol URL, Android Intent URL, M3U playlist URL, and direct stream links.
-    """
+    """Returns multi-platform mobile playback and LAN QR code stream links."""
     from app.config import PROXY_PORT
     host = request.headers.get("host", f"127.0.0.1:{PROXY_PORT}")
     scheme = request.url.scheme or "http"
@@ -1523,201 +1358,26 @@ async def get_mobile_playback_info(chat_id: str, message_id: int, request: Reque
     import urllib.parse
     enc_name = urllib.parse.quote(clean_fn)
     stream_url = f"{scheme}://{host}/dl/{chat_id}/{message_id}/{enc_name}"
-
-    vlc_url = f"vlc://{stream_url}"
-    path_only = f"{host}/dl/{chat_id}/{message_id}/{enc_name}"
-    android_intent = f"intent://{path_only}#Intent;scheme={scheme};type=video/*;package=org.videolan.vlc;end"
-
-    playlist_url = f"/api/media/vlc/playlist/{chat_id}/{message_id}/{enc_name}.m3u"
-    base_no_ext = os.path.splitext(clean_fn)[0]
-    transmux_url = f"/stream/{chat_id}/{message_id}/{urllib.parse.quote(base_no_ext)}.mp4"
     sub_file = subtitle_service.get_cached_subtitle(clean_fn)
 
     from app.services.network_service import network_service
     lan_ip = network_service.get_lan_ip()
     lan_host = f"{lan_ip}:{PROXY_PORT}"
     lan_stream_url = f"{scheme}://{lan_host}/dl/{chat_id}/{message_id}/{enc_name}"
-    lan_vlc_url = f"vlc://{lan_stream_url}"
-    lan_android_intent = f"intent://{lan_host}/dl/{chat_id}/{message_id}/{enc_name}#Intent;scheme={scheme};type=video/*;package=org.videolan.vlc;end"
-    lan_playlist_url = f"http://{lan_host}/api/media/vlc/playlist/{chat_id}/{message_id}/{enc_name}.m3u"
-    lan_qrcode_url = f"/api/system/qrcode?text={urllib.parse.quote(lan_vlc_url)}"
+    lan_qrcode_url = f"/api/system/qrcode?text={urllib.parse.quote(lan_stream_url)}"
 
     return {
         "chat_id": str(chat_id),
         "message_id": message_id,
         "filename": clean_fn,
         "stream_url": stream_url,
-        "vlc_url": vlc_url,
-        "android_intent": android_intent,
-        "playlist_url": playlist_url,
-        "transmux_url": transmux_url,
         "has_subtitles": bool(sub_file and sub_file.exists()),
         "subtitles_url": f"/api/media/subtitles/download/{chat_id}/{message_id}" if (sub_file and sub_file.exists()) else None,
         "host": host,
         "lan_ip": lan_ip,
         "lan_stream_url": lan_stream_url,
-        "lan_vlc_url": lan_vlc_url,
-        "lan_android_intent": lan_android_intent,
-        "lan_playlist_url": lan_playlist_url,
         "lan_qrcode_url": lan_qrcode_url
     }
-
-
-@router.get("/api/media/vlc/live_status")
-async def get_vlc_live_status():
-    """Returns live playback telemetry, volume, and playback state from active VLC instance."""
-    return player_launcher.get_vlc_live_status()
-
-
-ALLOWED_VLC_COMMANDS = {
-    "play", "pause", "pl_pause", "pl_stop", "pl_next", "pl_previous",
-    "seek", "volume", "fullscreen", "rate", "audiodelay", "subdelay",
-    "aspectratio", "audio_track", "subtitle_track"
-}
-
-
-@router.post("/api/media/vlc/control", dependencies=[Depends(verify_auth)])
-async def control_vlc(payload: Dict[str, Any]):
-    """Dispatches remote control commands (play/pause, seek, volume, fullscreen, stop) to VLC."""
-    command = payload.get("command", "")
-    val = payload.get("val")
-    if not command:
-        raise HTTPException(status_code=400, detail="Command is required")
-    if command not in ALLOWED_VLC_COMMANDS:
-        raise HTTPException(status_code=400, detail=f"Command '{command}' is not allowed")
-    return player_launcher.send_vlc_control(command, val)
-
-
-@router.post("/api/media/vlc/track", dependencies=[Depends(verify_auth)])
-async def set_vlc_track(payload: Dict[str, Any]):
-    """Selects an audio or subtitle track by index/id in active VLC player."""
-    track_type = payload.get("type", "audio")
-    track_id = payload.get("track_id")
-    if track_id is None:
-        raise HTTPException(status_code=400, detail="track_id is required")
-    cmd = "subtitle_track" if track_type in ("subtitle", "sub") else "audio_track"
-    return player_launcher.send_vlc_control(cmd, track_id)
-
-
-@router.post("/api/media/vlc/sync", dependencies=[Depends(verify_auth)])
-async def sync_vlc_delay(payload: Dict[str, Any]):
-    """Adjusts audio or subtitle delay offset (in seconds) in active VLC player."""
-    delay_type = payload.get("type", "audio")
-    delta = payload.get("delta_seconds", 0.0)
-    cmd = "subdelay" if delay_type in ("subtitle", "sub") else "audiodelay"
-    return player_launcher.send_vlc_control(cmd, delta)
-
-
-@router.post("/api/media/vlc/aspect_ratio", dependencies=[Depends(verify_auth)])
-async def set_vlc_aspect_ratio(payload: Dict[str, Any]):
-    """Sets display aspect ratio ('default', '16:9', '4:3', '2.35:1', '1:1') in active VLC player."""
-    ratio = payload.get("ratio", "default")
-    return player_launcher.send_vlc_control("aspectratio", ratio)
-
-
-@router.post("/api/media/vlc/volume", dependencies=[Depends(verify_auth)])
-async def set_vlc_volume_endpoint(payload: Dict[str, Any]):
-    """Sets VLC volume directly by percent (0 to 200%)."""
-    vol_pct = payload.get("volume_percent", 100)
-    try:
-        vol_pct = max(0, min(200, int(vol_pct)))
-    except (ValueError, TypeError):
-        vol_pct = 100
-    raw_vol = round((vol_pct / 100.0) * 256)
-    return player_launcher.send_vlc_control("volume", raw_vol)
-
-
-@router.post("/api/media/vlc/play_batch", dependencies=[Depends(verify_auth)])
-async def launch_vlc_batch(payload: Dict[str, Any], request: Request):
-    """Launch VLC Player with an entire TV Series / Season playlist queued for seamless binge watching."""
-    from app.config import PROXY_PORT
-    host = request.headers.get("host", f"127.0.0.1:{PROXY_PORT}")
-    items = payload.get("items", [])
-    title = payload.get("title", "Season Playlist")
-    player = payload.get("player", "vlc")
-    
-    # Auto-resolve from chat_id and message_ids if items not provided directly
-    if not items:
-        chat_id = payload.get("chat_id")
-        message_ids = payload.get("message_ids", [])
-        if chat_id and message_ids:
-            items = []
-            for mid in message_ids:
-                fn = "video.mp4"
-                cached = sniffer_service._message_cache.get((chat_id, mid)) or sniffer_service._message_cache.get((str(chat_id), mid))
-                if cached and getattr(cached, "file", None) and getattr(cached.file, "name", None):
-                    fn = auto_rename(cached.file.name)
-                items.append({
-                    "chat_id": str(chat_id),
-                    "message_id": int(mid),
-                    "filename": fn
-                })
-
-    if not items:
-        raise HTTPException(status_code=400, detail="No video items provided for batch playback.")
-
-    network_caching = payload.get("network_caching")
-    audio_lang = payload.get("audio_lang")
-    sub_lang = payload.get("sub_lang")
-
-    return player_launcher.launch_batch(
-        items=items,
-        title=title,
-        player=player,
-        host=host,
-        network_caching=network_caching,
-        audio_lang=audio_lang,
-        sub_lang=sub_lang
-    )
-
-
-@router.post("/api/media/vlc/batch_playlist")
-async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
-    """Generates a complete multi-episode .m3u playlist for a TV Series season."""
-    from app.config import PROXY_PORT
-    host = request.headers.get("host", f"localhost:{PROXY_PORT}")
-    items = payload.get("items", [])
-    title = payload.get("title", "Season_Playlist").replace(" ", "_")
-
-    if not items:
-        chat_id = payload.get("chat_id")
-        message_ids = payload.get("message_ids", [])
-        if chat_id and message_ids:
-            items = []
-            for mid in message_ids:
-                fn = "video.mp4"
-                cached = sniffer_service._message_cache.get((chat_id, mid)) or sniffer_service._message_cache.get((str(chat_id), mid))
-                if cached and getattr(cached, "file", None) and getattr(cached.file, "name", None):
-                    fn = auto_rename(cached.file.name)
-                items.append({
-                    "chat_id": str(chat_id),
-                    "message_id": int(mid),
-                    "filename": fn
-                })
-
-    if not items:
-        raise HTTPException(status_code=400, detail="No video items provided for batch playlist.")
-
-    network_caching = payload.get("network_caching")
-    audio_lang = payload.get("audio_lang")
-    sub_lang = payload.get("sub_lang")
-
-    m3u_content = player_launcher.build_playlist(
-        items=items,
-        host=host,
-        title=title,
-        network_caching=network_caching,
-        audio_lang=audio_lang,
-        sub_lang=sub_lang
-    )
-    return Response(
-        content=m3u_content,
-        media_type="audio/x-mpegurl",
-        headers={
-            "Content-Disposition": f'attachment; filename="{title}.m3u"',
-            "Content-Type": "audio/x-mpegurl; charset=utf-8"
-        }
-    )
 
 
 @router.get("/api/media/continue_watching", dependencies=[Depends(verify_auth)])

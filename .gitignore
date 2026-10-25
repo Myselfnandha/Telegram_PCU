@@ -28,17 +28,23 @@ backend/sessions/*.session*
 .agents
 *.agents
 # Local Database, Logs & Storage
-backend/data/*.db
+backend/data/*.db*
 backend/data/*.sqlite*
 backend/data/*.sqlite3
 backend/data/*.db-wal
 backend/data/*.db-shm
-backend/data/*.log
+backend/data/*.log*
 backend/data/*.pid
+backend/data/subtitles/*
+!backend/data/subtitles/.gitkeep
+backend/data/bin/*
+!backend/data/bin/.gitkeep
+backend/backups/
 *.db
 *.sqlite3
-*.log
+*.log*
 *.pid
+*.zip
 ZeroGravity
 *ZeroGravity
 # Temporary Buffers & Download Directories
@@ -57,5 +63,3 @@ Thumbs.db
 *.swp
 *.swo
 *~
-backend/data
-*backend/data

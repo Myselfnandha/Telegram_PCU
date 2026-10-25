@@ -360,23 +360,6 @@ export const MobileTelegramDock: React.FC = () => {
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Launch VLC on media click
-  const handleLaunchVlc = async (chatId: string | number, messageId: number, filename?: string) => {
-    try {
-      await api.playInVlc({
-        chat_id: String(chatId),
-        message_id: messageId,
-        filename: filename || 'video.mp4',
-      });
-      addToast({
-        type: 'success',
-        title: 'VLC Launched',
-        message: `Playing ${cleanFileName(filename || 'video.mp4')} in VLC`,
-      });
-    } catch (err: any) {
-      addToast({ type: 'error', message: `VLC Error: ${err.message}` });
-    }
-  };
 
   // Stream in Cinema View
   const handleStreamInCinema = (chatId: string | number, messageId: number, filename?: string) => {
@@ -774,14 +757,6 @@ export const MobileTelegramDock: React.FC = () => {
                                     Cinema
                                   </button>
                                   <button
-                                    onClick={() => handleLaunchVlc(activeChat.id, m.id, m.media?.file_name)}
-                                    className="flex-1 py-1 px-2 rounded-md bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-[10px] font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                                    title="Launch in local VLC player"
-                                  >
-                                    <Tv className="w-3 h-3" />
-                                    VLC
-                                  </button>
-                                  <button
                                     onClick={() => handleCopyLink(activeChat.id, m.id, m.media?.file_name)}
                                     className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                                     title="Copy stream link"
@@ -1143,13 +1118,6 @@ export const MobileTelegramDock: React.FC = () => {
                 >
                   <Play className="w-3.5 h-3.5" />
                   Cinema Player
-                </button>
-                <button
-                  onClick={() => handleLaunchVlc(lightboxMedia.chatId, lightboxMedia.messageId, lightboxMedia.title)}
-                  className="px-3.5 py-1.5 rounded-xl bg-orange-500 text-white text-xs font-medium flex items-center gap-1.5 hover:bg-orange-600 transition-colors cursor-pointer shadow-sm"
-                >
-                  <Tv className="w-3.5 h-3.5" />
-                  Play in VLC
                 </button>
               </>
             )}

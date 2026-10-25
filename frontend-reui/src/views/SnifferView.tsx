@@ -135,33 +135,6 @@ export const SnifferView: React.FC = () => {
     }
   };
 
-  const handlePlayVlc = async (item: SnifferFeedItem) => {
-    addToast({
-      type: 'info',
-      title: 'Launching VLC',
-      message: `Starting "${item.filename}" in VLC Media Player...`,
-    });
-    try {
-      const res = await api.playInVlc({
-        chat_id: item.chat_id,
-        message_id: item.message_id,
-        filename: item.filename,
-        player: 'vlc',
-      });
-      if (res.launched) {
-        addToast({ type: 'success', title: 'Streaming in VLC', message: `Now playing "${item.filename}".` });
-      } else if (res.playlist_url) {
-        const a = document.createElement('a');
-        a.href = res.playlist_url;
-        a.download = `${item.filename}.m3u`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'Player Error', message: err.message });
-    }
-  };
 
   const handleCopyLink = (item: SnifferFeedItem) => {
     const url =
@@ -460,17 +433,6 @@ export const SnifferView: React.FC = () => {
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={() => handlePlayVlc(item)}
-                        className="h-8 text-xs flex-1 gap-1 cursor-pointer"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Stream VLC</span>
-                      </Button>
-                    )}
-                    {isVideo && (
-                      <Button
-                        variant="outline"
-                        size="sm"
                         onClick={() =>
                           setPreviewVideo({
                             chat_id: item.chat_id,
@@ -479,10 +441,10 @@ export const SnifferView: React.FC = () => {
                             size: item.size || 0,
                           })
                         }
-                        className="h-8 text-xs px-2.5 cursor-pointer"
-                        title="In-Browser Preview"
+                        className="h-8 text-xs flex-1 gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:opacity-90"
                       >
-                        <Tv className="w-3.5 h-3.5" />
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Stream Video</span>
                       </Button>
                     )}
                     <Button
@@ -521,16 +483,6 @@ export const SnifferView: React.FC = () => {
         video={previewVideo}
         open={Boolean(previewVideo)}
         onOpenChange={(open) => !open && setPreviewVideo(null)}
-        onLaunchVlc={(v) => {
-          setPreviewVideo(null);
-          handlePlayVlc({
-            id: String(v.message_id),
-            chat_id: v.chat_id,
-            message_id: v.message_id,
-            filename: v.filename,
-            status: 'stream',
-          });
-        }}
       />
     </div>
   );
