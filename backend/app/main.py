@@ -326,6 +326,76 @@ class MediaExcludingGZipMiddleware:
         await self.gzip_app(scope, receive, send)
 
 
+class GlobalAuthEnforcementMiddleware:
+    """
+    Comprehensive Zero-Trust Authentication Middleware:
+    1. Local loopback single-user mode is allowed when API_AUTH_TOKEN is unset.
+    2. Any remote / non-loopback connection (LAN, tunnel, proxy) strictly requires authentication.
+       If API_AUTH_TOKEN is unset on the server, remote requests are rejected with 403 Forbidden.
+    3. When API_AUTH_TOKEN is configured or ENABLE_API_AUTH is true, all non-public routes require a valid token.
+    """
+    PUBLIC_PREFIXES = (
+        "/assets/",
+        "/css/",
+        "/js/",
+    )
+    PUBLIC_PATHS = {
+        "/",
+        "/manifest.json",
+        "/favicon.ico",
+        "/favicon.svg",
+        "/icons.svg",
+        "/sw.js",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+        "/api/system/stats",
+        "/api/system/network",
+        "/api/system/qrcode",
+        "/api/auth/status",
+    }
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path in self.PUBLIC_PATHS or any(path.startswith(p) for p in self.PUBLIC_PREFIXES):
+                await self.app(scope, receive, send)
+                return
+
+            req = Request(scope)
+            from app.auth import is_loopback_request, is_authenticated
+            import app.auth as auth_mod
+            token = auth_mod.API_AUTH_TOKEN
+            enable_auth = auth_mod.ENABLE_API_AUTH
+            is_loopback = is_loopback_request(req)
+
+            must_auth = bool(token) or enable_auth or not is_loopback
+            if must_auth:
+                if not token:
+                    # Remote request without configured token -> 403 Forbidden
+                    response = Response(
+                        content='{"detail":"Forbidden: Non-loopback or remote requests require API_AUTH_TOKEN to be configured on the server."}',
+                        status_code=403,
+                        media_type="application/json"
+                    )
+                    await response(scope, receive, send)
+                    return
+                if not is_authenticated(req):
+                    response = Response(
+                        content='{"detail":"Unauthorized: Valid API authentication token required."}',
+                        status_code=401,
+                        media_type="application/json"
+                    )
+                    await response(scope, receive, send)
+                    return
+
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(GlobalAuthEnforcementMiddleware)
 app.add_middleware(MediaExcludingGZipMiddleware, minimum_size=1000)
 app.add_middleware(ClientDisconnectSuppressorMiddleware)
 app.add_middleware(SmartStaticCacheASGIMiddleware)
