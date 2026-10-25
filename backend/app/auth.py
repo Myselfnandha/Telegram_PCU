@@ -34,6 +34,29 @@ def is_authenticated(request: Request) -> bool:
     token_to_check = API_AUTH_TOKEN
     is_loopback = is_loopback_request(request)
 
+    # VLC and native mobile players cannot reliably attach custom auth headers. Accept a
+    # short-lived capability only for GET/HEAD requests to one exact /dl/{chat}/{message}
+    # resource. It cannot authorize API routes, transmux endpoints, or another media item.
+    req_method = request.scope.get("method", "GET") if hasattr(request, "scope") else getattr(request, "method", "GET")
+    if req_method in ("GET", "HEAD"):
+        path = request.scope.get("path", "") if hasattr(request, "scope") else getattr(request, "path", "")
+        parts = path.split("/")
+        media_identity = None
+        if path.startswith("/dl/") and len(parts) >= 4 and parts[2] and parts[3].isdigit():
+            media_identity = (parts[2], int(parts[3]))
+        elif path.startswith("/api/media/subtitles/download/") and len(parts) >= 7 and parts[5] and parts[6].isdigit():
+            media_identity = (parts[5], int(parts[6]))
+        if media_identity:
+            try:
+                from app.services.vlc_playback import playback_grants
+                if playback_grants.allows(
+                    request.query_params.get("playback_token", ""), media_identity[0], media_identity[1]
+                ):
+                    return True
+            except Exception:
+                # Fail closed if grant validation is unavailable.
+                pass
+
     # In local single-user mode (loopback only and auth not explicitly required), allow access
     if not token_to_check and not ENABLE_API_AUTH and is_loopback:
         return True
@@ -74,14 +97,17 @@ async def verify_auth(request: Request):
     must_authenticate = bool(API_AUTH_TOKEN) or ENABLE_API_AUTH or not is_loopback
 
     if must_authenticate:
+        # A valid media-scoped playback capability is also an authentication credential
+        # for its single media resource, including when the permanent API token is unset.
+        if is_authenticated(request):
+            return
         if not API_AUTH_TOKEN:
             # Non-loopback / remote access attempted without configured API_AUTH_TOKEN
             raise HTTPException(
                 status_code=403,
-                detail="Forbidden: Non-loopback or remote requests require API_AUTH_TOKEN to be configured on the server."
+                detail="Forbidden: Non-loopback or remote requests require API_AUTH_TOKEN to be configured on the server or a valid media playback link."
             )
-        if not is_authenticated(request):
-            raise HTTPException(
-                status_code=401,
-                detail="Unauthorized: Valid API authentication token required."
-            )
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Valid API authentication token required."
+        )

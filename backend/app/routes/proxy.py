@@ -36,6 +36,7 @@ from app.services.stream_cache import stream_cache_service, BLOCK_SIZE
 from app.services.fast_stream_engine import fast_stream_engine
 from app.services.subtitle_service import subtitle_service
 from app.services.playback_tracker import playback_tracker
+from app.services.vlc_playback import playback_grants
 from app.services.stream_saver import stream_saver_service
 from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_videos_db
 
@@ -1169,7 +1170,7 @@ async def prefetch_media_subtitles(chat_id: str, message_id: int):
 
 
 @router.get("/api/media/subtitles/download/{chat_id}/{message_id}")
-async def download_media_subtitles(chat_id: str, message_id: int):
+async def download_media_subtitles(chat_id: str, message_id: int, _auth = Depends(verify_auth)):
     """
     Direct subtitle file provider for VLC (--sub-file / --input-slave) and mobile M3U players.
     Serves cached or auto-fetched SRT subtitles, or falls back to a clean empty subtitle stream.
@@ -1344,7 +1345,7 @@ async def get_stream_buffer_stats():
 
 @router.get("/api/media/mobile_info/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
 async def get_mobile_playback_info(chat_id: str, message_id: int, request: Request, filename: Optional[str] = None):
-    """Returns multi-platform mobile playback and LAN QR code stream links."""
+    """Returns scoped, expiring playback URLs and an embedded QR image for VLC/mobile clients."""
     from app.config import PROXY_PORT
     host = request.headers.get("host", f"127.0.0.1:{PROXY_PORT}")
     scheme = request.url.scheme or "http"
@@ -1356,28 +1357,78 @@ async def get_mobile_playback_info(chat_id: str, message_id: int, request: Reque
             clean_fn = auto_rename(cached_msg.file.name)
 
     import urllib.parse
+    import base64
     enc_name = urllib.parse.quote(clean_fn)
-    stream_url = f"{scheme}://{host}/dl/{chat_id}/{message_id}/{enc_name}"
+    # The capability is scoped to this chat/message and expires after four hours. VLC
+    # can use it without receiving the server's permanent API token.
+    playback_token = playback_grants.issue(chat_id, message_id)
+    token_query = urllib.parse.urlencode({"playback_token": playback_token})
+    stream_url = f"{scheme}://{host}/dl/{urllib.parse.quote(str(chat_id), safe='')}/{message_id}/{enc_name}?{token_query}"
+    local_stream_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{urllib.parse.quote(str(chat_id), safe='')}/{message_id}/{enc_name}?{token_query}"
     sub_file = subtitle_service.get_cached_subtitle(clean_fn)
 
     from app.services.network_service import network_service
     lan_ip = network_service.get_lan_ip()
-    lan_host = f"{lan_ip}:{PROXY_PORT}"
-    lan_stream_url = f"{scheme}://{lan_host}/dl/{chat_id}/{message_id}/{enc_name}"
+    lan_stream_url = f"http://{lan_ip}:{PROXY_PORT}/dl/{urllib.parse.quote(str(chat_id), safe='')}/{message_id}/{enc_name}?{token_query}"
+    # Embed the QR PNG in the authenticated response; an <img> request cannot attach
+    # the application's API auth headers, and the QR endpoint must remain private.
+    qr_bytes = network_service.generate_qr(lan_stream_url)
+    qr_data_url = "data:image/png;base64," + base64.b64encode(qr_bytes).decode("ascii")
     lan_qrcode_url = f"/api/system/qrcode?text={urllib.parse.quote(lan_stream_url)}"
+
+    local_subtitle_url = f"http://127.0.0.1:{PROXY_PORT}/api/media/subtitles/download/{urllib.parse.quote(str(chat_id), safe='')}/{message_id}?{token_query}"
+    lan_subtitle_url = f"http://{lan_ip}:{PROXY_PORT}/api/media/subtitles/download/{urllib.parse.quote(str(chat_id), safe='')}/{message_id}?{token_query}"
 
     return {
         "chat_id": str(chat_id),
         "message_id": message_id,
         "filename": clean_fn,
         "stream_url": stream_url,
+        "local_stream_url": local_stream_url,
         "has_subtitles": bool(sub_file and sub_file.exists()),
-        "subtitles_url": f"/api/media/subtitles/download/{chat_id}/{message_id}" if (sub_file and sub_file.exists()) else None,
+        "subtitles_url": local_subtitle_url if (sub_file and sub_file.exists()) else None,
+        "lan_subtitles_url": lan_subtitle_url,
         "host": host,
         "lan_ip": lan_ip,
         "lan_stream_url": lan_stream_url,
-        "lan_qrcode_url": lan_qrcode_url
+        "lan_qrcode_url": lan_qrcode_url,
+        "lan_qrcode_data_url": qr_data_url,
+        "playback_token_expires_in_seconds": 4 * 60 * 60
     }
+
+
+@router.post("/api/media/vlc/launch/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
+async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, filename: Optional[str] = None):
+    """Launch VLC on the TG Power Suite host; deliberately restricted to direct loopback clients."""
+    import shutil
+    import subprocess
+    from app.config import PROXY_PORT
+
+    peer = getattr(request.client, "host", "") if request.client else ""
+    if peer not in ("127.0.0.1", "::1", "localhost", "testclient", "testserver"):
+        raise HTTPException(status_code=403, detail="Desktop VLC launch is available only from the local machine.")
+    if any(header in request.headers for header in ("cf-connecting-ip", "x-forwarded-for", "x-real-ip")):
+        raise HTTPException(status_code=403, detail="Proxied VLC launch requests are not allowed.")
+
+    vlc_bin = shutil.which("vlc")
+    if not vlc_bin:
+        raise HTTPException(status_code=503, detail="VLC is not installed or not available on PATH. On Arch Linux, install it with: sudo pacman -S vlc.")
+
+    import urllib.parse
+    safe_name = urllib.parse.quote(filename or f"video_{message_id}.mp4")
+    grant = playback_grants.issue(chat_id, message_id)
+    url = f"http://127.0.0.1:{PROXY_PORT}/dl/{urllib.parse.quote(str(chat_id), safe='')}/{message_id}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
+    try:
+        proc = subprocess.Popen(
+            [vlc_bin, "--no-video-title-show", "--network-caching=1500", "--file-caching=1000", "--http-reconnect", url],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True, close_fds=True,
+        )
+    except OSError as exc:
+        logger.exception("Could not launch VLC")
+        raise HTTPException(status_code=500, detail=f"Failed to launch VLC: {exc}")
+    return {"success": True, "pid": proc.pid, "player": "vlc", "message": "VLC launched."}
+
 
 
 @router.get("/api/media/continue_watching", dependencies=[Depends(verify_auth)])

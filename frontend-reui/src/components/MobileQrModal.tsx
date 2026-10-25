@@ -25,7 +25,7 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
     lan_vlc_url?: string;
     lan_android_intent?: string;
     lan_playlist_url?: string;
-    lan_qrcode_url?: string;
+    lan_qrcode_data_url?: string;
     filename?: string;
   } | null>(null);
 
@@ -96,9 +96,9 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
             {/* Scannable QR Code */}
             <div className="flex flex-col items-center justify-center p-4 rounded-xl bg-black/60 border border-white/10 space-y-2.5">
               <div className="p-2.5 rounded-xl bg-white shadow-xl">
-                {mobileInfo.lan_qrcode_url ? (
+                {mobileInfo.lan_qrcode_data_url ? (
                   <img
-                    src={mobileInfo.lan_qrcode_url}
+                    src={mobileInfo.lan_qrcode_data_url}
                     alt="Stream QR Code"
                     className="w-48 h-48 object-contain"
                   />
@@ -109,7 +109,7 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
                 )}
               </div>
               <p className="text-[11px] text-zinc-400 text-center max-w-xs">
-                Scan with your phone's camera, tablet, or TV QR scanner to open stream immediately.
+                Scan on the same Wi-Fi network, then open the stream in VLC or a compatible player. The link expires after four hours.
               </p>
               {mobileInfo.lan_ip && (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -119,7 +119,7 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
             </div>
 
             {/* Quick Action Buttons */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-3 gap-2 pt-1">
               <Button
                 variant="outline"
                 size="sm"
@@ -130,6 +130,20 @@ export function MobileQrModal({ open, onOpenChange, video }: MobileQrModalProps)
                 <span>Copy Stream URL</span>
               </Button>
 
+              <a
+                href={mobileInfo.lan_stream_url?.replace(/^http:\/\//, 'intent://') + '#Intent;scheme=http;package=org.videolan.vlc;end'}
+                className="inline-flex"
+                aria-label="Open stream in VLC for Android"
+              >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-9 text-xs gap-1.5 border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 cursor-pointer"
+                >
+                  <Tv className="w-4 h-4" />
+                  <span>Open VLC</span>
+                </Button>
+              </a>
               <a
                 href={mobileInfo.lan_stream_url}
                 target="_blank"

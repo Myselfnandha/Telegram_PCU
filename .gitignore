@@ -45,6 +45,7 @@ backend/backups/
 *.log*
 *.pid
 *.zip
+tg_power_suite_v2.0_vlc_stability_patch/
 ZeroGravity
 *ZeroGravity
 # Temporary Buffers & Download Directories

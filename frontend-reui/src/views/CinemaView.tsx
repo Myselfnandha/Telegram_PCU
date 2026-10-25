@@ -134,51 +134,53 @@ export const CinemaView: React.FC = () => {
   }, [selectedChat.id]);
 
 
-  const handleExportPlaylist = () => {
+  const handleExportPlaylist = async () => {
     if (selectedIds.size === 0) return;
     const selectedVideos = filteredVideos.filter((v) => selectedIds.has(v.message_id));
-    const lines = ['#EXTM3U'];
-    const origin = window.location.origin;
-    const cachingVal = Number(localStorage.getItem('tg_network_caching') || 1000);
-    const audioLang = localStorage.getItem('tg_audio_lang') || 'tam,eng,hin,tel,mal,kan,all';
-    const subLang = localStorage.getItem('tg_sub_lang') || 'eng,tam,hin,all';
+    try {
+      addToast({ type: 'info', title: 'Preparing VLC playlist', message: 'Creating short-lived, media-scoped stream links…' });
+      const playbackInfo = await Promise.all(
+        selectedVideos.map((video) => api.getMobilePlaybackInfo(video.chat_id, video.message_id, video.filename))
+      );
+      const lines = ['#EXTM3U'];
+      const cachingVal = Number(localStorage.getItem('tg_network_caching') || 1500);
+      const audioLang = localStorage.getItem('tg_audio_lang') || 'tam,eng,hin,tel,mal,kan,all';
+      const subLang = localStorage.getItem('tg_sub_lang') || 'eng,tam,hin,all';
 
-    for (const v of selectedVideos) {
-      const streamUrl = `${origin}/dl/${encodeURIComponent(String(v.chat_id))}/${v.message_id}/${encodeURIComponent(v.filename)}`;
-      const subUrl = `${origin}/api/media/subtitles/download/${encodeURIComponent(String(v.chat_id))}/${v.message_id}`;
-      lines.push(`#EXTINF:-1,${cleanFileName(v.filename)}`);
-      lines.push(`#EXTVLCOPT:network-caching=${cachingVal}`);
-      lines.push(`#EXTVLCOPT:file-caching=${cachingVal}`);
-      lines.push(`#EXTVLCOPT:live-caching=${cachingVal}`);
-      lines.push('#EXTVLCOPT:clock-jitter=0');
-      lines.push('#EXTVLCOPT:clock-synchro=0');
-      lines.push('#EXTVLCOPT:drop-late-frames');
-      lines.push('#EXTVLCOPT:skip-frames');
-      lines.push('#EXTVLCOPT:http-reconnect');
-      lines.push('#EXTVLCOPT:http-continuous');
-      lines.push('#EXTVLCOPT:input-fast-seek');
-      lines.push('#EXTVLCOPT:avcodec-hw=any');
-      lines.push('#EXTVLCOPT:avcodec-fast');
-      lines.push('#EXTVLCOPT:deinterlace=-1');
-      lines.push('#EXTVLCOPT:deinterlace-mode=auto');
-      lines.push(`#EXTVLCOPT:sub-language=${subLang}`);
-      lines.push(`#EXTVLCOPT:audio-language=${audioLang}`);
-      lines.push(`#EXTVLCOPT:input-slave=${subUrl}`);
-      lines.push(`#EXTVLCOPT:sub-file=${subUrl}`);
-      lines.push(streamUrl);
+      selectedVideos.forEach((video, index) => {
+        const info = playbackInfo[index];
+        const streamUrl = info.lan_ip && info.lan_ip !== '127.0.0.1' ? info.lan_stream_url : info.stream_url;
+        if (!streamUrl) return;
+        lines.push(`#EXTINF:-1,${cleanFileName(video.filename)}`);
+        lines.push(`#EXTVLCOPT:network-caching=${cachingVal}`);
+        lines.push(`#EXTVLCOPT:file-caching=${cachingVal}`);
+        lines.push('#EXTVLCOPT:http-reconnect');
+        lines.push('#EXTVLCOPT:http-continuous');
+        lines.push('#EXTVLCOPT:input-fast-seek');
+        lines.push('#EXTVLCOPT:avcodec-hw=any');
+        lines.push(`#EXTVLCOPT:sub-language=${subLang}`);
+        lines.push(`#EXTVLCOPT:audio-language=${audioLang}`);
+        if (info.lan_subtitles_url) {
+          lines.push(`#EXTVLCOPT:input-slave=${info.lan_subtitles_url}`);
+          lines.push(`#EXTVLCOPT:sub-file=${info.lan_subtitles_url}`);
+        }
+        lines.push(streamUrl);
+      });
+      const blob = new Blob([lines.join('\n')], { type: 'audio/x-mpegurl' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedChat.name || 'Playlist'}.m3u`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast({
+        type: 'success',
+        title: 'Playlist Exported',
+        message: `Created VLC playlist with ${selectedVideos.length} media-scoped links. Links expire after four hours.`,
+      });
+    } catch (error) {
+      addToast({ type: 'error', title: 'Playlist export failed', message: error instanceof Error ? error.message : 'Could not prepare VLC stream links.' });
     }
-    const blob = new Blob([lines.join('\n')], { type: 'audio/x-mpegurl' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedChat.name || 'Playlist'}.m3u`;
-    a.click();
-    URL.revokeObjectURL(url);
-    addToast({
-      type: 'success',
-      title: 'Playlist Exported',
-      message: `Downloaded .M3U playlist with ${selectedVideos.length} episode(s) with audio normalizer & subtitles for VLC!`,
-    });
   };
 
   const toggleSelectVideo = (messageId: number) => {
@@ -206,6 +208,19 @@ export const CinemaView: React.FC = () => {
       title: 'Stream URL Copied',
       message: 'Direct media stream URL copied to clipboard.',
     });
+  };
+
+  const handlePlayInVlc = async (video: CinemaVideo) => {
+    try {
+      const result = await api.launchVlc(video.chat_id, video.message_id, video.filename);
+      addToast({ type: 'success', title: 'VLC launched', message: result.message || `Playing ${video.filename} in VLC.` });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Could not launch VLC',
+        message: error instanceof Error ? error.message : 'Check that VLC is installed on the TG Power Suite desktop.',
+      });
+    }
   };
 
   const handleRemoveContinueWatching = async (item: ContinueWatchingItem) => {
@@ -643,7 +658,7 @@ export const CinemaView: React.FC = () => {
                       </div>
 
                       {/* Action Button Row */}
-                      <div className={`grid grid-cols-4 gap-1.5 ${isDense ? 'pt-1.5' : 'pt-2'} border-t border-border/40`}>
+                      <div className={`grid grid-cols-5 gap-1.5 ${isDense ? 'pt-1.5' : 'pt-2'} border-t border-border/40`}>
                         <Button
                           size="sm"
                           variant="default"
@@ -653,6 +668,17 @@ export const CinemaView: React.FC = () => {
                         >
                           <Play className="w-3 h-3 fill-current" />
                           <span>Stream Video</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void handlePlayInVlc(video)}
+                          aria-label={`Play ${media.cleanTitle} in desktop VLC`}
+                          className={`${isDense ? 'h-7 text-[10px] px-1' : 'h-8 text-[11px] px-1'} cursor-pointer font-medium gap-1 hover:bg-primary/10 hover:text-primary transition-colors`}
+                          title="Play on this Arch Linux desktop in VLC"
+                        >
+                          <PlayCircle className="w-3 h-3" />
+                          <span>VLC</span>
                         </Button>
                         <Button
                           size="sm"

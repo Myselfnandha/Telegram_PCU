@@ -250,9 +250,22 @@ class ApiService {
     return { ...res, videos: normalized };
   }
 
-  async getMobilePlaybackInfo(chatId: string | number, messageId: number, filename?: string): Promise<any> {
+  async getMobilePlaybackInfo(chatId: string | number, messageId: number, filename?: string): Promise<{
+    lan_ip?: string;
+    lan_stream_url?: string;
+    lan_qrcode_data_url?: string;
+    lan_subtitles_url?: string;
+    stream_url?: string;
+    filename?: string;
+    playback_token_expires_in_seconds?: number;
+  }> {
     const q = filename ? `?filename=${encodeURIComponent(filename)}` : '';
     return this.request(`/api/media/mobile_info/${encodeURIComponent(String(chatId))}/${messageId}${q}`);
+  }
+
+  async launchVlc(chatId: string | number, messageId: number, filename?: string): Promise<{ success: boolean; pid?: number; message?: string }> {
+    const q = filename ? `?filename=${encodeURIComponent(filename)}` : '';
+    return this.request(`/api/media/vlc/launch/${encodeURIComponent(String(chatId))}/${messageId}${q}`, { method: 'POST' });
   }
 
   async getContinueWatching(): Promise<ContinueWatchingItem[]> {
