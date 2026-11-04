@@ -206,6 +206,13 @@ class SnifferService:
         except Exception as e:
             logger.warning(f"Could not initialize dispatched_downloads SQLite table: {e}")
 
+    def _cache_message(self, key: Tuple[Any, int], message: Any):
+        """Bounded message cache with FIFO eviction to prevent memory accumulation."""
+        if len(self._message_cache) > 2000:
+            for k in list(self._message_cache.keys())[:400]:
+                self._message_cache.pop(k, None)
+        self._message_cache[key] = message
+
     def is_dispatched(self, chat_id: Union[int, str], message_id: int) -> bool:
         """Returns True if the message has already been dispatched (in-memory + SQLite)."""
         key = (str(chat_id), int(message_id))
@@ -551,7 +558,7 @@ class SnifferService:
         encoded_fname = urllib.parse.quote(fname)
         link = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{chat_id}/{message_id}/{encoded_fname}"
 
-        self._message_cache[(chat_id, message_id)] = event.message
+        self._cache_message((chat_id, message_id), event.message)
 
         if not force and self.is_dispatched(chat_id, message_id):
             return
@@ -574,7 +581,7 @@ class SnifferService:
 
         chat_id = utils.get_peer_id(event.chat_id) if hasattr(event, "chat_id") and event.chat_id else 0
         message_id = message.id
-        self._message_cache[(chat_id, message_id)] = message
+        self._cache_message((chat_id, message_id), message)
 
         file_size = int(message.file.size or 0)
         min_bytes = MIN_FILE_SIZE_MB * 1024 * 1024

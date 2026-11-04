@@ -121,13 +121,13 @@ class PlaybackTracker:
                     display_title = CASE WHEN excluded.filename NOT LIKE 'tg_media_%' AND excluded.filename != 'thumb' THEN excluded.display_title ELSE playback_history.display_title END,
                     last_position_seconds = CASE 
                         WHEN ? THEN 0.0
-                        WHEN excluded.last_position_seconds > 0 THEN excluded.last_position_seconds 
+                        WHEN excluded.last_position_seconds > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.last_position_seconds 
                         ELSE playback_history.last_position_seconds 
                     END,
                     duration_seconds = CASE WHEN excluded.duration_seconds > 0 THEN excluded.duration_seconds ELSE playback_history.duration_seconds END,
                     progress_percent = CASE 
                         WHEN ? THEN 0.0
-                        WHEN excluded.progress_percent > 0 THEN excluded.progress_percent 
+                        WHEN excluded.progress_percent > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.progress_percent 
                         ELSE playback_history.progress_percent 
                     END,
                     last_watched_at = excluded.last_watched_at,
@@ -157,7 +157,7 @@ class PlaybackTracker:
         """
         Updates chunk-aligned progress derived from VLC/browser byte-range streaming requests.
         Protects existing progress from being wiped by initial container header probes (0..16MB).
-        Only updates last_byte_offset and last_chunk_index without altering real playback position.
+        Infers playback seconds and percentage from the byte stream ratio.
         """
         if not filename or filename == "thumb":
             return
@@ -172,20 +172,59 @@ class PlaybackTracker:
         record_id = f"{chat_id}_{message_id}"
         now = time.time()
 
+        # Calculate inferred seconds & percent from byte ratio
+        existing = self.get_playback_progress(chat_id, message_id)
+        duration_seconds = (existing.get("duration_seconds") or 0.0) if existing else 0.0
+        if duration_seconds <= 0 and total_file_size > 0:
+            duration_seconds = max(60.0, total_file_size / (350 * 1024))
+
+        ratio = min(1.0, max(0.0, streamed_byte_offset / total_file_size)) if total_file_size > 0 else 0.0
+        inferred_position_seconds = round(ratio * duration_seconds, 1) if duration_seconds > 0 else 0.0
+        inferred_percent = round(min(100.0, ratio * 100.0), 1)
+
+        parsed = subtitle_service.parse_media_title(filename)
+        display_title = parsed.get("title", filename)
+        is_series = 1 if parsed.get("is_series") else 0
+        series_title = parsed.get("title") if is_series else None
+        season_num = parsed.get("season")
+        episode_num = parsed.get("episode")
+        if is_series and season_num and episode_num:
+            display_title = f"{series_title} S{season_num:02d}E{episode_num:02d}"
+        elif parsed.get("year"):
+            display_title = f"{display_title} ({parsed.get('year')})"
+
+        thumb_url = f"/dl/{chat_id}/{message_id}/thumb"
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO playback_history (
                     id, chat_id, message_id, filename, display_title,
-                    file_size, last_watched_at, last_chunk_index, last_byte_offset
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    file_size, duration_seconds, last_position_seconds,
+                    progress_percent, last_watched_at, is_series,
+                    series_title, season_num, episode_num, thumbnail_url,
+                    last_chunk_index, last_byte_offset
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     last_chunk_index = excluded.last_chunk_index,
                     last_byte_offset = excluded.last_byte_offset,
-                    last_watched_at = excluded.last_watched_at
+                    last_watched_at = excluded.last_watched_at,
+                    duration_seconds = CASE WHEN playback_history.duration_seconds > 0 THEN playback_history.duration_seconds ELSE excluded.duration_seconds END,
+                    last_position_seconds = CASE 
+                        WHEN playback_history.last_position_seconds > excluded.last_position_seconds THEN playback_history.last_position_seconds 
+                        ELSE excluded.last_position_seconds 
+                    END,
+                    progress_percent = CASE 
+                        WHEN playback_history.progress_percent > excluded.progress_percent THEN playback_history.progress_percent 
+                        ELSE excluded.progress_percent 
+                    END,
+                    thumbnail_url = COALESCE(playback_history.thumbnail_url, excluded.thumbnail_url)
             """, (
-                record_id, str(chat_id), message_id, filename, filename,
-                total_file_size, now, chunk_index, streamed_byte_offset
+                record_id, str(chat_id), message_id, filename, display_title,
+                total_file_size, duration_seconds, inferred_position_seconds,
+                inferred_percent, now, is_series,
+                series_title, season_num, episode_num, thumb_url,
+                chunk_index, streamed_byte_offset
             ))
             conn.commit()
 
@@ -197,13 +236,19 @@ class PlaybackTracker:
             cursor.execute("SELECT * FROM playback_history WHERE id = ?", (record_id,))
             row = cursor.fetchone()
             if row:
-                return dict(row)
+                d = dict(row)
+                d["playback_seconds"] = d.get("last_position_seconds", 0.0)
+                d["total_seconds"] = d.get("duration_seconds", 0.0)
+                d["percent"] = round(d.get("progress_percent", 0.0), 1)
+                d["thumb_url"] = d.get("thumbnail_url") or f"/dl/{d.get('chat_id')}/{d.get('message_id')}/thumb"
+                d["last_watched"] = d.get("last_watched_at")
+                return d
         return None
 
     def get_continue_watching(self, limit: int = 12) -> List[Dict[str, Any]]:
         """
         Returns actively watched videos (progress >= 1% or position >= 10s)
-        ordered by most recently watched.
+        ordered by most recently watched, with normalized keys for frontend and backend compatibility.
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -216,7 +261,16 @@ class PlaybackTracker:
                 LIMIT ?
             """, (limit,))
             rows = cursor.fetchall()
-            return [dict(r) for r in rows]
+            results = []
+            for r in rows:
+                d = dict(r)
+                d["playback_seconds"] = d.get("last_position_seconds", 0.0)
+                d["total_seconds"] = d.get("duration_seconds", 0.0)
+                d["percent"] = round(d.get("progress_percent", 0.0), 1)
+                d["thumb_url"] = d.get("thumbnail_url") or f"/dl/{d.get('chat_id')}/{d.get('message_id')}/thumb"
+                d["last_watched"] = d.get("last_watched_at")
+                results.append(d)
+            return results
 
     def remove_progress(self, chat_id: str, message_id: int):
         """Removes an item from continue watching."""
@@ -229,3 +283,4 @@ class PlaybackTracker:
 
 # Global singleton playback tracker
 playback_tracker = PlaybackTracker()
+

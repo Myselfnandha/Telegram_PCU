@@ -28,7 +28,10 @@ import {
   Trash2,
   Tv,
   Wifi,
+  Zap,
 } from 'lucide-react';
+import { SecondaryAuthModal } from '@/components/SecondaryAuthModal';
+import type { SecondaryAuthStatus } from '@/types';
 
 export const SettingsView: React.FC = () => {
   const { authStatus, setAuthModalOpen, refreshAuth, telemetry, theme, setTheme, toggleTheme, addToast } = useApp();
@@ -51,6 +54,8 @@ export const SettingsView: React.FC = () => {
   const [cacheStatus, setCacheStatus] = useState<{ total_mb?: number; size_mb?: number; file_count?: number } | null>(null);
   const [networkInfo, setNetworkInfo] = useState<{ local_ip?: string; port?: number; latency_ms?: number } | null>(null);
   const [offlineSaver, setOfflineSaver] = useState<boolean>(false);
+  const [secondaryStatus, setSecondaryStatus] = useState<SecondaryAuthStatus | null>(null);
+  const [secondaryModalOpen, setSecondaryModalOpen] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
   const [pinging, setPinging] = useState(false);
   const [pingResult, setPingResult] = useState<number | null>(null);
@@ -76,10 +81,18 @@ export const SettingsView: React.FC = () => {
     } catch {}
   };
 
+  const loadSecondaryAuth = async () => {
+    try {
+      const res = await api.getSecondaryAuthStatus();
+      setSecondaryStatus(res);
+    } catch {}
+  };
+
   useEffect(() => {
     loadCacheStatus();
     loadNetworkInfo();
     loadOfflineSaver();
+    loadSecondaryAuth();
   }, []);
 
   const handleToggleOfflineSaver = async (enabled: boolean) => {
@@ -92,6 +105,22 @@ export const SettingsView: React.FC = () => {
         message: enabled
           ? 'Completed streams will automatically save to ~/Videos/Telegram_Cinema'
           : 'Offline stream saving disabled.',
+      });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Error', message: err.message });
+    }
+  };
+
+  const handleToggleTurbo = async (enabled: boolean) => {
+    try {
+      await api.toggleSecondaryTurbo(enabled);
+      setSecondaryStatus((prev) => (prev ? { ...prev, enabled } : { enabled, authenticated: false }));
+      addToast({
+        type: 'success',
+        title: enabled ? 'Turbo Pooling Enabled' : 'Turbo Pooling Disabled',
+        message: enabled
+          ? 'Multi-Account MTProto pooling will accelerate all streams and downloads (2x).'
+          : 'Using single Telegram account for transfers.',
       });
     } catch (err: any) {
       addToast({ type: 'error', title: 'Error', message: err.message });
@@ -324,6 +353,104 @@ export const SettingsView: React.FC = () => {
           )}
         </div>
 
+        {/* Multi-Account Turbo (2x Speed) Card */}
+        <div className="p-5 rounded-2xl border border-border/70 bg-card/85 backdrop-blur-md shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                <Zap className="w-4 h-4 fill-amber-500/20" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  Multi-Account Turbo
+                </h2>
+                <span className="text-[11px] text-muted-foreground">Speed Doubler (2x Aggregate MTProto)</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className={
+                  secondaryStatus?.authenticated && secondaryStatus?.enabled
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px]'
+                    : secondaryStatus?.authenticated
+                    ? 'bg-muted text-muted-foreground text-[10px]'
+                    : 'bg-muted text-muted-foreground text-[10px]'
+                }
+              >
+                {secondaryStatus?.authenticated && secondaryStatus?.enabled
+                  ? '⚡ 2x Active'
+                  : secondaryStatus?.authenticated
+                  ? 'Paused'
+                  : 'Ready to Connect'}
+              </Badge>
+              {secondaryStatus?.authenticated && (
+                <Switch
+                  checked={secondaryStatus.enabled}
+                  onCheckedChange={handleToggleTurbo}
+                  className="scale-90 cursor-pointer"
+                />
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Bypass Telegram's per-account rate limits (~1.5–4.5 MB/s) by concurrently downloading alternate chunks across two separate MTProto accounts.
+          </p>
+
+          {secondaryStatus?.authenticated && secondaryStatus.user ? (
+            <div className="space-y-3 pt-1">
+              <div className="p-3.5 rounded-xl bg-accent/40 border border-border flex items-center gap-3">
+                <div className="w-11 h-11 rounded-full bg-amber-500/20 flex items-center justify-center font-bold text-amber-500 text-base shrink-0">
+                  {secondaryStatus.user.first_name ? secondaryStatus.user.first_name.charAt(0).toUpperCase() : '2'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      {secondaryStatus.user.name || secondaryStatus.user.first_name || 'Secondary User'}
+                    </span>
+                    {secondaryStatus.user.is_premium && (
+                      <Badge variant="outline" className="text-[9px] bg-primary/10 text-primary border-primary/20 py-0 px-1">
+                        Premium
+                      </Badge>
+                    )}
+                  </div>
+                  {secondaryStatus.user.username && (
+                    <div className="text-[11px] text-muted-foreground">@{secondaryStatus.user.username}</div>
+                  )}
+                  {secondaryStatus.user.phone && (
+                    <div className="text-[11px] text-muted-foreground font-mono">{secondaryStatus.user.phone}</div>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSecondaryModalOpen(true)}
+                className="w-full text-xs cursor-pointer"
+              >
+                Manage Secondary Account
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3 pt-1">
+              <div className="text-xs text-muted-foreground bg-accent/30 p-3 rounded-lg border border-border leading-relaxed">
+                ⚡ Connect a second Telegram account or paste a Telethon StringSession to achieve <strong>~9–12 MB/s</strong> (up to <strong>48 MB/s</strong> with Premium).
+              </div>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setSecondaryModalOpen(true)}
+                className="w-full text-xs cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0 shadow-sm"
+              >
+                <Zap className="w-3.5 h-3.5 mr-1.5 fill-white" />
+                Connect Secondary Account (2x Boost)
+              </Button>
+            </div>
+          )}
+        </div>
+
         {/* Media Player Engine & Buffering */}
         <div className="p-5 rounded-2xl border border-border/70 bg-card/85 backdrop-blur-md shadow-sm space-y-4">
           <div className="flex items-center gap-2">
@@ -512,6 +639,14 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <SecondaryAuthModal
+        open={secondaryModalOpen}
+        onOpenChange={setSecondaryModalOpen}
+        status={secondaryStatus}
+        onSuccess={loadSecondaryAuth}
+        addToast={addToast}
+      />
     </div>
   );
 };

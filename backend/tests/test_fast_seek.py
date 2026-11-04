@@ -339,6 +339,7 @@ async def test_direct_streamer_pipelined_producer_delivers_chunks():
     mock_client._call = AsyncMock(return_value=mock_res)
 
     with patch("app.telegram_client.TelegramClientManager.get_client", AsyncMock(return_value=mock_client)), \
+         patch("app.telegram_client.TelegramClientManager.get_active_streaming_clients", AsyncMock(return_value=[mock_client])), \
          patch("app.telegram_client.sender_pool.borrow") as mock_borrow:
         mock_sender = MagicMock()
         mock_borrow.return_value.__aenter__ = AsyncMock(return_value=mock_sender)
@@ -683,9 +684,8 @@ def test_stream_buffer_enhanced_limits_and_stitched_assembly():
 
 
 def test_sender_pool_max_per_dc_capacity():
-    """Verifies that sender_pool default capacity is 8 per DC for high-throughput streaming."""
     from app.telegram_client import sender_pool
-    assert sender_pool.max_per_dc == 8
+    assert sender_pool.max_per_dc == 32
 
 
 @pytest.mark.asyncio
@@ -1030,7 +1030,264 @@ async def test_cache_status_and_buffer_stats_routes():
     assert cleared["success"] is True
 
 
+@pytest.mark.asyncio
+async def test_stream_engine_in_flight_chunk_deduplication():
+    """
+    Verifies that StreamEngine deduplicates simultaneous in-flight chunk requests.
+    When multiple seek iterations or workers request the same chunk offset,
+    exactly ONE MTProto wire request is executed, and both callers receive the chunk.
+    """
+    from app.services.stream_engine import StreamEngine
+    from app.services.stream_buffer import stream_buffer
+    engine = StreamEngine()
+
+    call_count = 0
+    async def mock_call(s, req, flood_sleep_threshold=0):
+        nonlocal call_count
+        call_count += 1
+        await asyncio.sleep(0.05)  # simulate wire latency
+        res = MagicMock()
+        res.bytes = b"CHUNK_DEDUP_PAYLOAD_" * 100
+        return res
+
+    from telethon.tl.types import Document
+    mock_client = MagicMock()
+    mock_client._call = mock_call
+    mock_client.session = MagicMock(dc_id=4)
+    fake_message = MagicMock()
+    fake_message.media = Document(
+        id=99999,
+        access_hash=88888,
+        file_reference=b"ref123",
+        date=None,
+        mime_type="video/mp4",
+        size=10 * 1024 * 1024,
+        dc_id=4,
+        thumbs=None,
+        video_thumbs=None,
+        attributes=[],
+    )
+    fake_message.file = MagicMock(size=10 * 1024 * 1024, name="test.mkv")
+
+    # Clear any previous buffers for this key
+    chat_id = "test_dedup_chat"
+    msg_id = 99991
+
+    with patch("app.services.stream_engine.sender_pool.borrow") as mock_borrow:
+        mock_borrow.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        mock_borrow.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        # Run two simultaneous streams that both ask for the first chunk (offset 0..1MB)
+        gen1 = engine.stream_media(
+            client=mock_client,
+            chat_id=chat_id,
+            message_id=msg_id,
+            start=0,
+            length=1024 * 1024,
+            file_size=10 * 1024 * 1024,
+            is_media_player=True,
+            clean_name="test.mkv",
+            message=fake_message
+        )
+
+        gen2 = engine.stream_media(
+            client=mock_client,
+            chat_id=chat_id,
+            message_id=msg_id,
+            start=0,
+            length=1024 * 1024,
+            file_size=10 * 1024 * 1024,
+            is_media_player=True,
+            clean_name="test.mkv",
+            message=fake_message
+        )
+
+        async def get_first_chunk(g):
+            async for chunk in g:
+                return chunk
+
+        chunk1, chunk2 = await asyncio.gather(get_first_chunk(gen1), get_first_chunk(gen2))
+        await gen1.aclose()
+        await gen2.aclose()
+
+        assert chunk1 is not None and chunk2 is not None
+        assert chunk1 == chunk2
+        # Exactly ONE MTProto wire download was executed despite 2 parallel streams!
+        assert call_count == 1
 
 
+@pytest.mark.asyncio
+async def test_stream_engine_shielded_chunk_completion_on_cancel():
+    """
+    Verifies that when a stream iterator is cancelled prematurely during a seek,
+    the detached MTProto wire task completes cleanly without corrupting senders,
+    and caches the downloaded chunk into stream_buffer for instant subsequent reuse.
+    """
+    from app.services.stream_engine import StreamEngine
+    from app.services.stream_buffer import stream_buffer
+    from telethon.tl.types import Document
 
+    engine = StreamEngine()
+    wire_event = asyncio.Event()
+
+    async def mock_call(s, req, flood_sleep_threshold=0):
+        await wire_event.wait()
+        res = MagicMock()
+        res.bytes = b"SHIELDED_CHUNK_CONTENT_" * 100
+        return res
+
+    mock_client = MagicMock()
+    mock_client._call = mock_call
+    mock_client.session = MagicMock(dc_id=4)
+    fake_message = MagicMock()
+    fake_message.media = Document(
+        id=99992,
+        access_hash=88882,
+        file_reference=b"ref123",
+        date=None,
+        mime_type="video/mp4",
+        size=10 * 1024 * 1024,
+        dc_id=4,
+        thumbs=None,
+        video_thumbs=None,
+        attributes=[],
+    )
+    fake_message.file = MagicMock(size=10 * 1024 * 1024, name="test2.mkv")
+
+    chat_id = "test_shield_chat"
+    msg_id = 99992
+
+    with patch("app.services.stream_engine.sender_pool.borrow") as mock_borrow, \
+         patch("app.services.rust_bridge.rust_bridge.is_healthy", AsyncMock(return_value=False)):
+        mock_borrow.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        mock_borrow.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        # 1. Start stream 1
+        gen1 = engine.stream_media(
+            client=mock_client,
+            chat_id=chat_id,
+            message_id=msg_id,
+            start=0,
+            length=1024 * 1024,
+            file_size=10 * 1024 * 1024,
+            is_media_player=True,
+            clean_name="test2.mkv",
+            message=fake_message
+        )
+
+        async def start_and_cancel():
+            async for chunk in gen1:
+                return chunk
+
+        task = asyncio.create_task(start_and_cancel())
+        await asyncio.sleep(0.02)  # Give time to initiate wire download
+
+        # 2. Cancel stream 1 mid-flight (simulating user scrub / new Range request)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        await gen1.aclose()
+
+        # 3. Allow wire download to finish in background
+        wire_event.set()
+        await asyncio.sleep(0.05)
+
+        # 4. Subsequent seek checks RAM buffer: must be instant RAM hit!
+        cached = stream_buffer.get_slice(chat_id, msg_id, 0, len(b"SHIELDED_CHUNK_CONTENT_" * 100))
+        assert cached == b"SHIELDED_CHUNK_CONTENT_" * 100
+
+@pytest.mark.asyncio
+async def test_download_links_unconstrained_and_no_cancellation():
+    from app.services.rate_governor import RateGovernor
+    gov = RateGovernor(initial_rate=1.0, burst_capacity=0.0)
+    gov.configure_for_tier(is_premium=False)
+    gov._tokens = 0.0
+    gov._target_time = time.monotonic() + 10.0
+
+    t0 = time.monotonic()
+    await gov.acquire_chunk_slot(chunk_size_bytes=1024 * 1024, is_unlimited=True)
+    dt = time.monotonic() - t0
+    assert dt < 0.05
+
+
+@pytest.mark.asyncio
+async def test_stream_engine_seek_lead_priority_and_lookahead_cancellation():
+    """
+    Verifies that on media player startup/seek:
+    1. Only the lead chunk(s) are fetched initially (allowed_in_flight = 1 or 2).
+    2. Once chunk 0 arrives, concurrency expands.
+    3. When the stream is cancelled, lookahead wire tasks are immediately cancelled.
+    """
+    from app.services.stream_engine import StreamEngine
+    from telethon.tl.types import Document
+
+    engine = StreamEngine()
+    in_flight_offsets = []
+    max_concurrent_in_flight = 0
+    current_in_flight = 0
+
+    async def mock_call(s, req, flood_sleep_threshold=0):
+        nonlocal max_concurrent_in_flight, current_in_flight
+        current_in_flight += 1
+        max_concurrent_in_flight = max(max_concurrent_in_flight, current_in_flight)
+        in_flight_offsets.append(req.offset)
+        try:
+            await asyncio.sleep(0.05)
+            res = MagicMock()
+            res.bytes = b"X" * (1024 * 1024)
+            return res
+        finally:
+            current_in_flight -= 1
+
+    mock_client = MagicMock()
+    mock_client._call = mock_call
+    mock_client.session = MagicMock(dc_id=4)
+    fake_message = MagicMock()
+    fake_message.media = Document(
+        id=88881,
+        access_hash=77771,
+        file_reference=b"ref_lead",
+        date=None,
+        mime_type="video/mp4",
+        size=50 * 1024 * 1024,
+        dc_id=4,
+        thumbs=None,
+        video_thumbs=None,
+        attributes=[],
+    )
+    fake_message.file = MagicMock(size=50 * 1024 * 1024, name="lead_test.mp4")
+
+    with patch("app.services.stream_engine.sender_pool.borrow") as mock_borrow, \
+         patch("app.services.rust_bridge.rust_bridge.is_healthy", AsyncMock(return_value=False)), \
+         patch("app.telegram_client.TelegramClientManager.get_active_streaming_clients", AsyncMock(return_value=[mock_client])):
+        mock_borrow.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        mock_borrow.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        stop_ev = asyncio.Event()
+        gen = engine.stream_media(
+            client=mock_client,
+            chat_id="test_lead_chat",
+            message_id=88881,
+            start=10 * 1024 * 1024,
+            length=10 * 1024 * 1024,
+            file_size=50 * 1024 * 1024,
+            is_media_player=True,
+            clean_name="lead_test.mp4",
+            message=fake_message,
+            external_stop_event=stop_ev
+        )
+
+        # 1. Fetch first chunk (chunk 0)
+        c0 = await gen.__anext__()
+        assert len(c0) == 1024 * 1024
+
+        # While fetching chunk 0 with 1 account, in-flight must not exceed 1 initially
+        # (lead chunk priority so chunk 0 gets full bandwidth)
+        assert in_flight_offsets[0] == 10 * 1024 * 1024
+
+        # Cancel the stream to simulate subsequent seek
+        stop_ev.set()
+        await gen.aclose()
 

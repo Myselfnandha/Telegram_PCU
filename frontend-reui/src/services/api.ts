@@ -1,5 +1,8 @@
 import type {
   AuthStatus,
+  SecondaryAuthStatus,
+  QrStartResponse,
+  QrStatusResponse,
   ChatItem,
   ChatMessagesResponse,
   CinemaVideo,
@@ -64,8 +67,73 @@ class ApiService {
     });
   }
 
+  async startQrLogin(): Promise<QrStartResponse> {
+    return this.request<QrStartResponse>('/api/auth/qr/start', { method: 'POST' });
+  }
+
+  async getQrStatus(): Promise<QrStatusResponse> {
+    return this.request<QrStatusResponse>('/api/auth/qr/status');
+  }
+
   async logout(): Promise<{ success: boolean }> {
     return this.request('/api/auth/logout', { method: 'POST' });
+  }
+
+  // Secondary Account (Multi-Account Turbo 2x Speed) endpoints
+  async startSecondaryQrLogin(): Promise<QrStartResponse> {
+    return this.request<QrStartResponse>('/api/auth/secondary/qr/start', { method: 'POST' });
+  }
+
+  async getSecondaryQrStatus(): Promise<QrStatusResponse> {
+    return this.request<QrStatusResponse>('/api/auth/secondary/qr/status');
+  }
+
+  async getSecondaryAuthStatus(): Promise<SecondaryAuthStatus> {
+    return this.request<SecondaryAuthStatus>('/api/auth/secondary/status');
+  }
+
+  async sendSecondaryCode(phone: string): Promise<{ phone_code_hash: string; message?: string }> {
+    return this.request('/api/auth/secondary/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+  }
+
+  async signInSecondary(phone: string, code: string, phone_code_hash: string): Promise<any> {
+    return this.request('/api/auth/secondary/sign-in', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code, phone_code_hash }),
+    });
+  }
+
+  async verifySecondary2FA(password: string): Promise<any> {
+    return this.request('/api/auth/secondary/2fa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  async importSecondarySessionString(sessionString: string): Promise<any> {
+    return this.request('/api/auth/secondary/session-string', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_string: sessionString }),
+    });
+  }
+
+  async logoutSecondary(): Promise<{ status: string }> {
+    return this.request('/api/auth/secondary/logout', { method: 'POST' });
+  }
+
+  async toggleSecondaryTurbo(enabled: boolean): Promise<{ enabled: boolean }> {
+    return this.request('/api/auth/secondary/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
   }
 
   // Chats endpoints
@@ -220,7 +288,22 @@ class ApiService {
     return this.request('/api/proxy/trigger', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: downloadUrl }),
+      body: JSON.stringify({ url: downloadUrl, manager: 'fdm' }),
+    });
+  }
+
+  async triggerFdm(chatId: string | number, messageId: number, filename?: string): Promise<{ success: boolean; manager?: string; url?: string }> {
+    const encName = filename ? `/${encodeURIComponent(filename)}` : '';
+    const dlUrl = `/dl/${encodeURIComponent(String(chatId))}/${messageId}${encName}`;
+    return this.request('/api/proxy/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        url: dlUrl,
+        manager: 'fdm',
+      }),
     });
   }
 

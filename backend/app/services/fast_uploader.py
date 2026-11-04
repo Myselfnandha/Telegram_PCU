@@ -134,6 +134,7 @@ async def upload_file_turbo(
                     )
 
                 # Retry chunk if temporary network blip occurs
+                part_uploaded = False
                 for attempt in range(6):
                     if cancel_event and cancel_event.is_set():
                         break
@@ -144,7 +145,25 @@ async def upload_file_turbo(
                     await speed_limiter.acquire(len(chunk))
 
                     try:
-                        await client(req)
+                        uploaded_via_rust = False
+                        if is_big:
+                            try:
+                                from app.services.rust_bridge import rust_bridge
+                                if await rust_bridge.is_healthy():
+                                    acc_idx = 1 if getattr(client, "_is_secondary_client", False) else 0
+                                    uploaded_via_rust = await rust_bridge.upload_part(
+                                        file_id=file_id,
+                                        file_part=part_index,
+                                        file_total_parts=total_parts,
+                                        chunk=chunk,
+                                        account_idx=acc_idx
+                                    )
+                            except Exception as r_up_err:
+                                logger.debug(f"Rust upload fallback notice: {r_up_err}")
+
+                        if not uploaded_via_rust:
+                            await client(req)
+                        part_uploaded = True
                         break
                     except errors.FloodWaitError as fwe:
                         rate_governor.report_flood_wait(fwe.seconds, reason=f"Upload FloodWait on part {part_index}")
@@ -157,6 +176,11 @@ async def upload_file_turbo(
                             raise
                         backoff = min(5.0, 0.4 * (1.8 ** attempt))
                         await asyncio.sleep(backoff)
+
+                if cancel_event and cancel_event.is_set():
+                    break
+                if not part_uploaded:
+                    raise RuntimeError(f"Failed to upload part {part_index} after retries")
 
                 async with uploaded_bytes_lock:
                     completed_parts.add(part_index)

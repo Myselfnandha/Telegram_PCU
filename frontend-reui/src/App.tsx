@@ -1,13 +1,12 @@
 import React, { Suspense } from 'react';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
+import { NetworkWatchdogBanner } from '@/components/NetworkWatchdogBanner';
 import { FloodWaitBanner } from '@/components/FloodWaitBanner';
 import { AuthModal } from '@/components/AuthModal';
 import { ToastContainer } from '@/components/ToastContainer';
-import { MobileTelegramDock } from '@/components/MobileTelegramDock';
 import { Loader2 } from 'lucide-react';
 
-// Code-split top-level views via dynamic import() for instant initial paint
 const UploaderView = React.lazy(() => import('@/views/UploaderView').then((m) => ({ default: m.UploaderView })));
 const SnifferView = React.lazy(() => import('@/views/SnifferView').then((m) => ({ default: m.SnifferView })));
 const CinemaView = React.lazy(() => import('@/views/CinemaView').then((m) => ({ default: m.CinemaView })));
@@ -34,7 +33,6 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col antialiased selection:bg-primary/20 selection:text-primary">
-      {/* Accessible Skip Link for Keyboard & Screen Reader Users */}
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-xl focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-ring font-medium text-xs transition-all"
@@ -42,7 +40,6 @@ const MainLayout: React.FC = () => {
         Skip to main content
       </a>
 
-      {/* Dynamic ambient background glow & cyber grid */}
       <div
         aria-hidden="true"
         className={`fixed inset-0 pointer-events-none transition-opacity duration-700 ${
@@ -53,10 +50,10 @@ const MainLayout: React.FC = () => {
       />
 
       <Header />
+      <NetworkWatchdogBanner />
       <FloodWaitBanner />
 
       <div className="flex-1 flex w-full relative">
-        <MobileTelegramDock />
         <main
           id="main-content"
           tabIndex={-1}

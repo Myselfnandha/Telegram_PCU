@@ -49,31 +49,61 @@ class RateGovernor:
         self._total_flood_events: int = 0
         self._last_flood_time: float = 0.0
         self._last_ramp_time: float = time.monotonic()
+        self._client_cooldowns: Dict[int, float] = {}
 
-    def configure_for_tier(self, is_premium: bool):
-        """Auto-tunes token bucket and AIMD limits based on account tier to prevent Telegram FloodWaits."""
-        if is_premium:
-            self._rate = 24.0
-            self._min_rate = 12.0
-            self._max_rate = 32.0
-            self._capacity = 6.0
-            logger.info("⚡ RateGovernor: Configured for Telegram Premium tier (24-32 MB/s ceiling).")
+    def configure_for_tier(self, is_premium: bool, secondary_premium: Optional[bool] = None):
+        """Auto-tunes token bucket and AIMD limits based on account tier(s) to maximize throughput and prevent FloodWaits."""
+        if secondary_premium is not None:
+            # Multi-Account Turbo Pooling: Combine capacity from both accounts
+            r1 = 24.0 if is_premium else 4.5
+            min1 = 12.0 if is_premium else 1.8
+            max1 = 32.0 if is_premium else 6.5
+            cap1 = 6.0 if is_premium else 1.5
+
+            r2 = 24.0 if secondary_premium else 4.5
+            min2 = 12.0 if secondary_premium else 1.8
+            max2 = 32.0 if secondary_premium else 6.5
+            cap2 = 6.0 if secondary_premium else 1.5
+
+            self._rate = r1 + r2
+            self._min_rate = min1 + min2
+            self._max_rate = max1 + max2
+            self._capacity = cap1 + cap2
+            logger.info(
+                f"⚡ RateGovernor: Configured for Multi-Account Turbo "
+                f"({self._min_rate:.1f}-{self._max_rate:.1f} MB/s ceiling, target: {self._rate:.1f} MB/s, burst cap: {self._capacity:.1f}MB)."
+            )
+        elif is_premium:
+            self._rate = 28.0
+            self._min_rate = 14.0
+            self._max_rate = 36.0
+            self._capacity = 16.0
+            logger.info("⚡ RateGovernor: Configured for Telegram Premium tier (28-36 MB/s ceiling, 16MB burst).")
         else:
             self._rate = 4.5
             self._min_rate = 1.8
             self._max_rate = 6.5
             self._capacity = 1.5
-            logger.info("🛡️ RateGovernor: Configured for Standard tier (1.8-6.5 MB/s safe ceiling, eliminates recursive pauses).")
+            logger.info("🛡️ RateGovernor: Configured for Standard tier (1.8-6.5 MB/s safe ceiling, 1.5MB burst).")
+
+    def is_client_cooling_down(self, client: Any) -> bool:
+        """Returns True if the specific Telethon client instance is cooling down from a FloodWait."""
+        if client is None:
+            return self.is_cooling_down
+        cid = id(client)
+        until = self._client_cooldowns.get(cid, 0.0)
+        if until > 0 and time.monotonic() < until:
+            return True
+        return False
 
     @property
     def is_cooling_down(self) -> bool:
         if self._cooldown_until <= 0.0:
             return False
         if self._cooldown_until > 1_000_000_000:
-            if time.time() >= self._cooldown_until:
-                return False
-        if getattr(self, "_cooldown_until_mono", 0.0) > 0 and time.monotonic() >= self._cooldown_until_mono:
-            return False
+            return time.time() < self._cooldown_until
+        if getattr(self, "_cooldown_until_mono", 0.0) > 0:
+            return time.monotonic() < self._cooldown_until_mono
         return True
 
     @property
@@ -98,10 +128,18 @@ class RateGovernor:
     def current_rate_limit_mbs(self) -> float:
         return self._rate
 
-    def report_flood_wait(self, seconds: int, reason: str = "Telegram MTProto FloodWait", client=None):
+    def report_flood_wait(
+        self,
+        seconds: int,
+        reason: str = "Telegram MTProto FloodWait",
+        client: Any = None,
+        all_clients_in_pool: Optional[list] = None
+    ):
         """
         Registers a FloodWait event. Immediately closes the gate,
         pausing all active workers cleanly until the cooldown expires.
+        If multiple accounts are pooled and another account is healthy,
+        isolates the cooldown to the affected account so active transfers continue.
         Applies Multiplicative Decrease (MD) to safely adapt to server limits.
         """
         now_mono = time.monotonic()
@@ -109,7 +147,28 @@ class RateGovernor:
         cooldown_sec = max(2, int(seconds) + 1)  # 1s safety buffer
         until_mono = now_mono + cooldown_sec
         until_wall = now_wall + cooldown_sec
-        
+
+        if client is not None:
+            cid = id(client)
+            self._client_cooldowns[cid] = until_mono
+            if all_clients_in_pool:
+                try:
+                    if client in all_clients_in_pool:
+                        acc_idx = all_clients_in_pool.index(client)
+                        from app.services.rust_bridge import rust_bridge
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(rust_bridge.report_flood(acc_idx, cooldown_sec))
+                except Exception:
+                    pass
+            if all_clients_in_pool and len(all_clients_in_pool) > 1:
+                healthy_alternates = [c for c in all_clients_in_pool if c is not client and not self.is_client_cooling_down(c)]
+                if healthy_alternates:
+                    logger.warning(
+                        f"⚠️ RateGovernor: Telegram FloodWait on client {cid} ({seconds}s). "
+                        f"Pool contains {len(healthy_alternates)} healthy alternate account(s); continuing transfers without global pause."
+                    )
+                    return
+
         self._cooldown_until_mono = max(getattr(self, "_cooldown_until_mono", 0.0), until_mono)
         self._cooldown_until = max(self._cooldown_until, until_wall)
         self._cooldown_reason = reason
@@ -177,17 +236,17 @@ class RateGovernor:
         if not self.is_cooling_down and not self._cooldown_event.is_set():
             self._cooldown_event.set()
 
-    async def acquire_chunk_slot(self, chunk_size_bytes: int = 1024 * 1024):
-        """
-        Acquires permission to dispatch a chunk.
-        Uses debt-based non-blocking token scheduling with micro-jitter to eliminate thundering herd.
-        Clamps max debt delay to 0.8s to prevent accumulating multi-second pauses while enforcing pacing.
-        """
+    async def acquire_chunk_slot(self, chunk_size_bytes: int = 1024 * 1024, is_emergency: bool = False, is_unlimited: bool = False):
+        if is_emergency:
+            return
+
         was_cooling = self.is_cooling_down
         await self.wait_if_cooling_down()
         if was_cooling:
-            # Stagger workers upon gate re-opening to prevent simultaneous request spikes
             await asyncio.sleep(random.uniform(0.10, 0.35))
+
+        if is_unlimited:
+            return
 
         delay = 0.0
         tokens_needed = chunk_size_bytes / (1024 * 1024)

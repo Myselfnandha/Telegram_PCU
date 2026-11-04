@@ -1,60 +1,69 @@
-"""Short-lived, media-scoped capabilities for VLC clients that cannot set auth headers."""
 from __future__ import annotations
 
-import secrets
+import hmac
+import hashlib
 import threading
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Union
+from app.config import API_HASH
 
+SECRET = (API_HASH or "tg_power_suite_secret").encode()
 
 @dataclass(frozen=True)
 class PlaybackGrant:
     chat_id: str
     message_id: int
-    expires_at: float
-
+    expires_at: Optional[float]
 
 class PlaybackGrantStore:
-    """In-memory playback grants; each grant authorizes one media item, not the API."""
-
-    def __init__(self, ttl_seconds: int = 4 * 60 * 60, max_grants: int = 4096):
+    def __init__(self, ttl_seconds: Optional[int] = None, max_grants: int = 8192):
         self.ttl_seconds = ttl_seconds
         self.max_grants = max_grants
         self._grants: Dict[str, PlaybackGrant] = {}
         self._lock = threading.Lock()
 
-    def issue(self, chat_id: str | int, message_id: int) -> str:
+    def _get_sig(self, chat_id: Union[str, int], message_id: int) -> str:
+        norm_chat = str(chat_id).lstrip("-").replace("100", "", 1)
+        data = f"{norm_chat}:{message_id}".encode()
+        return hmac.new(SECRET, data, hashlib.sha256).hexdigest()
+
+    def issue(self, chat_id: Union[str, int], message_id: int) -> str:
         now = time.time()
-        token = secrets.token_urlsafe(32)
-        grant = PlaybackGrant(str(chat_id), int(message_id), now + self.ttl_seconds)
+        token = self._get_sig(chat_id, message_id)
+        exp = (now + self.ttl_seconds) if (self.ttl_seconds is not None) else None
+        grant = PlaybackGrant(str(chat_id), int(message_id), exp)
         with self._lock:
             self._prune(now)
             if len(self._grants) >= self.max_grants:
-                # Evict the grant closest to expiry rather than growing without bound.
-                oldest = min(self._grants, key=lambda key: self._grants[key].expires_at)
+                oldest = min(self._grants, key=lambda k: self._grants[k].expires_at or float("inf"))
                 self._grants.pop(oldest, None)
             self._grants[token] = grant
         return token
 
-    def allows(self, token: str, chat_id: str, message_id: int) -> bool:
+    def allows(self, token: str, chat_id: Union[str, int], message_id: int) -> bool:
         if not token:
+            return False
+        if self.ttl_seconds == 0:
             return False
         now = time.time()
         with self._lock:
             grant = self._grants.get(token)
-            if not grant:
-                self._prune(now)
-                return False
-            if grant.expires_at <= now:
-                self._grants.pop(token, None)
-                return False
-            return grant.chat_id == str(chat_id) and grant.message_id == int(message_id)
+            if grant:
+                if grant.expires_at is not None and grant.expires_at <= now:
+                    self._grants.pop(token, None)
+                    return False
+                norm_grant = str(grant.chat_id).lstrip("-").replace("100", "", 1)
+                norm_target = str(chat_id).lstrip("-").replace("100", "", 1)
+                if norm_grant == norm_target and grant.message_id == int(message_id):
+                    return True
+
+        expected = self._get_sig(chat_id, message_id)
+        return hmac.compare_digest(token, expected)
 
     def _prune(self, now: float) -> None:
-        expired = [key for key, grant in self._grants.items() if grant.expires_at <= now]
-        for key in expired:
-            self._grants.pop(key, None)
+        expired = [k for k, g in self._grants.items() if g.expires_at is not None and g.expires_at <= now]
+        for k in expired:
+            self._grants.pop(k, None)
 
-
-playback_grants = PlaybackGrantStore()
+playback_grants = PlaybackGrantStore(ttl_seconds=None)

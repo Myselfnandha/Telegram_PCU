@@ -78,6 +78,9 @@ class EndpointFilter(logging.Filter):
     SILENT_PATHS = (
         "/api/governor/status",
         "/api/auth/status",
+        "/api/auth/qr/status",
+        "/api/auth/secondary/status",
+        "/api/auth/secondary/qr/status",
         "/api/history",
         "/api/system/network",
         "/socket.io/",
@@ -183,19 +186,41 @@ async def lifespan(app: FastAPI):
             if me_info:
                 logger.info(f"Telegram client ready: {me_info.get('first_name')} (@{me_info.get('username')})")
             
-            # Attach sniffer to client
             sniffer_service.attach_to_client(client)
+
+            if await TelegramClientManager.is_secondary_authorized():
+                sec_client = await TelegramClientManager.get_secondary_client()
+                if sec_client:
+                    sec_info = await TelegramClientManager.get_secondary_me_info()
+                    if sec_info:
+                        logger.info(f"Secondary Telegram client ready: {sec_info.get('first_name')} (@{sec_info.get('username')})")
         else:
             logger.info("Telegram client is not authorized yet. Log in via setup_auth.py or Web Settings.")
     except Exception as e:
         logger.warning(f"Could not auto-start Telegram client: {e}")
 
+    try:
+        from app.services.network_monitor import network_monitor
+        network_monitor.start()
+    except Exception as nme:
+        logger.warning(f"Could not start network monitor: {nme}")
+
+    try:
+        from app.services.rust_bridge import rust_bridge
+        await rust_bridge.start_daemon()
+    except Exception as rbe:
+        logger.warning(f"Could not start rust bridge: {rbe}")
+
     yield
 
-    # Clean shutdown
     logger.info("Shutting down TG Power Suite backend...")
     telemetry_task.cancel()
     maintenance_task.cancel()
+    try:
+        from app.services.network_monitor import network_monitor
+        network_monitor.stop()
+    except Exception:
+        pass
     try:
         await asyncio.gather(telemetry_task, maintenance_task, return_exceptions=True)
     except Exception:
@@ -219,6 +244,11 @@ async def lifespan(app: FastAPI):
         from app.routes.tgweb import _client as tgweb_client
         if tgweb_client and not tgweb_client.is_closed:
             await tgweb_client.aclose()
+    except Exception:
+        pass
+    try:
+        from app.services.rust_bridge import rust_bridge
+        await rust_bridge.stop_daemon()
     except Exception:
         pass
     logger.info("Shutdown complete.")
@@ -365,10 +395,17 @@ class GlobalAuthEnforcementMiddleware:
             enable_auth = auth_mod.ENABLE_API_AUTH
             is_loopback = is_loopback_request(req)
 
+            method = scope.get("method", "GET")
+            if not token and not enable_auth and method in ("GET", "HEAD") and path.startswith(("/dl/", "/stream/")):
+                await self.app(scope, receive, send)
+                return
+
             must_auth = bool(token) or enable_auth or not is_loopback
             if must_auth:
                 if not token:
-                    # Remote request without configured token -> 403 Forbidden
+                    if is_authenticated(req):
+                        await self.app(scope, receive, send)
+                        return
                     response = Response(
                         content='{"detail":"Forbidden: Non-loopback or remote requests require API_AUTH_TOKEN to be configured on the server."}',
                         status_code=403,

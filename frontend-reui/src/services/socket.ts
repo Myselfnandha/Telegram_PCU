@@ -12,6 +12,7 @@ class SocketService {
   private snifferFeedListeners = new Set<Listener<SnifferFeedItem>>();
   private cinemaUpdateListeners = new Set<Listener<any>>();
   private floodWaitListeners = new Set<Listener<{ active: boolean; seconds: number; message?: string }>>();
+  private networkStatusListeners = new Set<Listener<{ online: boolean; reason?: string; ip?: string }>>();
 
   public isConnected = false;
 
@@ -69,6 +70,10 @@ class SocketService {
     this.socket.on('floodwait:status', (data: { active: boolean; seconds: number; message?: string }) => {
       this.floodWaitListeners.forEach((fn) => fn(data));
     });
+
+    this.socket.on('network:status', (data: { online: boolean; reason?: string; ip?: string }) => {
+      this.networkStatusListeners.forEach((fn) => fn(data));
+    });
   }
 
   onConnectionChange(fn: Listener<boolean>): () => void {
@@ -105,6 +110,11 @@ class SocketService {
   onFloodWait(fn: Listener<{ active: boolean; seconds: number; message?: string }>): () => void {
     this.floodWaitListeners.add(fn);
     return () => this.floodWaitListeners.delete(fn);
+  }
+
+  onNetworkStatus(fn: Listener<{ online: boolean; reason?: string; ip?: string }>): () => void {
+    this.networkStatusListeners.add(fn);
+    return () => this.networkStatusListeners.delete(fn);
   }
 
   requestQueueSnapshot() {

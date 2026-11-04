@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import type { CinemaVideo, ContinueWatchingItem } from '@/types';
 import { api } from '@/services/api';
@@ -6,6 +6,7 @@ import { socketService } from '@/services/socket';
 import { cleanFileName, formatBytes, formatDuration, parseMediaInfo } from '@/lib/formatters';
 import { scrollRightSideToTop } from '@/lib/scrollUtils';
 import { ChatPickerModal } from '@/components/ChatPickerModal';
+import { DockedChannelPicker } from '@/components/DockedChannelPicker';
 import { VideoPlayerModal } from '@/components/VideoPlayerModal';
 import { MobileQrModal } from '@/components/MobileQrModal';
 import { Button } from '@/components/ui/button';
@@ -14,30 +15,53 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   ArrowDownUp,
   Check,
   CheckSquare,
+  ChevronLeft,
   ChevronRight,
   Clapperboard,
   Copy,
   Download,
+  ExternalLink,
   Film,
   Grid3x3,
   HardDrive,
   LayoutGrid,
   List,
-  ListVideo,
   MessageSquare,
+  MoreVertical,
   Play,
   PlayCircle,
   QrCode,
   RefreshCw,
   Search,
-  Sparkles,
-  Trash2,
-  Tv,
+  SlidersHorizontal,
   X,
 } from 'lucide-react';
+
+/**
+ * Generates an array of page numbers with ellipsis (-1) for responsive pagination.
+ */
+function generatePagePills(current: number, total: number): number[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, -1, total];
+  }
+  if (current >= total - 3) {
+    return [1, -1, total - 4, total - 3, total - 2, total - 1, total];
+  }
+  return [1, -1, current - 1, current, current + 1, -1, total];
+}
 
 export const CinemaView: React.FC = () => {
   const { selectedChat, setSelectedChat, addToast } = useApp();
@@ -55,14 +79,31 @@ export const CinemaView: React.FC = () => {
     return 'dense';
   });
   const [isContinueWatchingOpen, setContinueWatchingOpen] = useState(true);
+  const [isChannelDockOpen, setChannelDockOpen] = useState<boolean>(() => {
+    const saved = localStorage.getItem('cinema_channel_dock_open');
+    return saved !== 'false';
+  });
   const [isChatPickerOpen, setChatPickerOpen] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<CinemaVideo | null>(null);
   const [qrModalVideo, setQrModalVideo] = useState<CinemaVideo | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+  // Client-side pagination to eliminate DOM bloat (e.g. 23,000 down to ~1,500 nodes)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(() => {
+    const saved = localStorage.getItem('cinema_page_size');
+    return saved ? Number(saved) : 24;
+  });
+
   const handleSetViewMode = (mode: 'large' | 'dense' | 'files') => {
     setViewMode(mode);
     localStorage.setItem('cinema_view_mode', mode);
+  };
+
+  const handleSetPageSize = (size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+    localStorage.setItem('cinema_page_size', String(size));
   };
 
   const loadVideos = async (forceRefresh = false) => {
@@ -70,7 +111,6 @@ export const CinemaView: React.FC = () => {
     try {
       const res = await api.getCinemaVideos(selectedChat.id, forceRefresh);
       setVideos(res.videos || []);
-      // Ensure right-side files catalog remains at top upon completing load
       scrollRightSideToTop(false);
     } catch (err: any) {
       console.debug('Failed to load videos:', err);
@@ -118,8 +158,8 @@ export const CinemaView: React.FC = () => {
     loadContinueWatching();
     loadOfflineSaver();
     setSelectedIds(new Set());
+    setCurrentPage(1);
 
-    // Auto-scroll right side files catalog to top on chat selection
     scrollRightSideToTop(true);
 
     const unsubCinema = socketService.onCinemaUpdate((data) => {
@@ -133,6 +173,10 @@ export const CinemaView: React.FC = () => {
     };
   }, [selectedChat.id]);
 
+  // Reset page when search, filter, or sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filter, sortBy]);
 
   const handleExportPlaylist = async () => {
     if (selectedIds.size === 0) return;
@@ -155,7 +199,7 @@ export const CinemaView: React.FC = () => {
         lines.push(`#EXTVLCOPT:network-caching=${cachingVal}`);
         lines.push(`#EXTVLCOPT:file-caching=${cachingVal}`);
         lines.push('#EXTVLCOPT:http-reconnect');
-        lines.push('#EXTVLCOPT:http-continuous');
+        lines.push('#EXTVLCOPT:no-spdif');
         lines.push('#EXTVLCOPT:input-fast-seek');
         lines.push('#EXTVLCOPT:avcodec-hw=any');
         lines.push(`#EXTVLCOPT:sub-language=${subLang}`);
@@ -192,7 +236,22 @@ export const CinemaView: React.FC = () => {
     });
   };
 
-  const handleSelectAll = () => {
+  const handleSelectAllCurrentPage = () => {
+    const pageIds = paginatedVideos.map((v) => v.message_id);
+    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleSelectEntireArchive = () => {
     if (selectedIds.size === filteredVideos.length) {
       setSelectedIds(new Set());
     } else {
@@ -212,6 +271,9 @@ export const CinemaView: React.FC = () => {
 
   const handlePlayInVlc = async (video: CinemaVideo) => {
     try {
+      if (previewVideo) {
+        setPreviewVideo(null);
+      }
       const result = await api.launchVlc(video.chat_id, video.message_id, video.filename);
       addToast({ type: 'success', title: 'VLC launched', message: result.message || `Playing ${video.filename} in VLC.` });
     } catch (error) {
@@ -219,6 +281,60 @@ export const CinemaView: React.FC = () => {
         type: 'error',
         title: 'Could not launch VLC',
         message: error instanceof Error ? error.message : 'Check that VLC is installed on the TG Power Suite desktop.',
+      });
+    }
+  };
+
+  const handleTriggerFdm = async (video: CinemaVideo) => {
+    try {
+      const res = await api.triggerFdm(video.chat_id, video.message_id, video.filename);
+      if (res && res.success) {
+        addToast({
+          type: 'success',
+          title: 'Dispatched to FDM',
+          message: `Sent "${cleanFileName(video.filename)}" to Free Download Manager!`,
+        });
+      } else {
+        const fullUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`;
+        await navigator.clipboard.writeText(fullUrl);
+        addToast({
+          type: 'warning',
+          title: 'FDM Auto-Launch Unavailable',
+          message: 'Direct media download link copied to clipboard for FDM import.',
+        });
+      }
+    } catch {
+      const fullUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`;
+      await navigator.clipboard.writeText(fullUrl).catch(() => {});
+      addToast({
+        type: 'warning',
+        title: 'FDM Auto-Launch Unavailable',
+        message: 'Direct media download link copied to clipboard.',
+      });
+    }
+  };
+
+  const handleBatchFdm = async () => {
+    const selectedVideos = filteredVideos.filter((v) => selectedIds.has(v.message_id));
+    if (selectedVideos.length === 0) return;
+    let dispatched = 0;
+    for (const v of selectedVideos) {
+      try {
+        await api.triggerFdm(v.chat_id, v.message_id, v.filename);
+        dispatched++;
+      } catch {}
+    }
+    if (dispatched > 0) {
+      addToast({
+        type: 'success',
+        title: 'Batch FDM Dispatch',
+        message: `Dispatched ${dispatched} of ${selectedVideos.length} streams to Free Download Manager.`,
+      });
+    } else {
+      addToast({
+        type: 'warning',
+        title: 'Batch FDM Notice',
+        message: 'Could not trigger local FDM automatically. Consider exporting .M3U playlist.',
       });
     }
   };
@@ -233,27 +349,63 @@ export const CinemaView: React.FC = () => {
   };
 
   // Sorting and Filtering
-  const filteredVideos = videos
-    .filter((v) => {
-      const matchesSearch = v.filename.toLowerCase().includes(search.toLowerCase());
-      if (!matchesSearch) return false;
+  const filteredVideos = useMemo(() => {
+    return videos
+      .filter((v) => {
+        const matchesSearch = v.filename.toLowerCase().includes(search.toLowerCase());
+        if (!matchesSearch) return false;
 
-      if (filter === 'series') return Boolean(v.series_name || v.season || v.episode);
-      if (filter === 'movies') return !v.series_name && !v.season && !v.episode;
-      if (filter === 'hd') return v.resolution?.includes('1080') || v.resolution?.includes('4K') || v.resolution?.includes('2160');
+        if (filter === 'series') return Boolean(v.series_name || v.season || v.episode);
+        if (filter === 'movies') return !v.series_name && !v.season && !v.episode;
+        if (filter === 'hd') return v.resolution?.includes('1080') || v.resolution?.includes('4K') || v.resolution?.includes('2160');
 
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'newest') return b.message_id - a.message_id;
-      if (sortBy === 'oldest') return a.message_id - b.message_id;
-      if (sortBy === 'size') return (b.size || b.file_size || 0) - (a.size || a.file_size || 0);
-      if (sortBy === 'title') return a.filename.localeCompare(b.filename);
-      return 0;
-    });
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'newest') return b.message_id - a.message_id;
+        if (sortBy === 'oldest') return a.message_id - b.message_id;
+        if (sortBy === 'size') return (b.size || b.file_size || 0) - (a.size || a.file_size || 0);
+        if (sortBy === 'title') return a.filename.localeCompare(b.filename);
+        return 0;
+      });
+  }, [videos, search, filter, sortBy]);
+
+  // Windowed pagination slice
+  const totalPages = pageSize > 0 ? Math.ceil(filteredVideos.length / pageSize) || 1 : 1;
+  const paginatedVideos = useMemo(() => {
+    if (pageSize <= 0) return filteredVideos;
+    const start = (currentPage - 1) * pageSize;
+    return filteredVideos.slice(start, start + pageSize);
+  }, [filteredVideos, currentPage, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    const clamped = Math.max(1, Math.min(newPage, totalPages));
+    setCurrentPage(clamped);
+    const catalogEl = document.getElementById('cinema-files-catalog');
+    if (catalogEl) {
+      catalogEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   const hasContinueWatching = continueWatching.length > 0;
-  const showDock = hasContinueWatching && isContinueWatchingOpen;
+  const showContinueWatching = hasContinueWatching && isContinueWatchingOpen;
+
+  const watchProgressMap = useMemo(() => {
+    const map = new Map<string, ContinueWatchingItem>();
+    continueWatching.forEach((item) => {
+      map.set(`${item.chat_id}_${item.message_id}`, item);
+    });
+    return map;
+  }, [continueWatching]);
+
+  const handleStartPlay = (v: CinemaVideo) => {
+    const prog = watchProgressMap.get(`${v.chat_id}_${v.message_id}`);
+    const resumeSec = prog ? (prog.playback_seconds || prog.last_position_seconds || 0) : (v.playback_seconds || 0);
+    setPreviewVideo({
+      ...v,
+      playback_seconds: resumeSec,
+    });
+  };
 
   return (
     <div id="cinema-view-container" className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6 animate-in fade-in duration-300">
@@ -272,9 +424,14 @@ export const CinemaView: React.FC = () => {
                 </Badge>
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Browsing archive from:{' '}
+                Browsing channel:{' '}
                 <button
-                  onClick={() => setChatPickerOpen(true)}
+                  onClick={() => {
+                    if (!isChannelDockOpen) {
+                      setChannelDockOpen(true);
+                      localStorage.setItem('cinema_channel_dock_open', 'true');
+                    }
+                  }}
                   className="font-medium text-foreground hover:underline cursor-pointer"
                 >
                   {selectedChat.name}
@@ -284,10 +441,9 @@ export const CinemaView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Continue Watching Quick Dock Toggle */}
             {hasContinueWatching && (
               <Button
-                variant={showDock ? 'secondary' : 'default'}
+                variant={showContinueWatching ? 'secondary' : 'default'}
                 size="sm"
                 onClick={() => setContinueWatchingOpen(!isContinueWatchingOpen)}
                 className="h-9 gap-1.5 cursor-pointer text-xs"
@@ -298,13 +454,17 @@ export const CinemaView: React.FC = () => {
             )}
 
             <Button
-              variant="outline"
+              variant={isChannelDockOpen ? 'secondary' : 'default'}
               size="sm"
-              onClick={() => setChatPickerOpen(true)}
+              onClick={() => {
+                const next = !isChannelDockOpen;
+                setChannelDockOpen(next);
+                localStorage.setItem('cinema_channel_dock_open', String(next));
+              }}
               className="h-9 gap-1.5 cursor-pointer text-xs"
             >
               <MessageSquare className="w-3.5 h-3.5 text-primary" />
-              <span>Change Channel</span>
+              <span>Channels {isChannelDockOpen ? '(Docked)' : ''}</span>
             </Button>
 
             <Button
@@ -355,7 +515,7 @@ export const CinemaView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            {/* View Mode Toggle: Large Grid (2-3) vs Dense Grid (3-5) vs Files Table */}
+            {/* View Mode Toggle: Large Grid vs Dense Grid vs Files Table */}
             <div role="group" aria-label="View display mode" className="flex items-center p-0.5 rounded-lg border border-border bg-background">
               <button
                 onClick={() => handleSetViewMode('large')}
@@ -366,7 +526,7 @@ export const CinemaView: React.FC = () => {
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
-                title="Large Grid (2-3 per row)"
+                title="Large Poster Grid"
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
               </button>
@@ -379,7 +539,7 @@ export const CinemaView: React.FC = () => {
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
-                title="Dense Grid (3-5 files per row)"
+                title="Dense Media Grid"
               >
                 <Grid3x3 className="w-3.5 h-3.5" />
               </button>
@@ -452,6 +612,16 @@ export const CinemaView: React.FC = () => {
             </Button>
             <Button
               size="sm"
+              variant="outline"
+              onClick={handleBatchFdm}
+              className="h-8 text-xs gap-1.5 cursor-pointer text-emerald-400 hover:text-emerald-300 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20"
+              title="Send selected videos to Free Download Manager"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>FDM Download</span>
+            </Button>
+            <Button
+              size="sm"
               variant="ghost"
               onClick={() => setSelectedIds(new Set())}
               className="h-8 text-xs cursor-pointer"
@@ -462,10 +632,143 @@ export const CinemaView: React.FC = () => {
         </div>
       )}
 
-      {/* Main Workspace: Left Catalog + Right Docked Continue Watching */}
+      {/* Main Layout Area */}
       <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
-        {/* Main Files / Catalog Section */}
-        <div id="cinema-files-catalog" className="flex-1 min-w-0 w-full space-y-4">
+        {/* Left Side Docked Channel Picker */}
+        {isChannelDockOpen && (
+          <DockedChannelPicker
+            selectedChatId={selectedChat.id}
+            onSelect={setSelectedChat}
+            onClose={() => {
+              setChannelDockOpen(false);
+              localStorage.setItem('cinema_channel_dock_open', 'false');
+            }}
+          />
+        )}
+
+        {/* Video Catalog (Expands to full remaining width) */}
+        <div id="cinema-files-catalog" className="flex-1 min-w-0 w-full space-y-5">
+          {/* Top Horizontal Continue Watching Shelf */}
+          {showContinueWatching && (
+            <div className="p-4 rounded-2xl border border-border/70 bg-card/75 backdrop-blur-xl shadow-sm space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border/40">
+                <div className="flex items-center gap-2">
+                  <PlayCircle className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-xs font-semibold text-foreground">Continue Watching</h3>
+                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500/30 text-amber-400 bg-amber-500/10 font-mono">
+                    {continueWatching.length}
+                  </Badge>
+                </div>
+                <button
+                  onClick={() => setContinueWatchingOpen(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
+                  title="Hide Continue Watching shelf"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Hide Shelf</span>
+                </button>
+              </div>
+
+              {/* Horizontal Scroll Shelf */}
+              <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-thin scroll-smooth">
+                {continueWatching.map((item) => {
+                  const media = parseMediaInfo(item.filename);
+                  const seconds = item.playback_seconds || item.last_position_seconds || 0;
+                  const total = item.total_seconds || item.duration_seconds || 0;
+                  const pct = item.percent !== undefined 
+                    ? item.percent 
+                    : (item.progress_percent !== undefined 
+                        ? Math.round(item.progress_percent) 
+                        : (total > 0 ? Math.round((seconds / total) * 100) : 0));
+                  const thumbUrl = item.thumb_url || item.thumbnail_url || `/stream/${encodeURIComponent(String(item.chat_id))}/${item.message_id}/thumb`;
+
+                  const startItemPlay = () => {
+                    setPreviewVideo({
+                      chat_id: item.chat_id,
+                      message_id: item.message_id,
+                      filename: item.filename,
+                      size: (item as any).file_size || 0,
+                      duration: total,
+                      thumb_url: thumbUrl,
+                      playback_seconds: seconds,
+                    });
+                  };
+
+                  return (
+                    <div
+                      key={`${item.chat_id}_${item.message_id}`}
+                      className="w-72 sm:w-80 shrink-0 p-2 rounded-xl border border-border/60 bg-background/50 hover:bg-accent/40 hover:border-border transition-all flex items-center gap-2.5 group relative shadow-xs"
+                    >
+                      {/* Compact Poster with Play Overlay and Progress Bar */}
+                      <div
+                        onClick={startItemPlay}
+                        className="relative w-24 h-15 shrink-0 rounded-lg overflow-hidden bg-zinc-950/90 border border-border/50 cursor-pointer shadow-sm group/thumb"
+                        title="Resume playback"
+                      >
+                        <img
+                          src={thumbUrl}
+                          alt=""
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/25 group-hover/thumb:bg-black/45 flex items-center justify-center transition-colors">
+                          <Play className="w-3.5 h-3.5 text-white fill-current opacity-85 group-hover/thumb:opacity-100 group-hover/thumb:scale-110 transition-all drop-shadow" />
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/70">
+                          <div
+                            className="bg-amber-400 h-full rounded-r transition-all"
+                            style={{ width: `${Math.max(5, pct)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Info & Action */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
+                        <div>
+                          <div
+                            className="text-xs font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors leading-tight"
+                            title={item.filename}
+                            onClick={startItemPlay}
+                          >
+                            {media.cleanTitle}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono mt-1">
+                            <span>{formatDuration(seconds)}</span>
+                            <span className="text-muted-foreground/40">•</span>
+                            <span className="text-amber-400 font-semibold">{pct}%</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={startItemPlay}
+                            className="h-6 px-2 text-[10px] gap-1 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
+                          >
+                            <Play className="w-2.5 h-2.5 fill-current" />
+                            <span>Resume</span>
+                          </Button>
+                          <button
+                            onClick={() => handleRemoveContinueWatching(item)}
+                            className="w-5 h-5 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors cursor-pointer ml-auto"
+                            title="Dismiss from history"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Videos Grid / Table Content */}
           {loading && videos.length === 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -490,19 +793,18 @@ export const CinemaView: React.FC = () => {
               </p>
             </div>
           ) : viewMode !== 'files' ? (
-            /* Cinematic Grid View: Large (2-3/row) or Dense (3-5/row) */
             <div
               className={`grid ${
                 viewMode === 'dense'
-                  ? showDock
-                    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-3'
-                    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-3'
-                  : showDock
-                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-3 gap-4'
-                  : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4'
+                  ? isChannelDockOpen
+                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-4'
+                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-4'
+                  : isChannelDockOpen
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5'
+                  : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5'
               }`}
             >
-              {filteredVideos.map((video) => {
+              {paginatedVideos.map((video) => {
                 const media = parseMediaInfo(video.filename);
                 const thumbUrl = `/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/thumb`;
                 const isSelected = selectedIds.has(video.message_id);
@@ -525,15 +827,13 @@ export const CinemaView: React.FC = () => {
                 return (
                   <div
                     key={`${video.chat_id}_${video.message_id}`}
-                    className={`group relative ${
-                      isDense ? 'rounded-xl' : 'rounded-2xl'
-                    } border bg-card/85 backdrop-blur-md overflow-hidden shadow-sm transition-all duration-300 flex flex-col justify-between ${
+                    className={`group relative rounded-2xl border bg-card/85 backdrop-blur-md overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col justify-between ${
                       isSelected
                         ? 'border-primary ring-2 ring-primary/40 bg-card'
-                        : 'border-border/70 hover:border-emerald-500/60 hover:shadow-xl hover:shadow-emerald-500/5'
+                        : 'border-border/70 hover:border-primary/50'
                     }`}
                   >
-                    {/* Poster Thumbnail / Video Frame */}
+                    {/* Poster Thumbnail Frame */}
                     <div className="relative aspect-[16/10] bg-zinc-950/90 overflow-hidden flex items-center justify-center">
                       <img
                         src={thumbUrl}
@@ -546,37 +846,37 @@ export const CinemaView: React.FC = () => {
                         }}
                       />
 
-                      {/* Art Fallback when thumbnail is missing/loading */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-zinc-900 via-zinc-950 to-emerald-950/40 pointer-events-none -z-0">
-                        <Clapperboard className={`${isDense ? 'w-6 h-6 mb-1' : 'w-8 h-8 mb-2'} text-emerald-500/30`} />
-                        <span className={`${isDense ? 'text-[10px]' : 'text-[11px]'} font-semibold text-zinc-400 line-clamp-2 px-1`}>
+                      {/* Art Fallback when thumbnail is missing */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 pointer-events-none -z-0">
+                        <Clapperboard className="w-8 h-8 mb-2 text-primary/30" />
+                        <span className="text-[11px] font-semibold text-zinc-400 line-clamp-2 px-2">
                           {media.cleanTitle}
                         </span>
                       </div>
 
                       {/* Ambient Gradient Overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent pointer-events-none z-10" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none z-10" />
 
-                      {/* Top Badges & Batch Selection Checkbox */}
-                      <div className={`absolute ${isDense ? 'top-2 left-2 right-2' : 'top-2.5 left-2.5 right-2.5'} flex items-center justify-between z-20`}>
+                      {/* Top Badges & Selection Checkbox */}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-20">
                         <div className="flex items-center gap-1 flex-wrap">
                           {resolution && (
-                            <span className={`px-1.5 py-0.5 rounded ${isDense ? 'text-[8px]' : 'text-[9px]'} font-extrabold uppercase bg-emerald-500/90 text-white shadow-sm backdrop-blur-md tracking-wider`}>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/90 text-white shadow-xs backdrop-blur-md tracking-wider">
                               {resolution}
                             </span>
                           )}
                           {ext && (
-                            <span className={`px-1.5 py-0.5 rounded ${isDense ? 'text-[8px]' : 'text-[9px]'} font-mono uppercase bg-black/60 text-zinc-300 border border-white/10 backdrop-blur-md`}>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-black/60 text-zinc-300 border border-white/10 backdrop-blur-md">
                               {ext}
                             </span>
                           )}
                           {media.audio && (
-                            <span className={`px-1.5 py-0.5 rounded ${isDense ? 'text-[8px]' : 'text-[9px]'} font-semibold uppercase bg-black/60 text-emerald-400 border border-emerald-500/30 backdrop-blur-md`}>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase bg-black/60 text-emerald-400 border border-emerald-500/30 backdrop-blur-md">
                               {media.audio}
                             </span>
                           )}
                           {media.year && (
-                            <span className={`px-1.5 py-0.5 rounded ${isDense ? 'text-[8px]' : 'text-[9px]'} font-mono bg-black/60 text-white/90 border border-white/10 backdrop-blur-md`}>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/60 text-white/90 border border-white/10 backdrop-blur-md">
                               {media.year}
                             </span>
                           )}
@@ -586,22 +886,20 @@ export const CinemaView: React.FC = () => {
                           onClick={() => toggleSelectVideo(video.message_id)}
                           aria-label={isSelected ? `Deselect ${media.cleanTitle}` : `Select ${media.cleanTitle} for playlist`}
                           aria-pressed={isSelected}
-                          className={`${
-                            isDense ? 'w-6 h-6 rounded-md' : 'w-7 h-7 rounded-lg'
-                          } flex items-center justify-center transition-all cursor-pointer backdrop-blur-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer backdrop-blur-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                             isSelected
                               ? 'bg-primary text-primary-foreground shadow-md ring-2 ring-primary/50'
-                              : 'bg-black/60 text-white/70 border border-white/20 hover:scale-110 hover:text-white'
+                              : 'bg-black/60 text-white/70 border border-white/20 hover:scale-105 hover:text-white'
                           }`}
                           title={isSelected ? 'Deselect video' : 'Select for playlist'}
                         >
-                          {isSelected ? <Check className={`${isDense ? 'w-3 h-3' : 'w-3.5 h-3.5'} stroke-[3]`} /> : null}
+                          {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : null}
                         </button>
                       </div>
 
                       {/* Bottom Duration & Size Badges */}
-                      <div className={`absolute ${isDense ? 'bottom-2 left-2 right-2 text-[9px]' : 'bottom-2.5 left-2.5 right-2.5 text-[10px]'} flex items-center justify-between z-20`}>
-                        <span className="font-mono text-zinc-300 font-medium">
+                      <div className="absolute bottom-2.5 left-2.5 right-2.5 text-[10px] flex items-center justify-between z-20">
+                        <span className="font-mono text-zinc-300 font-medium bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-md border border-white/10">
                           {formatBytes(fileSize)}
                         </span>
                         <span className="px-1.5 py-0.5 rounded-md font-mono font-medium bg-black/75 text-white backdrop-blur-md border border-white/10">
@@ -609,38 +907,50 @@ export const CinemaView: React.FC = () => {
                         </span>
                       </div>
 
+                      {/* Watched Progress Indicator */}
+                      {(() => {
+                        const cardProg = watchProgressMap.get(`${video.chat_id}_${video.message_id}`);
+                        const cardPct = cardProg ? (cardProg.percent !== undefined ? cardProg.percent : (cardProg.progress_percent !== undefined ? Math.round(cardProg.progress_percent) : 0)) : 0;
+                        if (cardPct <= 0) return null;
+                        return (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/60 z-20">
+                            <div
+                              className="bg-amber-400 h-full rounded-r transition-all"
+                              style={{ width: `${Math.max(5, cardPct)}%` }}
+                              title={`Watched: ${cardPct}%`}
+                            />
+                          </div>
+                        );
+                      })()}
+
                       {/* Center Hover Action Controls */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 bg-black/50 backdrop-blur-[2px] gap-2 z-30">
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 bg-black/50 backdrop-blur-[2px] gap-2.5 z-30">
                         <button
-                          onClick={() => setPreviewVideo(video)}
+                          onClick={() => handleStartPlay(video)}
                           aria-label={`Stream ${media.cleanTitle} in browser`}
-                          className={`${
-                            isDense ? 'w-10 h-10' : 'w-12 h-12'
-                          } rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none`}
-                          title="Stream in Browser"
+                          className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+                          title="Stream in Browser (Auto-Resumes)"
                         >
-                          <Play className={`${isDense ? 'w-4 h-4' : 'w-5 h-5'} fill-current ml-0.5`} />
+                          <Play className="w-4 h-4 fill-current ml-0.5" />
                         </button>
                         <button
                           onClick={() => setQrModalVideo(video)}
                           aria-label={`Stream ${media.cleanTitle} to mobile or smart TV via QR`}
-                          className={`${
-                            isDense ? 'w-8 h-8' : 'w-10 h-10'
-                          } rounded-full bg-zinc-900/90 text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/20 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none`}
+                          className="w-9 h-9 rounded-full bg-zinc-900/90 text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/20 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
                           title="Stream to Mobile / Smart TV (QR)"
                         >
-                          <QrCode className={`${isDense ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-amber-400`} />
+                          <QrCode className="w-4 h-4 text-amber-400" />
                         </button>
                       </div>
                     </div>
 
                     {/* Card Content & Action Bar */}
-                    <div className={`${isDense ? 'p-2.5 space-y-2' : 'p-3.5 space-y-3'} flex-1 flex flex-col justify-between`}>
+                    <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
                       <div>
                         <div
                           className="text-xs font-semibold text-foreground line-clamp-1 leading-snug hover:text-primary transition-colors cursor-pointer"
                           title={video.filename}
-                          onClick={() => setPreviewVideo(video)}
+                          onClick={() => handleStartPlay(video)}
                         >
                           {media.cleanTitle}
                         </div>
@@ -651,61 +961,83 @@ export const CinemaView: React.FC = () => {
                               {media.seasonEpisode}
                             </Badge>
                           )}
-                          <span className="text-[10px] text-muted-foreground/70 truncate max-w-[180px]" title={video.filename}>
+                          <span className="text-[10px] text-muted-foreground/60 truncate font-mono max-w-full" title={video.filename}>
                             {video.filename}
                           </span>
                         </div>
                       </div>
 
-                      {/* Action Button Row */}
-                      <div className={`grid grid-cols-5 gap-1.5 ${isDense ? 'pt-1.5' : 'pt-2'} border-t border-border/40`}>
+                      {/* Clean 3-Action Bar: Stream (Primary), VLC (Direct), Dropdown Menu (More) */}
+                      <div className="flex items-center gap-1.5 pt-2 border-t border-border/40">
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => setPreviewVideo(video)}
+                          onClick={() => handleStartPlay(video)}
                           aria-label={`Stream ${media.cleanTitle}`}
-                          className={`${isDense ? 'h-7 text-[10px] px-2' : 'h-8 text-[11px] px-2.5'} cursor-pointer col-span-2 gap-1 font-medium bg-primary text-primary-foreground hover:opacity-90`}
+                          className="h-8 flex-1 gap-1.5 text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 cursor-pointer shadow-xs"
                         >
-                          <Play className="w-3 h-3 fill-current" />
-                          <span>Stream Video</span>
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Stream</span>
                         </Button>
+
                         <Button
                           size="sm"
                           variant="secondary"
                           onClick={() => void handlePlayInVlc(video)}
                           aria-label={`Play ${media.cleanTitle} in desktop VLC`}
-                          className={`${isDense ? 'h-7 text-[10px] px-1' : 'h-8 text-[11px] px-1'} cursor-pointer font-medium gap-1 hover:bg-primary/10 hover:text-primary transition-colors`}
-                          title="Play on this Arch Linux desktop in VLC"
+                          className="h-8 px-2.5 text-xs font-medium gap-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 transition-colors cursor-pointer"
+                          title="Play immediately in desktop VLC"
                         >
-                          <PlayCircle className="w-3 h-3" />
+                          <PlayCircle className="w-3.5 h-3.5" />
                           <span>VLC</span>
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setQrModalVideo(video)}
-                          aria-label={`Stream ${media.cleanTitle} to mobile or smart TV via QR`}
-                          className={`${isDense ? 'h-7 text-[10px] px-1' : 'h-8 text-[11px] px-1'} cursor-pointer font-medium gap-1 hover:bg-amber-500/10 hover:text-amber-400 transition-colors`}
-                          title="Stream to Mobile / Smart TV (QR)"
-                        >
-                          <QrCode className="w-3 h-3 text-amber-400" />
-                          <span>QR</span>
-                        </Button>
-                        <a
-                          href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
-                          download={video.filename}
-                          className="inline-flex"
-                        >
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            aria-label={`Download ${media.cleanTitle}`}
-                            className={`${isDense ? 'h-7 text-[10px] w-full px-1' : 'h-8 text-[11px] w-full px-1'} cursor-pointer text-muted-foreground hover:text-foreground`}
-                            title="Direct Download"
-                          >
-                            <Download className="w-3 h-3" />
-                          </Button>
-                        </a>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              aria-label="More media options"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56 bg-card/95 border-border shadow-xl backdrop-blur-md">
+                            <DropdownMenuItem
+                              onClick={() => setQrModalVideo(video)}
+                              className="cursor-pointer gap-2 py-2 text-xs"
+                            >
+                              <QrCode className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span>Mobile / TV (QR Code)</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => void handleTriggerFdm(video)}
+                              className="cursor-pointer gap-2 py-2 text-xs"
+                            >
+                              <ExternalLink className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span>Send to FDM Downloader</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild className="cursor-pointer gap-2 py-2 text-xs">
+                              <a
+                                href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
+                                download={video.filename}
+                                className="flex items-center gap-2 w-full text-foreground"
+                              >
+                                <Download className="w-4 h-4 text-sky-400 shrink-0" />
+                                <span>Direct File Download</span>
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-border/50" />
+                            <DropdownMenuItem
+                              onClick={() => handleCopyStreamLink(video)}
+                              className="cursor-pointer gap-2 py-2 text-xs"
+                            >
+                              <Copy className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <span>Copy Direct Stream URL</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </div>
@@ -713,7 +1045,7 @@ export const CinemaView: React.FC = () => {
               })}
             </div>
           ) : (
-            /* Redesigned Files Explorer Table View */
+            /* Files Explorer Table View */
             <div className="rounded-2xl border border-border/70 bg-card/80 backdrop-blur-md overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -721,11 +1053,11 @@ export const CinemaView: React.FC = () => {
                     <tr>
                       <th className="py-3 px-3 w-10 text-center">
                         <button
-                          onClick={handleSelectAll}
+                          onClick={handleSelectAllCurrentPage}
                           className="w-4 h-4 rounded border border-muted-foreground/40 inline-flex items-center justify-center cursor-pointer"
-                          title="Select / Deselect All"
+                          title="Select / Deselect Current Page"
                         >
-                          {selectedIds.size === filteredVideos.length && filteredVideos.length > 0 && (
+                          {paginatedVideos.length > 0 && paginatedVideos.every((v) => selectedIds.has(v.message_id)) && (
                             <Check className="w-3 h-3 text-primary stroke-[3]" />
                           )}
                         </button>
@@ -734,11 +1066,11 @@ export const CinemaView: React.FC = () => {
                       <th className="py-3 px-3 w-28">Format / Quality</th>
                       <th className="py-3 px-3 w-24">Duration</th>
                       <th className="py-3 px-3 w-24">Size</th>
-                      <th className="py-3 px-3 w-44 text-right">Actions</th>
+                      <th className="py-3 px-3 w-48 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
-                    {filteredVideos.map((video) => {
+                    {paginatedVideos.map((video) => {
                       const media = parseMediaInfo(video.filename);
                       const isSelected = selectedIds.has(video.message_id);
                       const fileSize = video.size || video.file_size || 0;
@@ -790,7 +1122,7 @@ export const CinemaView: React.FC = () => {
                                 </Badge>
                               )}
                             </div>
-                            <div className="text-[10px] text-muted-foreground/70 truncate max-w-md font-mono mt-0.5" title={video.filename}>
+                            <div className="text-[10px] text-muted-foreground/60 truncate max-w-md font-mono mt-0.5" title={video.filename}>
                               {video.filename}
                             </div>
                           </td>
@@ -831,31 +1163,70 @@ export const CinemaView: React.FC = () => {
                               <Button
                                 size="sm"
                                 variant="default"
-                                onClick={() => setPreviewVideo(video)}
+                                onClick={() => handleStartPlay(video)}
                                 className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
-                                title="Stream in Browser"
+                                title="Stream in Browser (Auto-Resumes)"
                               >
                                 <Play className="w-3 h-3 fill-current" />
                                 <span>Stream</span>
                               </Button>
+
                               <Button
                                 size="sm"
-                                variant="ghost"
-                                onClick={() => setQrModalVideo(video)}
-                                className="h-7 w-7 p-0 cursor-pointer text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                                title="Stream to Mobile / Smart TV (QR)"
+                                variant="secondary"
+                                onClick={() => void handlePlayInVlc(video)}
+                                className="h-7 px-2 text-xs font-medium gap-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 cursor-pointer"
+                                title="Play in Desktop VLC"
                               >
-                                <QrCode className="w-3.5 h-3.5" />
+                                <PlayCircle className="w-3 h-3" />
+                                <span>VLC</span>
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleCopyStreamLink(video)}
-                                className="h-7 w-7 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
-                                title="Copy Stream Link"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </Button>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
+                                  >
+                                    <MoreVertical className="w-3.5 h-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52 bg-card/95 border-border shadow-xl backdrop-blur-md">
+                                  <DropdownMenuItem
+                                    onClick={() => setQrModalVideo(video)}
+                                    className="cursor-pointer gap-2 py-2 text-xs"
+                                  >
+                                    <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Stream to Mobile / TV (QR)</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => void handleTriggerFdm(video)}
+                                    className="cursor-pointer gap-2 py-2 text-xs"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>Send to FDM Downloader</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild className="cursor-pointer gap-2 py-2 text-xs">
+                                    <a
+                                      href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
+                                      download={video.filename}
+                                      className="flex items-center gap-2 w-full text-foreground"
+                                    >
+                                      <Download className="w-3.5 h-3.5 text-sky-400" />
+                                      <span>Direct File Download</span>
+                                    </a>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator className="bg-border/50" />
+                                  <DropdownMenuItem
+                                    onClick={() => handleCopyStreamLink(video)}
+                                    className="cursor-pointer gap-2 py-2 text-xs"
+                                  >
+                                    <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                                    <span>Copy Direct Stream URL</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </td>
                         </tr>
@@ -866,142 +1237,101 @@ export const CinemaView: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
 
-        {/* Right-Side Docked Continue Watching Panel */}
-        {showDock && (
-          <aside className="w-full lg:w-80 xl:w-88 2xl:w-96 shrink-0 lg:sticky lg:top-20 space-y-3 animate-in slide-in-from-right-4 duration-300">
-            <div className="p-4 rounded-2xl border border-border/80 bg-card/90 backdrop-blur-xl shadow-lg space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-border/50">
-                <div className="flex items-center gap-2">
-                  <PlayCircle className="w-4 h-4 text-amber-400" />
-                  <h3 className="text-xs font-semibold text-foreground">Continue Watching</h3>
-                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500/30 text-amber-400 bg-amber-500/10">
-                    {continueWatching.length}
-                  </Badge>
+          {/* Clean Pagination Bar */}
+          {filteredVideos.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl border border-border/60 bg-card/60 backdrop-blur-md shadow-sm">
+              <div className="text-xs text-muted-foreground">
+                Showing{' '}
+                <span className="font-semibold text-foreground">
+                  {pageSize > 0 ? (currentPage - 1) * pageSize + 1 : 1}
+                </span>
+                –
+                <span className="font-semibold text-foreground">
+                  {pageSize > 0 ? Math.min(currentPage * pageSize, filteredVideos.length) : filteredVideos.length}
+                </span>{' '}
+                of <span className="font-semibold text-foreground">{filteredVideos.length}</span> videos
+              </div>
+
+              {/* Page Number Buttons */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="h-8 px-2.5 text-xs gap-1 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Prev</span>
+                  </Button>
+
+                  {generatePagePills(currentPage, totalPages).map((p, idx) =>
+                    p === -1 ? (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground">
+                        …
+                      </span>
+                    ) : (
+                      <Button
+                        key={p}
+                        variant={currentPage === p ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => handlePageChange(p)}
+                        className={`h-8 w-8 p-0 text-xs cursor-pointer ${
+                          currentPage === p
+                            ? 'font-bold shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {p}
+                      </Button>
+                    )
+                  )}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="h-8 px-2.5 text-xs gap-1 cursor-pointer"
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
+              )}
+
+              {/* Page Size Selector */}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>Per page:</span>
+                {[24, 48, 96].map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => handleSetPageSize(size)}
+                    className={`px-2 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer ${
+                      pageSize === size
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                        : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
                 <button
-                  onClick={() => setContinueWatchingOpen(false)}
-                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
-                  title="Collapse Continue Watching sidebar"
+                  onClick={() => handleSetPageSize(0)}
+                  className={`px-2 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer ${
+                    pageSize === 0
+                      ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                      : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  All
                 </button>
               </div>
-
-              {/* Scrollable List of Resume Items */}
-              <div className="space-y-2 max-h-[calc(100vh-14rem)] overflow-y-auto pr-1 scrollbar-thin">
-                {continueWatching.map((item) => {
-                  const media = parseMediaInfo(item.filename);
-                  const pct = item.percent || (item.total_seconds ? Math.round((item.playback_seconds / item.total_seconds) * 100) : 0);
-                  const thumbUrl = item.thumb_url || `/stream/${encodeURIComponent(String(item.chat_id))}/${item.message_id}/thumb`;
-
-                  return (
-                    <div
-                      key={`${item.chat_id}_${item.message_id}`}
-                      className="group relative flex items-center gap-2.5 p-2 rounded-xl border border-border/60 bg-background/60 hover:bg-accent/40 hover:border-border transition-all"
-                    >
-                      {/* Compact Thumbnail with Progress Bar & Play Overlay */}
-                      <div
-                        onClick={() =>
-                          setPreviewVideo({
-                            chat_id: item.chat_id,
-                            message_id: item.message_id,
-                            filename: item.filename,
-                            size: 0,
-                            duration: item.total_seconds,
-                            thumb_url: item.thumb_url,
-                            playback_seconds: item.playback_seconds,
-                          })
-                        }
-                        className="relative w-20 h-12 shrink-0 rounded-lg overflow-hidden bg-zinc-950/80 border border-border/50 group/thumb cursor-pointer shadow-sm"
-                        title="Resume playback"
-                      >
-                        <img
-                          src={thumbUrl}
-                          alt={`Thumbnail for ${item.filename}`}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-black/25 group-hover/thumb:bg-black/45 flex items-center justify-center transition-colors">
-                          <Play className="w-3.5 h-3.5 text-white fill-current opacity-80 group-hover/thumb:opacity-100 group-hover/thumb:scale-110 transition-all drop-shadow" />
-                        </div>
-                        {/* Resume Progress Bar at bottom */}
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/60">
-                          <div
-                            className="bg-amber-400 h-full rounded-r transition-all"
-                            style={{ width: `${Math.max(5, pct)}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Title & Timestamp */}
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="text-xs font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors leading-tight"
-                          title={item.filename}
-                          onClick={() =>
-                            setPreviewVideo({
-                              chat_id: item.chat_id,
-                              message_id: item.message_id,
-                              filename: item.filename,
-                              size: 0,
-                              duration: item.total_seconds,
-                              thumb_url: item.thumb_url,
-                              playback_seconds: item.playback_seconds,
-                            })
-                          }
-                        >
-                          {media.cleanTitle}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono mt-1">
-                          <span>{formatDuration(item.playback_seconds)}</span>
-                          <span className="text-muted-foreground/40">•</span>
-                          <span className="text-amber-400 font-semibold">{pct}%</span>
-                        </div>
-                      </div>
-
-                      {/* Quick Actions */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          onClick={() =>
-                            setPreviewVideo({
-                              chat_id: item.chat_id,
-                              message_id: item.message_id,
-                              filename: item.filename,
-                              size: 0,
-                              duration: item.total_seconds,
-                              thumb_url: item.thumb_url,
-                              playback_seconds: item.playback_seconds,
-                            })
-                          }
-                          className="h-7 px-2 text-[11px] gap-1 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
-                          title="Resume in Browser"
-                        >
-                          <Play className="w-3 h-3 fill-current" />
-                          <span>Resume</span>
-                        </Button>
-                        <button
-                          onClick={() => handleRemoveContinueWatching(item)}
-                          className="w-6 h-6 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors cursor-pointer"
-                          title="Dismiss from history"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
-          </aside>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Global Modals */}
@@ -1015,7 +1345,12 @@ export const CinemaView: React.FC = () => {
       <VideoPlayerModal
         video={previewVideo}
         open={Boolean(previewVideo)}
-        onOpenChange={(open) => !open && setPreviewVideo(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewVideo(null);
+            loadContinueWatching();
+          }
+        }}
       />
 
       <MobileQrModal

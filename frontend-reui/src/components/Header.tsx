@@ -26,7 +26,6 @@ import {
   Server,
   Settings,
   ShieldCheck,
-  Smartphone,
   Sparkles,
   Sun,
   Upload,
@@ -44,8 +43,6 @@ export const Header: React.FC = () => {
     theme,
     toggleTheme,
     uploadQueue,
-    isMobileDockOpen,
-    toggleMobileDock,
   } = useApp();
 
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -371,24 +368,6 @@ export const Header: React.FC = () => {
             </PopoverContent>
           </Popover>
 
-          {/* Mobile Telegram Dock Toggle Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleMobileDock}
-            aria-label={isMobileDockOpen ? 'Hide Mobile Telegram Dock (Ctrl+B)' : 'Show Mobile Telegram Dock (Ctrl+B)'}
-            aria-expanded={isMobileDockOpen}
-            className={`w-9 h-9 rounded-lg border transition-all cursor-pointer ${
-              isMobileDockOpen
-                ? 'border-sky-500/40 bg-sky-500/15 text-sky-400 shadow-sm shadow-sky-500/10'
-                : 'border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent'
-            }`}
-            title={`Toggle Mobile Telegram Dock (Ctrl+B) — ${isMobileDockOpen ? 'Visible' : 'Hidden'}`}
-          >
-            <Smartphone className="w-4 h-4" />
-          </Button>
-
-          {/* Theme Switcher Button */}
           <Button
             variant="ghost"
             size="icon"

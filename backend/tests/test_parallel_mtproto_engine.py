@@ -263,12 +263,13 @@ async def test_cooldown_fallback_continues_download(engine):
     loc = InputDocumentFileLocation(id=10, access_hash=20, file_reference=b"ref", thumb_size="")
     sender = MagicMock()
 
-    data = await engine._fetch_single_chunk(client, sender, loc, offset=0, limit=1024 * 1024)
-    assert len(data) == 1024 * 1024
-    assert data == chunk_1mb
-    # Primary client called directly, sender pool bypassed
-    assert client.call_count == 1
-    assert client._call.call_count == 0
+    with patch("app.services.rust_bridge.rust_bridge.is_healthy", AsyncMock(return_value=False)):
+        data = await engine._fetch_single_chunk(client, sender, loc, offset=0, limit=1024 * 1024)
+        assert len(data) == 1024 * 1024
+        assert data == chunk_1mb
+        # Primary client called directly, sender pool bypassed
+        assert client.call_count == 1
+        assert client._call.call_count == 0
 
     # Reset cooldown
     rate_governor._cooldown_until = 0.0

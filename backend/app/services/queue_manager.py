@@ -312,7 +312,9 @@ class QueueManager:
                 await asyncio.sleep(15)
 
             try:
-                await self._process_upload(item)
+                active_clients = await TelegramClientManager.get_active_streaming_clients()
+                assigned_client = active_clients[worker_id % len(active_clients)] if active_clients else await TelegramClientManager.get_client()
+                await self._process_upload(item, client=assigned_client)
             except UploadCancelledError:
                 logger.info(f"Task {item.id} cancelled by user.")
                 item.status = UploadStatus.CANCELLED
@@ -333,9 +335,10 @@ class QueueManager:
                     except Exception as e:
                         logger.error(f"Failed to log task to DB: {e}")
 
-    async def _process_upload(self, item: UploadItem):
+    async def _process_upload(self, item: UploadItem, client: Optional[Any] = None):
         try:
-            client = await TelegramClientManager.get_client()
+            if not client:
+                client = await TelegramClientManager.get_client()
             if not await client.is_user_authorized():
                 raise UploadFailedError("Telegram client is not authorized. Run setup_auth.py first.")
 

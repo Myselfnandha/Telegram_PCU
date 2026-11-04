@@ -49,6 +49,37 @@ export interface AuthStatus {
   dc_id?: number | null;
 }
 
+export interface SecondaryAuthStatus {
+  enabled: boolean;
+  authenticated: boolean;
+  user?: {
+    id?: number | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    name?: string | null;
+    username?: string | null;
+    phone?: string | null;
+    is_premium?: boolean;
+  } | null;
+  error?: string | null;
+}
+
+export interface QrStartResponse {
+  status: 'waiting' | 'success' | 'authorized' | 'expired' | 'error';
+  token?: string;
+  url?: string;
+  qr_image?: string;
+  expires?: number | string;
+  message?: string;
+}
+
+export interface QrStatusResponse {
+  status: 'waiting' | 'success' | 'authorized' | '2fa_required' | 'expired' | 'error';
+  message?: string;
+  expires?: number | string;
+  user?: any;
+}
+
 export interface TelemetryStats {
   cpu_percent?: number;
   ram_percent?: number;
@@ -127,6 +158,8 @@ export interface CinemaVideo {
   episode?: number;
   thumb_url?: string;
   stream_url?: string;
+  stream_transmux_url?: string;
+  is_mkv?: boolean;
   date?: string | number;
   mime_type?: string;
   has_subtitles?: boolean;
@@ -138,10 +171,20 @@ export interface ContinueWatchingItem {
   message_id: number;
   filename: string;
   playback_seconds: number;
+  last_position_seconds?: number;
   total_seconds?: number;
+  duration_seconds?: number;
   percent?: number;
-  last_watched?: string;
+  progress_percent?: number;
+  last_watched?: string | number;
+  last_watched_at?: string | number;
   thumb_url?: string;
+  thumbnail_url?: string;
+  is_series?: number;
+  series_title?: string;
+  season_num?: number;
+  episode_num?: number;
+  display_title?: string;
 }
 
 export interface UploadHistoryItem {

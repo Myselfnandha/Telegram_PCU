@@ -12,6 +12,8 @@ __pycache__/
 htmlcov/
 dist/
 build/
+target/
+rust_core/target/
 *.egg-info/
 
 # Sensitive Telegram Credentials & Sessions

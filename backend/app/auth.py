@@ -41,6 +41,8 @@ def is_authenticated(request: Request) -> bool:
     if req_method in ("GET", "HEAD"):
         path = request.scope.get("path", "") if hasattr(request, "scope") else getattr(request, "path", "")
         parts = path.split("/")
+        if not token_to_check and not ENABLE_API_AUTH and path.startswith(("/dl/", "/stream/")):
+            return True
         media_identity = None
         if path.startswith("/dl/") and len(parts) >= 4 and parts[2] and parts[3].isdigit():
             media_identity = (parts[2], int(parts[3]))
@@ -54,10 +56,8 @@ def is_authenticated(request: Request) -> bool:
                 ):
                     return True
             except Exception:
-                # Fail closed if grant validation is unavailable.
                 pass
 
-    # In local single-user mode (loopback only and auth not explicitly required), allow access
     if not token_to_check and not ENABLE_API_AUTH and is_loopback:
         return True
 

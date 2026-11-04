@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/services/api';
 import {
@@ -11,11 +11,22 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, KeyRound, Lock, LogOut, Phone, ShieldCheck, UserCheck } from 'lucide-react';
+import {
+  CheckCircle2,
+  KeyRound,
+  Lock,
+  LogOut,
+  Phone,
+  QrCode,
+  RefreshCw,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setAuthModalOpen, authStatus, refreshAuth, addToast } = useApp();
 
+  const [loginMethod, setLoginMethod] = useState<'qr' | 'phone'>('qr');
   const [step, setStep] = useState<'phone' | 'code' | '2fa'>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -24,14 +35,110 @@ export const AuthModal: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // QR Code State
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrExpired, setQrExpired] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const resetForm = () => {
+    setLoginMethod('qr');
     setStep('phone');
     setPhone('');
     setCode('');
     setPhoneCodeHash('');
     setPassword('');
     setError(null);
+    setQrImage(null);
+    setQrExpired(false);
+    setQrError(null);
   };
+
+  const clearQrTimer = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  // Start QR Code generation
+  const handleStartQr = async () => {
+    clearQrTimer();
+    setQrLoading(true);
+    setQrExpired(false);
+    setQrError(null);
+
+    try {
+      const res = await api.startQrLogin();
+      if (res.qr_image) {
+        setQrImage(res.qr_image);
+      }
+      if (res.status === 'success' || res.status === 'authorized') {
+        addToast({
+          type: 'success',
+          title: 'Authorized',
+          message: 'Welcome back to Telegram!',
+        });
+        await refreshAuth();
+        setAuthModalOpen(false);
+        resetForm();
+      }
+    } catch (err: any) {
+      setQrError(err.message || 'Failed to generate QR code');
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  // QR polling lifecycle
+  useEffect(() => {
+    if (!isAuthModalOpen || authStatus?.authenticated || loginMethod !== 'qr' || qrExpired) {
+      clearQrTimer();
+      return;
+    }
+
+    // Auto-fetch QR code if not loaded yet
+    if (!qrImage && !qrLoading) {
+      handleStartQr();
+    }
+
+    pollTimerRef.current = setInterval(async () => {
+      try {
+        const res = await api.getQrStatus();
+        if (res.status === 'success' || res.status === 'authorized') {
+          clearQrTimer();
+          addToast({
+            type: 'success',
+            title: 'Authorized',
+            message: `Welcome, ${res.user?.first_name || 'Telegram User'}!`,
+          });
+          await refreshAuth();
+          setAuthModalOpen(false);
+          resetForm();
+        } else if (res.status === '2fa_required') {
+          clearQrTimer();
+          addToast({
+            type: 'info',
+            title: '2FA Required',
+            message: 'QR verified! Please enter your Two-Step Verification Cloud Password.',
+          });
+          setLoginMethod('phone');
+          setStep('2fa');
+        } else if (res.status === 'expired') {
+          clearQrTimer();
+          setQrExpired(true);
+        } else if (res.status === 'error') {
+          clearQrTimer();
+          setQrError(res.message || 'QR session error. Please refresh.');
+        }
+      } catch {
+        // Silent poll error
+      }
+    }, 1500);
+
+    return () => clearQrTimer();
+  }, [isAuthModalOpen, authStatus?.authenticated, loginMethod, qrExpired, qrImage]);
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,7 +238,13 @@ export const AuthModal: React.FC = () => {
   };
 
   return (
-    <Dialog open={isAuthModalOpen} onOpenChange={setAuthModalOpen}>
+    <Dialog
+      open={isAuthModalOpen}
+      onOpenChange={(open) => {
+        setAuthModalOpen(open);
+        if (!open) clearQrTimer();
+      }}
+    >
       <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border-border shadow-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2 mb-1">
@@ -193,14 +306,126 @@ export const AuthModal: React.FC = () => {
             </Button>
           </div>
         ) : (
-          <div className="py-2">
+          <div className="py-2 space-y-4">
+            {/* Login Mode Tabs: Scan QR vs Phone OTP */}
+            {step !== '2fa' && (
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-accent/40 rounded-xl border border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginMethod('qr');
+                    setError(null);
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    loginMethod === 'qr'
+                      ? 'bg-card text-foreground shadow-xs font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <QrCode className="w-4 h-4 text-primary" />
+                  Quick QR Scan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginMethod('phone');
+                    setError(null);
+                    clearQrTimer();
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    loginMethod === 'phone'
+                      ? 'bg-card text-foreground shadow-xs font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Phone className="w-4 h-4 text-primary" />
+                  Phone Number
+                </button>
+              </div>
+            )}
+
             {error && (
-              <div className="p-3 mb-4 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
                 {error}
               </div>
             )}
 
-            {step === 'phone' && (
+            {/* TAB 1: QR Code Login */}
+            {loginMethod === 'qr' && step !== '2fa' && (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center justify-center">
+                  <div className="relative p-3.5 bg-white rounded-2xl shadow-xl border border-border flex items-center justify-center">
+                    {qrLoading && !qrImage ? (
+                      <div className="w-52 h-52 flex flex-col items-center justify-center gap-2.5 text-slate-800">
+                        <RefreshCw className="w-7 h-7 animate-spin text-primary" />
+                        <span className="text-xs font-medium">Generating QR code...</span>
+                      </div>
+                    ) : qrImage ? (
+                      <img
+                        src={qrImage}
+                        alt="Telegram QR Login"
+                        className={`w-52 h-52 object-contain rounded-lg transition-opacity duration-200 ${
+                          qrExpired ? 'opacity-20 blur-[1px]' : 'opacity-100'
+                        }`}
+                      />
+                    ) : (
+                      <div className="w-52 h-52 flex flex-col items-center justify-center gap-2 text-slate-800">
+                        <QrCode className="w-10 h-10 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">No QR code</span>
+                      </div>
+                    )}
+
+                    {/* Expired Overlay */}
+                    {qrExpired && (
+                      <div className="absolute inset-0 bg-background/80 backdrop-blur-xs rounded-2xl flex flex-col items-center justify-center p-4 text-center gap-2.5">
+                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                          QR Expired
+                        </Badge>
+                        <p className="text-xs text-muted-foreground">This login code has expired for security.</p>
+                        <Button
+                          size="sm"
+                          onClick={handleStartQr}
+                          className="gap-1.5 cursor-pointer text-xs"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Refresh Code
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {qrError && (
+                  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive text-center">
+                    {qrError}
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={handleStartQr}
+                      className="text-xs text-primary underline ml-2 p-0 h-auto cursor-pointer"
+                    >
+                      Try Again
+                    </Button>
+                  </div>
+                )}
+
+                {/* Steps instructions */}
+                <div className="p-3 rounded-xl bg-accent/30 border border-border space-y-2">
+                  <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-primary" />
+                    How to log in with Telegram:
+                  </div>
+                  <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside pl-1 leading-relaxed">
+                    <li>Open <strong>Telegram</strong> on your phone</li>
+                    <li>Go to <strong>Settings → Devices → Link Desktop Device</strong></li>
+                    <li>Point your camera at the QR code above</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: Phone Number Form */}
+            {loginMethod === 'phone' && step === 'phone' && (
               <form onSubmit={handleSendCode} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">Phone Number</label>
@@ -226,7 +451,7 @@ export const AuthModal: React.FC = () => {
               </form>
             )}
 
-            {step === 'code' && (
+            {loginMethod === 'phone' && step === 'code' && (
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">Verification Code</label>

@@ -30,11 +30,6 @@ interface AppContextValue {
   removeToast: (id: string) => void;
   uploadQueue: UploadTask[];
   setUploadQueue: React.Dispatch<React.SetStateAction<UploadTask[]>>;
-  isMobileDockOpen: boolean;
-  setMobileDockOpen: (open: boolean) => void;
-  toggleMobileDock: () => void;
-  mobileDockWidth: number;
-  setMobileDockWidth: (w: number) => void;
 }
 
 const DEFAULT_CHAT: ChatItem = {
@@ -103,49 +98,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedChatState(chat);
     try {
       localStorage.setItem('tg_selected_chat', JSON.stringify(chat));
-    } catch {}
-  };
-
-  const [isMobileDockOpen, setIsMobileDockOpenState] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('tg_dock_open') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const [mobileDockWidth, setMobileDockWidthState] = useState<number>(() => {
-    try {
-      const saved = Number(localStorage.getItem('tg_dock_width'));
-      if (saved >= 320 && saved <= 520) return saved;
-      return 380;
-    } catch {
-      return 380;
-    }
-  });
-
-  const setMobileDockOpen = (open: boolean) => {
-    setIsMobileDockOpenState(open);
-    try {
-      localStorage.setItem('tg_dock_open', String(open));
-    } catch {}
-  };
-
-  const toggleMobileDock = () => {
-    setIsMobileDockOpenState((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('tg_dock_open', String(next));
-      } catch {}
-      return next;
-    });
-  };
-
-  const setMobileDockWidth = (w: number) => {
-    const clamped = Math.max(320, Math.min(520, w));
-    setMobileDockWidthState(clamped);
-    try {
-      localStorage.setItem('tg_dock_width', String(clamped));
     } catch {}
   };
 
@@ -279,11 +231,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeToast,
         uploadQueue,
         setUploadQueue,
-        isMobileDockOpen,
-        setMobileDockOpen,
-        toggleMobileDock,
-        mobileDockWidth,
-        setMobileDockWidth,
       }}
     >
       {children}

@@ -19,16 +19,124 @@ from app.config import (
     SESSION_DIR,
     SESSION_FILE_PATH,
     SESSION_STRING,
-    update_session_string_in_env
+    update_session_string_in_env,
+    SESSION_NAME_2,
+    SESSION_FILE_PATH_2,
+    SESSION_STRING_2,
+    ENABLE_MULTI_ACCOUNT_TURBO,
+    update_secondary_session_string_in_env
 )
 
+import io
+import base64
+import qrcode
 import telethon.client.downloads as td
 from telethon import functions, errors
 from telethon.network import MTProtoSender
-from telethon.tl.alltlobjects import LAYER
+from telethon.tl.alltlobjects import LAYER, tlobjects
+from telethon.tl.types import User
+
+class UserLayer228(User):
+    CONSTRUCTOR_ID = 0xb1b8cc83
+    SUBCLASS_OF_ID = 0x2da17977
+
+    @classmethod
+    def from_reader(cls, reader):
+        flags = reader.read_int()
+        _is_self = bool(flags & 1024)
+        _contact = bool(flags & 2048)
+        _mutual_contact = bool(flags & 4096)
+        _deleted = bool(flags & 8192)
+        _bot = bool(flags & 16384)
+        _bot_chat_history = bool(flags & 32768)
+        _bot_nochats = bool(flags & 65536)
+        _verified = bool(flags & 131072)
+        _restricted = bool(flags & 262144)
+        _min = bool(flags & 1048576)
+        _bot_inline_geo = bool(flags & 2097152)
+        _support = bool(flags & 8388608)
+        _scam = bool(flags & 16777216)
+        _apply_min_photo = bool(flags & 33554432)
+        _fake = bool(flags & 67108864)
+        _bot_attach_menu = bool(flags & 134217728)
+        _premium = bool(flags & 268435456)
+        _attach_menu_enabled = bool(flags & 536870912)
+        flags2 = reader.read_int()
+
+        _bot_can_edit = bool(flags2 & 2)
+        _close_friend = bool(flags2 & 4)
+        _stories_hidden = bool(flags2 & 8)
+        _stories_unavailable = bool(flags2 & 16)
+        _contact_require_premium = bool(flags2 & 1024)
+        _bot_business = bool(flags2 & 2048)
+        _bot_has_main_app = bool(flags2 & 8192)
+        _bot_forum_view = bool(flags2 & 65536)
+        _bot_forum_can_manage_topics = bool(flags2 & 131072)
+        _bot_can_manage_bots = bool(flags2 & 262144)
+        _bot_guestchat = bool(flags2 & 524288)
+        _bot_guard = bool(flags2 & 1048576)
+        _id = reader.read_long()
+        _access_hash = reader.read_long() if (flags & 1) else None
+        _first_name = reader.tgread_string() if (flags & 2) else None
+        _last_name = reader.tgread_string() if (flags & 4) else None
+        _username = reader.tgread_string() if (flags & 8) else None
+        _phone = reader.tgread_string() if (flags & 16) else None
+        _photo = reader.tgread_object() if (flags & 32) else None
+        _status = reader.tgread_object() if (flags & 64) else None
+        _bot_info_version = reader.read_int() if (flags & 16384) else None
+        if flags & 262144:
+            reader.read_int()
+            _restriction_reason = [reader.tgread_object() for _ in range(reader.read_int())]
+        else:
+            _restriction_reason = None
+        _bot_inline_placeholder = reader.tgread_string() if (flags & 524288) else None
+        _lang_code = reader.tgread_string() if (flags & 4194304) else None
+        _emoji_status = reader.tgread_object() if (flags & 1073741824) else None
+        if flags2 & 1:
+            reader.read_int()
+            _usernames = [reader.tgread_object() for _ in range(reader.read_int())]
+        else:
+            _usernames = None
+        _stories_max_id = reader.tgread_object() if (flags2 & 32) else None
+        _color = reader.tgread_object() if (flags2 & 256) else None
+        _profile_color = reader.tgread_object() if (flags2 & 512) else None
+        _bot_active_users = reader.read_int() if (flags2 & 4096) else None
+        _bot_verification_icon = reader.read_long() if (flags2 & 16384) else None
+        _send_paid_messages_stars = reader.read_long() if (flags2 & 32768) else None
+        _linked_community_id = reader.read_long() if (flags2 & 2097152) else None
+
+        u = cls(id=_id, is_self=_is_self, contact=_contact, mutual_contact=_mutual_contact, deleted=_deleted, bot=_bot, bot_chat_history=_bot_chat_history, bot_nochats=_bot_nochats, verified=_verified, restricted=_restricted, min=_min, bot_inline_geo=_bot_inline_geo, support=_support, scam=_scam, apply_min_photo=_apply_min_photo, fake=_fake, bot_attach_menu=_bot_attach_menu, premium=_premium, attach_menu_enabled=_attach_menu_enabled, bot_can_edit=_bot_can_edit, close_friend=_close_friend, stories_hidden=_stories_hidden, stories_unavailable=_stories_unavailable, contact_require_premium=_contact_require_premium, bot_business=_bot_business, bot_has_main_app=_bot_has_main_app, bot_forum_view=_bot_forum_view, bot_forum_can_manage_topics=_bot_forum_can_manage_topics, bot_can_manage_bots=_bot_can_manage_bots, bot_guestchat=_bot_guestchat, bot_guard=_bot_guard, access_hash=_access_hash, first_name=_first_name, last_name=_last_name, username=_username, phone=_phone, photo=_photo, status=_status, bot_info_version=_bot_info_version, restriction_reason=_restriction_reason, bot_inline_placeholder=_bot_inline_placeholder, lang_code=_lang_code, emoji_status=_emoji_status, usernames=_usernames, stories_max_id=_stories_max_id, color=_color, profile_color=_profile_color, bot_active_users=_bot_active_users, bot_verification_icon=_bot_verification_icon, send_paid_messages_stars=_send_paid_messages_stars)
+        u.linked_community_id = _linked_community_id
+        return u
+
+tlobjects[0xb1b8cc83] = UserLayer228
 
 logger = logging.getLogger("telegram_client")
 logging.getLogger("telethon.network").setLevel(logging.ERROR)
+
+SESSION_REVOKED_ERRORS = (
+    getattr(errors, "AuthKeyDuplicatedError", Exception),
+    getattr(errors, "AuthKeyUnregisteredError", Exception),
+    getattr(errors, "SessionRevokedError", Exception),
+    getattr(errors, "SessionExpiredError", Exception),
+    getattr(errors, "UserDeactivatedBanError", Exception),
+)
+
+def generate_qr_data_url(url: str) -> str:
+    """Generates a high-contrast base64 Data URL PNG for a QR code."""
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{b64}"
 
 # 1. Optimize Telethon MTProto chunk sizing to 1MB (Telegram API supported limit)
 td.MAX_CHUNK_SIZE = 1024 * 1024
@@ -98,6 +206,17 @@ async def _safe_conn_recv_loop(self):
                 pass
 
 Connection._recv_loop = _safe_conn_recv_loop
+
+# 5. Patch MTProtoSender._handle_gzip_packed to safely ignore newer Layer TypeNotFoundError
+_orig_handle_gzip_packed = MTProtoSender._handle_gzip_packed
+
+async def _safe_handle_gzip_packed(self, message):
+    try:
+        await _orig_handle_gzip_packed(self, message)
+    except errors.TypeNotFoundError as e:
+        self._log.info('Skipping unknown TLObject %08x in gzipped packet', e.invalid_constructor_id)
+
+MTProtoSender._handle_gzip_packed = _safe_handle_gzip_packed
 
 from telethon import helpers
 
@@ -209,9 +328,22 @@ class TelegramClientManager:
     _instance: Optional["TelegramClientManager"] = None
     _client: Optional[TelegramClient] = None
     _bot_client: Optional[TelegramClient] = None
+    _secondary_client: Optional[TelegramClient] = None
+    _secondary_auth_client: Optional[TelegramClient] = None
     _lock = asyncio.Lock()
+    _secondary_lock = asyncio.Lock()
     _is_ready = False
+    _is_secondary_ready = False
     _cached_me: Optional[dict] = None
+    _cached_secondary_me: Optional[dict] = None
+
+    _qr_login: Optional[Any] = None
+    _qr_wait_task: Optional[asyncio.Task] = None
+    _qr_status: Dict[str, Any] = {"status": "idle"}
+
+    _secondary_qr_login: Optional[Any] = None
+    _secondary_qr_wait_task: Optional[asyncio.Task] = None
+    _secondary_qr_status: Dict[str, Any] = {"status": "idle"}
 
     @classmethod
     async def get_client(cls) -> TelegramClient:
@@ -244,11 +376,47 @@ class TelegramClientManager:
                     logger.info("Connecting Telethon user client to Telegram MTProto...")
                     try:
                         await cls._client.connect()
+                    except SESSION_REVOKED_ERRORS as rev_err:
+                        logger.warning(f"Session revoked or duplicated ({type(rev_err).__name__}: {rev_err}). Resetting to clean StringSession...")
+                        update_session_string_in_env("")
+                        cls._client = TelegramClient(
+                            StringSession(),
+                            API_ID,
+                            API_HASH,
+                            flood_sleep_threshold=0,
+                            connection_retries=None,
+                            retry_delay=3,
+                            auto_reconnect=True,
+                            timeout=15
+                        )
+                        await cls._client.connect()
                     except Exception as conn_err:
                         logger.warning(f"MTProto connect error (network may be switching): {conn_err}")
 
                 if cls._client.is_connected():
-                    cls._is_ready = await cls._client.is_user_authorized()
+                    try:
+                        cls._is_ready = await cls._client.is_user_authorized()
+                    except SESSION_REVOKED_ERRORS as auth_rev_err:
+                        logger.warning(f"Session auth check detected revoked key ({type(auth_rev_err).__name__}). Resetting to clean StringSession...")
+                        update_session_string_in_env("")
+                        cls._is_ready = False
+                        cls._cached_me = None
+                        try:
+                            await cls._client.disconnect()
+                        except Exception:
+                            pass
+                        cls._client = TelegramClient(
+                            StringSession(),
+                            API_ID,
+                            API_HASH,
+                            flood_sleep_threshold=0,
+                            connection_retries=None,
+                            retry_delay=3,
+                            auto_reconnect=True,
+                            timeout=15
+                        )
+                        await cls._client.connect()
+
                     if cls._is_ready:
                         # Sync and persist active string session if not already stored
                         if isinstance(cls._client.session, StringSession):
@@ -267,7 +435,7 @@ class TelegramClientManager:
                                     "username": getattr(me, "username", None),
                                     "is_premium": is_prem
                                 }
-                                sender_pool.set_max_senders(12 if is_prem else 8)
+                                sender_pool.set_max_senders(32 if is_prem else 32)
                                 from app.services.rate_governor import rate_governor
                                 rate_governor.configure_for_tier(is_premium=is_prem)
                                 logger.info(f"Telegram user client authorized as: {getattr(me, 'first_name', '')} (@{getattr(me, 'username', 'N/A')}, Premium: {is_prem})")
@@ -300,28 +468,44 @@ class TelegramClientManager:
         return cls._client
 
     @classmethod
+    async def reconnect_primary(cls, timeout: float = 15.0) -> bool:
+        async with cls._lock:
+            if cls._client:
+                try:
+                    await cls._pool.disconnect_all(cls._client)
+                except Exception:
+                    pass
+                try:
+                    await cls._client.disconnect()
+                except Exception:
+                    pass
+                cls._client = None
+                cls._is_ready = False
+            deadline = time.time() + timeout
+            delay = 0.5
+            while time.time() < deadline:
+                try:
+                    client = await cls.get_client()
+                    if client and client.is_connected():
+                        return True
+                except Exception as e:
+                    logger.debug(f"reconnect_primary retry notice: {e}")
+                await asyncio.sleep(min(delay, max(0.1, deadline - time.time())))
+                delay = min(2.0, delay * 1.5)
+            return bool(cls._client and cls._client.is_connected())
+
+    @classmethod
     async def ensure_connected(cls, timeout: float = 15.0) -> bool:
-        """
-        Ensures the client is connected to MTProto.
-        If a network switch or temporary disconnect occurs, aggressively reconnects with exponential backoff.
-        Does NOT de-authorize the user while reconnecting.
-        """
         if cls._client is not None and cls._client.is_connected():
             return True
-
-        deadline = time.time() + timeout
-        delay = 0.4
-        while time.time() < deadline:
+        if cls._client is not None:
             try:
-                client = await cls.get_client()
-                if client and client.is_connected():
+                await asyncio.wait_for(cls._client.connect(), timeout=min(5.0, timeout))
+                if cls._client.is_connected():
                     return True
-            except Exception as e:
-                logger.debug(f"ensure_connected retry notice: {e}")
-            await asyncio.sleep(min(delay, max(0.1, deadline - time.time())))
-            delay = min(2.0, delay * 1.5)
-
-        return bool(cls._client and cls._client.is_connected())
+            except Exception:
+                pass
+        return await cls.reconnect_primary(timeout=timeout)
 
     @classmethod
     async def get_bot_client(cls) -> Optional[TelegramClient]:
@@ -407,7 +591,32 @@ class TelegramClientManager:
     async def send_login_code(cls, phone: str) -> dict:
         """Sends Telegram verification login code to the specified phone number."""
         client = await cls.get_client()
-        sent_code = await client.send_code_request(phone)
+        try:
+            sent_code = await client.send_code_request(phone)
+        except SESSION_REVOKED_ERRORS as rev_err:
+            logger.warning(f"send_login_code hit revoked/duplicated session ({type(rev_err).__name__}). Resetting client...")
+            async with cls._lock:
+                update_session_string_in_env("")
+                cls._is_ready = False
+                cls._cached_me = None
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+                cls._client = TelegramClient(
+                    StringSession(),
+                    API_ID,
+                    API_HASH,
+                    flood_sleep_threshold=0,
+                    connection_retries=None,
+                    retry_delay=3,
+                    auto_reconnect=True,
+                    timeout=15
+                )
+                await cls._client.connect()
+                client = cls._client
+            sent_code = await client.send_code_request(phone)
+
         return {
             "phone": phone,
             "phone_code_hash": sent_code.phone_code_hash,
@@ -446,6 +655,89 @@ class TelegramClientManager:
         return {"status": "authorized", "user": me_info}
 
     @classmethod
+    async def start_qr_login(cls) -> dict:
+        """Initiates Telegram QR code login for the primary account."""
+        if not API_ID or not API_HASH:
+            raise ValueError("TG_API_ID and TG_API_HASH must be configured in environment variables.")
+
+        client = await cls.get_client()
+        try:
+            if await client.is_user_authorized():
+                me_info = await cls.get_me_info()
+                return {"status": "authorized", "user": me_info}
+        except Exception:
+            pass
+
+        if cls._qr_wait_task and not cls._qr_wait_task.done():
+            cls._qr_wait_task.cancel()
+
+        try:
+            qr = await client.qr_login()
+        except (SESSION_REVOKED_ERRORS, Exception) as qr_err:
+            logger.warning(f"QR login hit error with session ({type(qr_err).__name__}: {qr_err}); resetting to pristine StringSession...")
+            async with cls._lock:
+                update_session_string_in_env("")
+                cls._is_ready = False
+                cls._cached_me = None
+                try:
+                    if client.is_connected():
+                        await client.disconnect()
+                except Exception:
+                    pass
+                cls._client = TelegramClient(
+                    StringSession(),
+                    API_ID,
+                    API_HASH,
+                    flood_sleep_threshold=0,
+                    connection_retries=None,
+                    retry_delay=3,
+                    auto_reconnect=True,
+                    timeout=15
+                )
+                await cls._client.connect()
+                qr = await cls._client.qr_login()
+
+        cls._qr_login = qr
+        cls._qr_status = {"status": "waiting"}
+        cls._qr_wait_task = asyncio.create_task(cls._wait_qr_login(qr))
+        qr_img = generate_qr_data_url(qr.url)
+        return {
+            "status": "waiting",
+            "url": qr.url,
+            "token_url": qr.url,
+            "qr_image": qr_img,
+            "expires": str(getattr(qr, "expires", ""))
+        }
+
+    @classmethod
+    async def _wait_qr_login(cls, qr):
+        try:
+            user = await qr.wait()
+            if isinstance(cls._client.session, StringSession):
+                new_str = cls._client.session.save()
+                if new_str:
+                    update_session_string_in_env(new_str)
+            cls._cached_me = None
+            me_info = await cls.get_me_info()
+            cls._is_ready = True
+            cls._qr_status = {"status": "authorized", "user": me_info}
+            logger.info(f"✅ Telegram QR login successful: {me_info.get('name') if me_info else 'User'}")
+        except SessionPasswordNeededError:
+            cls._qr_status = {"status": "2fa_required", "message": "Two-Step Verification (2FA) is enabled on this Telegram account."}
+        except asyncio.TimeoutError:
+            cls._qr_status = {"status": "expired", "message": "QR code expired. Please generate a new QR code."}
+        except asyncio.CancelledError:
+            cls._qr_status = {"status": "cancelled"}
+        except Exception as e:
+            logger.warning(f"QR login wait error: {e}")
+            cls._qr_status = {"status": "error", "message": str(e)}
+
+    @classmethod
+    def get_qr_status(cls) -> dict:
+        """Returns current status of primary QR login."""
+        return cls._qr_status
+
+    @classmethod
     async def logout(cls) -> dict:
         """Logs out from Telegram and clears local session."""
         async with cls._lock:
@@ -466,8 +758,361 @@ class TelegramClientManager:
             return {"status": "logged_out"}
 
     @classmethod
+    async def get_secondary_client(cls) -> Optional[TelegramClient]:
+        """
+        Retrieves the secondary Telethon client instance for multi-account turbo pooling.
+        Returns None if multi-account turbo is disabled or secondary session is not configured.
+        """
+        if not ENABLE_MULTI_ACCOUNT_TURBO or not API_ID or not API_HASH:
+            return None
+
+        has_session_string = bool(SESSION_STRING_2)
+        session_file = SESSION_FILE_PATH_2.with_suffix(".session") if not str(SESSION_FILE_PATH_2).endswith(".session") else SESSION_FILE_PATH_2
+        has_session_file = session_file.exists() or SESSION_FILE_PATH_2.exists()
+        if not has_session_string and not has_session_file:
+            return None
+
+        if cls._secondary_client is None or not cls._secondary_client.is_connected():
+            async with cls._secondary_lock:
+                if cls._secondary_client is None:
+                    session_target = StringSession(SESSION_STRING_2) if SESSION_STRING_2 else str(SESSION_FILE_PATH_2)
+                    cls._secondary_client = TelegramClient(
+                        session_target,
+                        API_ID,
+                        API_HASH,
+                        flood_sleep_threshold=0,
+                        connection_retries=None,
+                        retry_delay=3,
+                        auto_reconnect=True,
+                        timeout=15
+                    )
+                    cls._secondary_client._is_secondary_client = True
+
+                if not cls._secondary_client.is_connected():
+                    logger.info("Connecting secondary Telethon client to Telegram MTProto...")
+                    try:
+                        await cls._secondary_client.connect()
+                    except Exception as conn_err:
+                        logger.warning(f"Secondary MTProto connect error: {conn_err}")
+
+                if cls._secondary_client.is_connected():
+                    cls._is_secondary_ready = await cls._secondary_client.is_user_authorized()
+                    if cls._is_secondary_ready:
+                        if isinstance(cls._secondary_client.session, StringSession):
+                            current_str = cls._secondary_client.session.save()
+                            if current_str and current_str != SESSION_STRING_2:
+                                update_secondary_session_string_in_env(current_str)
+
+                        if not cls._cached_secondary_me:
+                            try:
+                                me = await cls._secondary_client.get_me()
+                                full_name = f"{getattr(me, 'first_name', '') or ''} {getattr(me, 'last_name', '') or ''}".strip()
+                                is_prem = getattr(me, "premium", False)
+                                raw_phone = getattr(me, "phone", None)
+                                masked_phone = None
+                                if raw_phone:
+                                    raw_str = str(raw_phone)
+                                    masked_phone = f"+{raw_str[:3]}******{raw_str[-4:]}" if len(raw_str) >= 7 else "***"
+
+                                cls._cached_secondary_me = {
+                                    "id": getattr(me, "id", None),
+                                    "name": full_name or getattr(me, "username", "Secondary User"),
+                                    "first_name": getattr(me, "first_name", ""),
+                                    "last_name": getattr(me, "last_name", ""),
+                                    "username": getattr(me, "username", None),
+                                    "phone": masked_phone,
+                                    "is_premium": is_prem
+                                }
+                                from app.services.rate_governor import rate_governor
+                                primary_prem = bool(cls._cached_me and cls._cached_me.get("is_premium"))
+                                rate_governor.configure_for_tier(is_premium=primary_prem, secondary_premium=is_prem)
+                                logger.info(f"Secondary Telegram client authorized as: {getattr(me, 'first_name', '')} (@{getattr(me, 'username', 'N/A')}, Premium: {is_prem})")
+                            except Exception as me_err:
+                                logger.debug(f"Secondary get_me notice: {me_err}")
+                else:
+                    return None
+
+        return cls._secondary_client if cls._is_secondary_ready else None
+
+    @classmethod
+    async def is_secondary_authorized(cls) -> bool:
+        """Check if secondary client is authorized."""
+        try:
+            if not ENABLE_MULTI_ACCOUNT_TURBO:
+                return False
+            if cls._is_secondary_ready and cls._secondary_client and cls._secondary_client.is_connected():
+                return True
+            client = await cls.get_secondary_client()
+            return bool(client and cls._is_secondary_ready)
+        except Exception as e:
+            logger.debug(f"Error checking secondary authorization: {e}")
+            return False
+
+    @classmethod
+    async def get_secondary_me_info(cls) -> Optional[dict]:
+        """Fetch secondary authenticated user profile."""
+        if not ENABLE_MULTI_ACCOUNT_TURBO:
+            return None
+        if cls._cached_secondary_me:
+            return cls._cached_secondary_me
+        try:
+            client = await cls.get_secondary_client()
+            if not client or not await client.is_user_authorized():
+                return None
+            me = await client.get_me()
+            full_name = f"{getattr(me, 'first_name', '') or ''} {getattr(me, 'last_name', '') or ''}".strip()
+            raw_phone = getattr(me, "phone", None)
+            masked_phone = None
+            if raw_phone:
+                raw_str = str(raw_phone)
+                masked_phone = f"+{raw_str[:3]}******{raw_str[-4:]}" if len(raw_str) >= 7 else "***"
+
+            cls._cached_secondary_me = {
+                "id": me.id,
+                "first_name": getattr(me, "first_name", ""),
+                "last_name": getattr(me, "last_name", ""),
+                "name": full_name or getattr(me, "username", "Secondary User"),
+                "username": getattr(me, "username", None),
+                "phone": masked_phone,
+                "is_premium": getattr(me, "premium", False)
+            }
+            return cls._cached_secondary_me
+        except Exception as e:
+            logger.error(f"Error getting secondary profile: {e}")
+            return None
+
+    @classmethod
+    async def get_active_streaming_clients(cls) -> list:
+        """Returns list of active, authorized Telethon clients for streaming pooling."""
+        clients = []
+        try:
+            primary = await cls.get_client()
+            if primary and await cls.is_authorized():
+                clients.append(primary)
+        except Exception as pe:
+            logger.debug(f"Primary client check notice: {pe}")
+
+        try:
+            if ENABLE_MULTI_ACCOUNT_TURBO:
+                sec = await cls.get_secondary_client()
+                if sec and cls._is_secondary_ready:
+                    clients.append(sec)
+        except Exception as se:
+            logger.debug(f"Secondary client check notice: {se}")
+
+        return clients
+
+    @classmethod
+    async def send_secondary_login_code(cls, phone: str) -> dict:
+        """Sends login code to secondary phone number using a dedicated auth client."""
+        if not API_ID or not API_HASH:
+            raise ValueError("TG_API_ID and TG_API_HASH must be configured.")
+        async with cls._secondary_lock:
+            if cls._secondary_auth_client is None:
+                cls._secondary_auth_client = TelegramClient(
+                    StringSession(),
+                    API_ID,
+                    API_HASH,
+                    flood_sleep_threshold=0,
+                    connection_retries=5,
+                    retry_delay=2,
+                    auto_reconnect=True,
+                    timeout=15
+                )
+                cls._secondary_auth_client._is_secondary_client = True
+            if not cls._secondary_auth_client.is_connected():
+                await cls._secondary_auth_client.connect()
+            sent_code = await cls._secondary_auth_client.send_code_request(phone)
+            return {
+                "phone": phone,
+                "phone_code_hash": sent_code.phone_code_hash,
+                "timeout": getattr(sent_code, "timeout", 60)
+            }
+
+    @classmethod
+    async def sign_in_secondary_with_code(cls, phone: str, code: str, phone_code_hash: str) -> dict:
+        """Completes sign-in for secondary account using phone code."""
+        if cls._secondary_auth_client is None or not cls._secondary_auth_client.is_connected():
+            raise RuntimeError("Authentication session expired. Please request a new code.")
+        try:
+            await cls._secondary_auth_client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
+            session_str = cls._secondary_auth_client.session.save()
+            update_secondary_session_string_in_env(session_str)
+            if cls._secondary_client and cls._secondary_client.is_connected():
+                try:
+                    await cls._secondary_client.disconnect()
+                except Exception:
+                    pass
+            cls._secondary_client = cls._secondary_auth_client
+            cls._secondary_auth_client = None
+            cls._cached_secondary_me = None
+            cls._is_secondary_ready = True
+            me_info = await cls.get_secondary_me_info()
+            return {"status": "authorized", "user": me_info}
+        except SessionPasswordNeededError:
+            return {"status": "2fa_required", "message": "Two-Step Verification (2FA) is enabled on this Telegram account."}
+
+    @classmethod
+    async def sign_in_secondary_with_2fa(cls, password: str) -> dict:
+        """Completes 2FA sign-in for secondary account."""
+        if cls._secondary_auth_client is None or not cls._secondary_auth_client.is_connected():
+            raise RuntimeError("Authentication session expired. Please start login again.")
+        await cls._secondary_auth_client.sign_in(password=password)
+        session_str = cls._secondary_auth_client.session.save()
+        update_secondary_session_string_in_env(session_str)
+        if cls._secondary_client and cls._secondary_client.is_connected():
+            try:
+                await cls._secondary_client.disconnect()
+            except Exception:
+                pass
+        cls._secondary_client = cls._secondary_auth_client
+        cls._secondary_auth_client = None
+        cls._cached_secondary_me = None
+        cls._is_secondary_ready = True
+        me_info = await cls.get_secondary_me_info()
+        return {"status": "authorized", "user": me_info}
+
+    @classmethod
+    async def import_secondary_session_string(cls, session_string: str) -> dict:
+        """Directly imports and activates a secondary StringSession."""
+        if not session_string or not session_string.strip():
+            raise ValueError("Session string cannot be empty.")
+        clean_str = session_string.strip()
+        client = TelegramClient(
+            StringSession(clean_str),
+            API_ID,
+            API_HASH,
+            flood_sleep_threshold=0,
+            connection_retries=5,
+            retry_delay=2,
+            auto_reconnect=True,
+            timeout=15
+        )
+        client._is_secondary_client = True
+        await client.connect()
+        if not await client.is_user_authorized():
+            await client.disconnect()
+            raise ValueError("The provided session string is invalid or expired.")
+
+        async with cls._secondary_lock:
+            if cls._secondary_client and cls._secondary_client.is_connected():
+                try:
+                    await cls._secondary_client.disconnect()
+                except Exception:
+                    pass
+            cls._secondary_client = client
+            cls._is_secondary_ready = True
+            cls._cached_secondary_me = None
+            update_secondary_session_string_in_env(clean_str)
+            me_info = await cls.get_secondary_me_info()
+            return {"status": "authorized", "user": me_info}
+
+    @classmethod
+    async def start_secondary_qr_login(cls) -> dict:
+        """Initiates Telegram QR code login for the secondary account."""
+        if not API_ID or not API_HASH:
+            raise ValueError("TG_API_ID and TG_API_HASH must be configured in environment variables.")
+
+        async with cls._secondary_lock:
+            if cls._secondary_auth_client is not None:
+                if cls._secondary_qr_wait_task and not cls._secondary_qr_wait_task.done():
+                    cls._secondary_qr_wait_task.cancel()
+                try:
+                    if cls._secondary_auth_client.is_connected():
+                        await cls._secondary_auth_client.disconnect()
+                except Exception:
+                    pass
+                cls._secondary_auth_client = None
+
+            cls._secondary_auth_client = TelegramClient(
+                StringSession(),
+                API_ID,
+                API_HASH,
+                flood_sleep_threshold=0,
+                connection_retries=5,
+                retry_delay=2,
+                auto_reconnect=True,
+                timeout=15
+            )
+            cls._secondary_auth_client._is_secondary_client = True
+            await cls._secondary_auth_client.connect()
+            qr = await cls._secondary_auth_client.qr_login()
+            cls._secondary_qr_login = qr
+            cls._secondary_qr_status = {"status": "waiting"}
+            cls._secondary_qr_wait_task = asyncio.create_task(cls._wait_secondary_qr_login(qr))
+            qr_img = generate_qr_data_url(qr.url)
+            return {
+                "status": "waiting",
+                "url": qr.url,
+                "token_url": qr.url,
+                "qr_image": qr_img,
+                "expires": str(getattr(qr, "expires", ""))
+            }
+
+    @classmethod
+    async def _wait_secondary_qr_login(cls, qr):
+        try:
+            user = await qr.wait()
+            session_str = cls._secondary_auth_client.session.save()
+            update_secondary_session_string_in_env(session_str)
+            if cls._secondary_client and cls._secondary_client.is_connected():
+                try:
+                    await cls._secondary_client.disconnect()
+                except Exception:
+                    pass
+            cls._secondary_client = cls._secondary_auth_client
+            cls._secondary_auth_client = None
+            cls._cached_secondary_me = None
+            cls._is_secondary_ready = True
+            me_info = await cls.get_secondary_me_info()
+            cls._secondary_qr_status = {"status": "authorized", "user": me_info}
+            logger.info(f"✅ Secondary Telegram QR login successful: {me_info.get('name') if me_info else 'User'}")
+        except SessionPasswordNeededError:
+            cls._secondary_qr_status = {"status": "2fa_required", "message": "Two-Step Verification (2FA) is enabled on this Telegram account."}
+        except asyncio.TimeoutError:
+            cls._secondary_qr_status = {"status": "expired", "message": "QR code expired. Please generate a new QR code."}
+        except asyncio.CancelledError:
+            cls._secondary_qr_status = {"status": "cancelled"}
+        except Exception as e:
+            logger.warning(f"Secondary QR login wait error: {e}")
+            cls._secondary_qr_status = {"status": "error", "message": str(e)}
+
+    @classmethod
+    def get_secondary_qr_status(cls) -> dict:
+        """Returns current status of secondary QR login."""
+        return cls._secondary_qr_status
+
+    @classmethod
+    async def logout_secondary(cls) -> dict:
+        """Logs out and unlinks the secondary Telegram account."""
+        async with cls._secondary_lock:
+            if cls._secondary_client and cls._secondary_client.is_connected():
+                try:
+                    await cls._secondary_client.log_out()
+                except Exception as e:
+                    logger.debug(f"Secondary logout notice: {e}")
+                await cls._secondary_client.disconnect()
+            cls._secondary_client = None
+            cls._cached_secondary_me = None
+            cls._is_secondary_ready = False
+            update_secondary_session_string_in_env("")
+            for ext in (".session", ".session.bak", ".session-wal", ".session-shm"):
+                sf = SESSION_FILE_PATH_2.with_suffix(ext)
+                if sf.exists():
+                    sf.unlink(missing_ok=True)
+            from app.services.rate_governor import rate_governor
+            primary_prem = bool(cls._cached_me and cls._cached_me.get("is_premium"))
+            rate_governor.configure_for_tier(is_premium=primary_prem, secondary_premium=None)
+            return {"status": "logged_out"}
+
+    @classmethod
     async def disconnect(cls):
         """Cleanly disconnect all clients on shutdown."""
+        if cls._qr_wait_task and not cls._qr_wait_task.done():
+            cls._qr_wait_task.cancel()
+        if cls._secondary_qr_wait_task and not cls._secondary_qr_wait_task.done():
+            cls._secondary_qr_wait_task.cancel()
+
         async with cls._lock:
             if cls._client is not None:
                 logger.info("Disconnecting Telethon user client...")
@@ -490,6 +1135,27 @@ class TelegramClientManager:
                 finally:
                     cls._bot_client = None
 
+        async with cls._secondary_lock:
+            if cls._secondary_client is not None:
+                logger.info("Disconnecting Telethon secondary client...")
+                try:
+                    if cls._secondary_client.is_connected():
+                        await cls._secondary_client.disconnect()
+                except Exception as e:
+                    logger.error(f"Error during secondary client disconnect: {e}")
+                finally:
+                    cls._secondary_client = None
+                    cls._is_secondary_ready = False
+
+            if cls._secondary_auth_client is not None:
+                try:
+                    if cls._secondary_auth_client.is_connected():
+                        await cls._secondary_auth_client.disconnect()
+                except Exception:
+                    pass
+                finally:
+                    cls._secondary_auth_client = None
+
         await sender_pool.disconnect_all()
 
 
@@ -504,26 +1170,48 @@ class MTProtoSenderPool:
     to achieve 18-30+ MB/s aggregate throughput by eliminating single-socket serialization
     and preventing socket exhaustion / FloodWait.
     """
-    def __init__(self, max_per_dc: int = 8):
+    def __init__(self, max_per_dc: int = 32):
         self.max_per_dc = max_per_dc
-        self._semaphores: Dict[int, asyncio.Semaphore] = {}
-        self._idle_senders: Dict[int, list] = {}
-        self._active_senders: Dict[int, set] = {}
-        self._auth_keys: Dict[int, Any] = {}
+        self._semaphores: Dict[Any, asyncio.Semaphore] = {}
+        self._bulk_semaphores: Dict[Any, asyncio.Semaphore] = {}
+        self._idle_senders: Dict[Any, list] = {}
+        self._active_senders: Dict[Any, set] = {}
+        self._auth_keys: Dict[Any, Any] = {}
         self._last_active: Dict[Any, float] = {}
         self._keepalive_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
         self._create_lock = asyncio.Lock()
 
-    def get_semaphore(self, dc_id: int) -> asyncio.Semaphore:
-        if dc_id not in self._semaphores:
-            self._semaphores[dc_id] = asyncio.Semaphore(self.max_per_dc)
-        return self._semaphores[dc_id]
+    def _get_key(self, client: Any, dc_id: int):
+        if client is not None and getattr(client, "_is_secondary_client", False) is True:
+            return f"sec_{dc_id}"
+        return dc_id
+
+    def get_semaphore(self, dc_id: Any, client: Any = None) -> asyncio.Semaphore:
+        if isinstance(dc_id, int):
+            key = self._get_key(client, dc_id)
+        elif client is not None and isinstance(client, int):
+            key = self._get_key(dc_id, client)
+        else:
+            key = dc_id
+
+        if key not in self._semaphores:
+            self._semaphores[key] = asyncio.Semaphore(self.max_per_dc)
+        return self._semaphores[key]
+
+    def get_bulk_semaphore(self, key: Any) -> asyncio.Semaphore:
+        if key not in self._bulk_semaphores:
+            max_bulk = max(1, self.max_per_dc - 4) if self.max_per_dc > 8 else self.max_per_dc
+            self._bulk_semaphores[key] = asyncio.Semaphore(max_bulk)
+        return self._bulk_semaphores[key]
 
     def set_max_senders(self, max_per_dc: int):
         self.max_per_dc = max_per_dc
         for dc_id in list(self._semaphores.keys()):
             self._semaphores[dc_id] = asyncio.Semaphore(max_per_dc)
+        max_bulk = max(1, max_per_dc - 4) if max_per_dc > 8 else max_per_dc
+        for k in list(self._bulk_semaphores.keys()):
+            self._bulk_semaphores[k] = asyncio.Semaphore(max_bulk)
 
     def _ensure_keepalive(self, client):
         """Starts background keepalive ping loop if not already running."""
@@ -594,6 +1282,11 @@ class MTProtoSenderPool:
             async with self._create_lock:
                 sender = None
                 try:
+                    if hasattr(client, "is_connected") and not client.is_connected():
+                        try:
+                            await asyncio.wait_for(client.connect(), timeout=8.0)
+                        except Exception:
+                            pass
                     dc = await client._get_dc(dc_id)
                     sender = MTProtoSender(None, loggers=client._log)
                     conn = client._connection(
@@ -619,23 +1312,46 @@ class MTProtoSenderPool:
                         except Exception:
                             pass
                     logger.debug(f"Export authorization for DC {dc_id} delegated to Telethon borrower: {e}")
-                    borrowed_sender = await asyncio.wait_for(client._borrow_exported_sender(dc_id), timeout=15.0)
-                    self._last_active[borrowed_sender] = time.time()
-                    return borrowed_sender
+                    try:
+                        if hasattr(client, "is_connected") and not client.is_connected():
+                            try:
+                                await asyncio.wait_for(client.connect(), timeout=8.0)
+                            except Exception:
+                                pass
+                        borrowed_sender = await asyncio.wait_for(client._borrow_exported_sender(dc_id), timeout=8.0)
+                        self._last_active[borrowed_sender] = time.time()
+                        return borrowed_sender
+                    except Exception as fe:
+                        if hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
+                            client._borrowed_senders.pop(dc_id, None)
+                        raise fe
 
-    async def acquire(self, client, dc_id: int) -> MTProtoSender:
-        """Acquires a pooled or newly initialized MTProtoSender guarded by semaphore."""
-        sem = self.get_semaphore(dc_id)
-        await sem.acquire()
+    async def acquire(self, client, dc_id: int, priority: bool = False) -> MTProtoSender:
+        key = self._get_key(client, dc_id)
+        bulk_sem = None
+        if not priority:
+            bulk_sem = self.get_bulk_semaphore(key)
+            await bulk_sem.acquire()
+        sem = self.get_semaphore(key)
+        try:
+            await sem.acquire()
+        except BaseException:
+            if bulk_sem:
+                try:
+                    bulk_sem.release()
+                except ValueError:
+                    pass
+            raise
         sender = None
         self._ensure_keepalive(client)
         try:
             async with self._lock:
-                if dc_id not in self._idle_senders:
-                    self._idle_senders[dc_id] = []
-                    self._active_senders[dc_id] = set()
+                if key not in self._idle_senders:
+                    self._idle_senders[key] = []
+                if key not in self._active_senders:
+                    self._active_senders[key] = set()
 
-                idle_list = self._idle_senders[dc_id]
+                idle_list = self._idle_senders[key]
                 while idle_list:
                     candidate = idle_list.pop()
                     last_used = self._last_active.get(candidate, 0)
@@ -682,18 +1398,20 @@ class MTProtoSenderPool:
                     if borrowed_entry and len(borrowed_entry) > 1:
                         b_sender = borrowed_entry[1]
                         async with self._lock:
-                            is_in_use = b_sender in self._active_senders.get(dc_id, set())
+                            is_in_use = b_sender in self._active_senders.get(key, set())
                         if b_sender and b_sender.is_connected() and not is_in_use:
                             sender = b_sender
                             self._last_active[sender] = time.time()
                             logger.debug(f"MTProtoPool: Fast-reused Telethon exported sender for DC {dc_id} (0ms TTFB)")
-                    if sender is None and len(self._active_senders.get(dc_id, set())) == 0:
+                    if sender is None and len(self._active_senders.get(key, set())) == 0:
                         try:
-                            sender = await asyncio.wait_for(client._borrow_exported_sender(dc_id), timeout=10.0)
+                            sender = await asyncio.wait_for(client._borrow_exported_sender(dc_id), timeout=8.0)
                             self._last_active[sender] = time.time()
                             logger.info(f"MTProtoPool: Borrowed exported MTProto sender for DC {dc_id}")
                         except Exception as fe:
                             logger.debug(f"Borrow fallback: {fe}")
+                            if hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
+                                client._borrowed_senders.pop(dc_id, None)
 
             if sender is None:
                 try:
@@ -707,12 +1425,19 @@ class MTProtoSenderPool:
                         sender = getattr(client, "_sender", None)
                     else:
                         try:
-                            sender = await asyncio.wait_for(client._borrow_exported_sender(dc_id), timeout=15.0)
+                            if hasattr(client, "is_connected") and not client.is_connected():
+                                try:
+                                    await asyncio.wait_for(client.connect(), timeout=8.0)
+                                except Exception:
+                                    pass
+                            sender = await asyncio.wait_for(client._borrow_exported_sender(dc_id), timeout=10.0)
                             self._last_active[sender] = time.time()
                             logger.info(f"MTProtoPool: Borrowed exported MTProto sender for DC {dc_id}")
                         except Exception as fe:
                             err_f = f"{type(fe).__name__}: {fe}" if str(fe) else type(fe).__name__
                             logger.warning(f"Fallback borrow sender for DC {dc_id} failed: {err_f}")
+                            if hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
+                                client._borrowed_senders.pop(dc_id, None)
                             sender = None
 
             if sender is None:
@@ -720,19 +1445,25 @@ class MTProtoSenderPool:
 
             if sender and sender != getattr(client, "_sender", None):
                 async with self._lock:
-                    self._active_senders[dc_id].add(sender)
+                    self._active_senders.setdefault(key, set()).add(sender)
                 self._last_active[sender] = time.time()
-                logger.debug(f"MTProtoPool: Leased MTProto sender for DC {dc_id} (active: {len(self._active_senders[dc_id])})")
+                logger.debug(f"MTProtoPool: Leased MTProto sender for DC {dc_id} (active: {len(self._active_senders[key])})")
             return sender
         except BaseException:
             try:
                 sem.release()
             except ValueError:
                 pass
+            if bulk_sem:
+                try:
+                    bulk_sem.release()
+                except ValueError:
+                    pass
             raise
 
-    async def release(self, client, dc_id: int, sender: MTProtoSender, healthy: bool = True):
+    async def release(self, client, dc_id: int, sender: MTProtoSender, healthy: bool = True, priority: bool = False):
         """Returns sender to idle cache or disposes of broken socket, always releasing semaphore slot."""
+        key = self._get_key(client, dc_id)
         current_dc = getattr(getattr(client, "session", None), "dc_id", None)
         try:
             if sender and sender != getattr(client, "_sender", None):
@@ -744,8 +1475,8 @@ class MTProtoSenderPool:
                         borrowed = borrowed_entry[1]
 
                 async with self._lock:
-                    if dc_id in self._active_senders:
-                        self._active_senders[dc_id].discard(sender)
+                    if key in self._active_senders:
+                        self._active_senders[key].discard(sender)
 
                 if not healthy:
                     # Broken / cancelled dirty sender: cleanly disconnect and purge immediately
@@ -754,13 +1485,12 @@ class MTProtoSenderPool:
                     except Exception:
                         pass
                     self._last_active.pop(sender, None)
-                    # ONLY clear Telethon's borrowed sender entry if THIS specific sender was Telethon's borrowed sender
-                    if sender == borrowed and hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
-                        if dc_id in client._borrowed_senders:
+                    if hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
+                        if sender == borrowed or dc_id in client._borrowed_senders:
                             client._borrowed_senders.pop(dc_id, None)
                     async with self._lock:
-                        if dc_id in self._idle_senders:
-                            self._idle_senders[dc_id] = [s for s in self._idle_senders[dc_id] if s != sender]
+                        if key in self._idle_senders:
+                            self._idle_senders[key] = [s for s in self._idle_senders[key] if s != sender]
                 elif sender == borrowed or (is_foreign and getattr(sender, "_is_independent", None) is not True and hasattr(client, "_return_exported_sender")):
                     # Telethon's borrowed sender returned via Telethon's mechanism
                     self._last_active[sender] = time.time()
@@ -774,9 +1504,9 @@ class MTProtoSenderPool:
                     async with self._lock:
                         if sender.is_connected():
                             self._last_active[sender] = time.time()
-                            if dc_id not in self._idle_senders:
-                                self._idle_senders[dc_id] = []
-                            self._idle_senders[dc_id].append(sender)
+                            if key not in self._idle_senders:
+                                self._idle_senders[key] = []
+                            self._idle_senders[key].append(sender)
                         else:
                             self._last_active.pop(sender, None)
                             try:
@@ -784,16 +1514,22 @@ class MTProtoSenderPool:
                             except Exception:
                                 pass
         finally:
-            sem = self.get_semaphore(dc_id)
+            sem = self.get_semaphore(key)
             try:
                 sem.release()
             except ValueError:
                 pass
+            if not priority:
+                bulk_sem = self.get_bulk_semaphore(key)
+                try:
+                    bulk_sem.release()
+                except ValueError:
+                    pass
 
     @asynccontextmanager
-    async def borrow(self, client, dc_id: int):
+    async def borrow(self, client, dc_id: int, priority: bool = False):
         """Context manager for acquiring and safely returning a pooled sender."""
-        sender = await self.acquire(client, dc_id)
+        sender = await self.acquire(client, dc_id, priority=priority)
         healthy = True
         try:
             yield sender
@@ -814,28 +1550,31 @@ class MTProtoSenderPool:
                 healthy = False
             raise
         finally:
-            await asyncio.shield(self.release(client, dc_id, sender, healthy=healthy))
+            await asyncio.shield(self.release(client, dc_id, sender, healthy=healthy, priority=priority))
 
-    async def purge_dc(self, dc_id: int):
-        """Immediately disconnects and purges all pooled senders for a specific DC upon socket/network failure."""
+    async def purge_dc(self, dc_id: int, client=None):
+        keys_to_purge = [dc_id, f"sec_{dc_id}"]
         async with self._lock:
-            idle = self._idle_senders.pop(dc_id, [])
-            for s in idle:
-                self._last_active.pop(s, None)
-                try:
-                    await s.disconnect()
-                except Exception:
-                    pass
-            active = self._active_senders.get(dc_id, set()).copy()
-            for s in active:
-                self._last_active.pop(s, None)
-                try:
-                    await s.disconnect()
-                except Exception:
-                    pass
-            self._active_senders.pop(dc_id, None)
+            for k in keys_to_purge:
+                idle = self._idle_senders.pop(k, [])
+                for s in idle:
+                    self._last_active.pop(s, None)
+                    try:
+                        await s.disconnect()
+                    except Exception:
+                        pass
+                active = self._active_senders.get(k, set()).copy()
+                for s in active:
+                    self._last_active.pop(s, None)
+                    try:
+                        await s.disconnect()
+                    except Exception:
+                        pass
+                self._active_senders.pop(k, None)
+        if client and hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
+            client._borrowed_senders.pop(dc_id, None)
 
-    async def disconnect_all(self):
+    async def disconnect_all(self, client=None):
         if self._keepalive_task and not self._keepalive_task.done():
             self._keepalive_task.cancel()
         async with self._lock:
@@ -855,6 +1594,8 @@ class MTProtoSenderPool:
             self._active_senders.clear()
             self._semaphores.clear()
             self._last_active.clear()
+        if client and hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
+            client._borrowed_senders.clear()
 
 
-sender_pool = MTProtoSenderPool(max_per_dc=8)
+sender_pool = MTProtoSenderPool(max_per_dc=32)

@@ -150,16 +150,86 @@ def is_manager_running(manager_id: str) -> bool:
             return False
 
 
-def _get_desktop_env() -> Dict[str, str]:
-    """Ensure desktop display and session bus variables are passed to GUI apps."""
+def get_desktop_env() -> Dict[str, str]:
     env = os.environ.copy()
-    if sys.platform != "win32":
-        if "DISPLAY" not in env:
+    if sys.platform == "win32":
+        return env
+
+    try:
+        out = subprocess.check_output(["systemctl", "--user", "show-environment"], text=True, timeout=1.5)
+        for line in out.splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                if k in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP", "DESKTOP_SESSION") and v:
+                    env[k] = v
+    except Exception:
+        pass
+
+    if "DISPLAY" not in env and "WAYLAND_DISPLAY" not in env:
+        try:
+            my_uid = os.getuid() if hasattr(os, "getuid") else None
+            for pid_entry in os.listdir("/proc"):
+                if not pid_entry.isdigit():
+                    continue
+                try:
+                    proc_path = f"/proc/{pid_entry}"
+                    if my_uid is not None and os.stat(proc_path).st_uid != my_uid:
+                        continue
+                    with open(f"{proc_path}/environ", "rb") as f:
+                        pairs = f.read().split(b"\0")
+                    proc_env = {}
+                    for p in pairs:
+                        if b"=" in p:
+                            k_b, v_b = p.split(b"=", 1)
+                            proc_env[k_b.decode("utf-8", "ignore")] = v_b.decode("utf-8", "ignore")
+                    if "DISPLAY" in proc_env or "WAYLAND_DISPLAY" in proc_env:
+                        for key in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP"):
+                            if key in proc_env and proc_env[key]:
+                                env.setdefault(key, proc_env[key])
+                        if "DISPLAY" in env or "WAYLAND_DISPLAY" in env:
+                            break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    if "DISPLAY" not in env and "WAYLAND_DISPLAY" not in env:
+        import glob
+        x11_sockets = glob.glob("/tmp/.X11-unix/X*")
+        if x11_sockets:
+            disp_num = os.path.basename(x11_sockets[0])[1:]
+            env["DISPLAY"] = f":{disp_num}"
+        else:
             env["DISPLAY"] = ":0"
-        if "XDG_RUNTIME_DIR" not in env:
-            uid = os.getuid() if hasattr(os, "getuid") else 1000
-            env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+
+    if "XAUTHORITY" not in env:
+        xauth_home = os.path.expanduser("~/.Xauthority")
+        if os.path.exists(xauth_home):
+            env["XAUTHORITY"] = xauth_home
+        else:
+            import glob
+            my_uid = os.getuid() if hasattr(os, "getuid") else None
+            for xf in glob.glob("/tmp/xauth_*"):
+                try:
+                    if my_uid is None or os.stat(xf).st_uid == my_uid:
+                        env["XAUTHORITY"] = xf
+                        break
+                except Exception:
+                    pass
+
+    uid = os.getuid() if hasattr(os, "getuid") else 1000
+    if "XDG_RUNTIME_DIR" not in env:
+        env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+
+    if "DBUS_SESSION_BUS_ADDRESS" not in env:
+        bus_path = f"/run/user/{uid}/bus"
+        if os.path.exists(bus_path):
+            env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={bus_path}"
+
     return env
+
+
+_get_desktop_env = get_desktop_env
 
 
 async def ensure_manager_running(manager_id: str, installed: Dict[str, str]) -> bool:

@@ -396,8 +396,7 @@ async def test_check5_media_ttfb_and_seek_benchmarks(monkeypatch):
     fake_client._call = AsyncMock(return_value=fake_res)
 
     @asynccontextmanager
-    async def fake_borrow(c, dc_id):
-        # 1ms simulated socket acquisition latency
+    async def fake_borrow(c, dc_id, *args, **kwargs):
         await asyncio.sleep(0.001)
         yield MagicMock()
 

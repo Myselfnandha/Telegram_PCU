@@ -23,6 +23,8 @@ import {
   Maximize2,
   Minimize2,
   AlertCircle,
+  Tv,
+  ExternalLink,
 } from 'lucide-react';
 
 interface VideoPlayerModalProps {
@@ -60,6 +62,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [osdMessage, setOsdMessage] = useState<string | null>(null);
   const osdTimerRef = useRef<any>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [isTriggeringFdm, setIsTriggeringFdm] = useState<boolean>(false);
 
   const initialSeekDone = useRef(false);
   const lastReportedTime = useRef(0);
@@ -68,9 +71,24 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     ? videoRef.current.duration
     : (video?.duration || 0);
 
-  // Direct MTProto range stream URL
+  const isMkvContainer = video ? (
+    Boolean(video.is_mkv) ||
+    /\.(mkv|avi|ts|flv|wmv|vob)$/i.test(video.filename)
+  ) : false;
+
+  const [forceTransmux, setForceTransmux] = useState<boolean>(false);
+
+  useEffect(() => {
+    setForceTransmux(false);
+  }, [video?.chat_id, video?.message_id]);
+
+  const useTransmux = isMkvContainer || forceTransmux;
+
+  // Direct MTProto range stream URL or real-time transmuxed stream
   const streamUrl = video
-    ? `/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`
+    ? (useTransmux
+        ? (video.stream_transmux_url || `/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename.replace(/\.[^/.]+$/, '.mp4'))}`)
+        : `/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`)
     : '';
   const subtitleUrl = video
     ? `/api/media/subtitles/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/0.vtt`
@@ -101,17 +119,31 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }
   }, [video?.chat_id, video?.message_id, open]);
 
+  const resumeTargetSec = video?.playback_seconds || (video as any)?.last_position_seconds || 0;
+
+  const attemptResume = useCallback(() => {
+    if (initialSeekDone.current || !videoRef.current || resumeTargetSec <= 5) return;
+    try {
+      videoRef.current.currentTime = resumeTargetSec;
+      initialSeekDone.current = true;
+      showOsd(`Resumed at ${formatDuration(resumeTargetSec)}`);
+    } catch (e) {
+      console.debug('Resume seek deferred:', e);
+    }
+  }, [resumeTargetSec]);
+
   const handleLoadedMetadata = () => {
     setPlaybackError(null);
     if (videoRef.current) {
       videoRef.current.volume = volume;
       videoRef.current.muted = isMuted;
     }
+    attemptResume();
+  };
 
-    if (!initialSeekDone.current && video?.playback_seconds && video.playback_seconds > 5 && videoRef.current) {
-      videoRef.current.currentTime = video.playback_seconds;
-      initialSeekDone.current = true;
-      showOsd(`Resumed at ${formatDuration(video.playback_seconds)}`);
+  const handleCanPlay = () => {
+    if (!initialSeekDone.current && resumeTargetSec > 5) {
+      attemptResume();
     }
   };
 
@@ -150,6 +182,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     const current = Math.floor(videoRef.current.currentTime);
     setCurrentTimeSec(current);
 
+    // Guard: Prevent initial 0..5s buffer playback from wiping out existing progress > 10s
+    if (resumeTargetSec > 10 && !initialSeekDone.current && current < 10) {
+      return;
+    }
+
     if (Math.abs(current - lastReportedTime.current) >= 5 && current > 0) {
       lastReportedTime.current = current;
       syncProgress(current);
@@ -158,21 +195,40 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     updateBufferStatus();
   };
 
-  const handleSeek = (targetSec: number) => {
+  const handleEnded = () => {
+    setIsPlaying(false);
+    if (video) {
+      api.removeContinueWatching(video.chat_id, video.message_id).catch(() => {});
+      showOsd('Completed playback');
+    }
+  };
+
+  const seekDebounceRef = useRef<any>(null);
+
+  const handleSeek = (targetSec: number, immediate: boolean = false) => {
     const total = duration > 0 ? duration : 999999;
     const bounded = Math.max(0, Math.min(total, targetSec));
     setCurrentTimeSec(bounded);
-
-    if (videoRef.current) {
-      videoRef.current.currentTime = bounded;
-      videoRef.current.play().catch(() => {});
-      setIsPlaying(true);
-    }
     showOsd(`Seek: ${formatDuration(Math.floor(bounded))}`);
+
+    if (seekDebounceRef.current) clearTimeout(seekDebounceRef.current);
+    const applySeek = () => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = bounded;
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    };
+
+    if (immediate) {
+      applySeek();
+    } else {
+      seekDebounceRef.current = setTimeout(applySeek, 120);
+    }
   };
 
   const handleSeekDelta = (deltaSec: number) => {
-    handleSeek(currentTimeSec + deltaSec);
+    handleSeek(currentTimeSec + deltaSec, false);
   };
 
   const togglePlayPause = () => {
@@ -255,26 +311,30 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     setHoverPct(pos * 100);
     setHoverTime(Math.round(pos * duration));
-
-    if (isDraggingTimeline.current) {
-      handleSeek(Math.round(pos * duration));
-    }
   };
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     isDraggingTimeline.current = true;
-    const target = calculateTimelineTime(e.clientX);
-    handleSeek(target);
+    const initialTarget = calculateTimelineTime(e.clientX);
+    setCurrentTimeSec(initialTarget);
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      if (isDraggingTimeline.current) {
-        const t = calculateTimelineTime(moveEvent.clientX);
-        handleSeek(t);
+      if (isDraggingTimeline.current && timelineRef.current && duration > 0) {
+        const rect = timelineRef.current.getBoundingClientRect();
+        const pos = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
+        const t = Math.round(pos * duration);
+        setHoverPct(pos * 100);
+        setHoverTime(t);
+        setCurrentTimeSec(t);
       }
     };
 
-    const onMouseUp = () => {
-      isDraggingTimeline.current = false;
+    const onMouseUp = (upEvent: MouseEvent) => {
+      if (isDraggingTimeline.current) {
+        isDraggingTimeline.current = false;
+        const finalTarget = calculateTimelineTime(upEvent.clientX);
+        handleSeek(finalTarget);
+      }
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
@@ -336,9 +396,73 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, currentTimeSec, duration, volume, isMuted, subtitlesEnabled]);
 
+  const [isLaunchingVlc, setIsLaunchingVlc] = useState(false);
+
+  useEffect(() => {
+    if (!open && videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
+      } catch (e) {}
+    }
+  }, [open]);
+
+  const handleLaunchInVlc = async () => {
+    if (!video) return;
+    setIsLaunchingVlc(true);
+    if (seekDebounceRef.current) clearTimeout(seekDebounceRef.current);
+    try {
+      const currentSec = Math.floor(videoRef.current?.currentTime || currentTimeSec);
+      syncProgress(currentSec);
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.removeAttribute('src');
+          videoRef.current.load();
+        } catch (e) {}
+      }
+      await api.launchVlc(video.chat_id, video.message_id, video.filename);
+      onOpenChange(false);
+    } catch (err: any) {
+      showOsd(err?.message || 'Failed to launch VLC');
+    } finally {
+      setIsLaunchingVlc(false);
+    }
+  };
+
+  const handleTriggerFdm = async () => {
+    if (!video) return;
+    setIsTriggeringFdm(true);
+    try {
+      const res = await api.triggerFdm(video.chat_id, video.message_id, video.filename);
+      if (res && res.success) {
+        showOsd('Dispatched to FDM');
+      } else {
+        const fullUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`;
+        await navigator.clipboard.writeText(fullUrl);
+        showOsd('FDM URL Copied');
+      }
+    } catch {
+      const fullUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`;
+      await navigator.clipboard.writeText(fullUrl).catch(() => {});
+      showOsd('FDM Link Copied');
+    } finally {
+      setIsTriggeringFdm(false);
+    }
+  };
+
   const handleDialogChange = (isOpen: boolean) => {
-    if (!isOpen && videoRef.current) {
-      syncProgress(Math.floor(currentTimeSec));
+    if (!isOpen) {
+      if (seekDebounceRef.current) clearTimeout(seekDebounceRef.current);
+      if (videoRef.current) {
+        syncProgress(Math.floor(currentTimeSec));
+        try {
+          videoRef.current.pause();
+          videoRef.current.removeAttribute('src');
+          videoRef.current.load();
+        } catch (e) {}
+      }
     }
     onOpenChange(isOpen);
   };
@@ -364,12 +488,23 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
         {/* Modal Header */}
         <DialogHeader className="p-3.5 border-b border-white/10 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0 pr-6">
+          <div className="flex items-center gap-2 min-w-0 pr-4">
             <Clapperboard className="w-4 h-4 text-primary shrink-0" />
             <DialogTitle className="text-sm font-semibold text-white truncate max-w-xl" title={video.filename}>
               {displayName}
             </DialogTitle>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLaunchInVlc}
+            disabled={isLaunchingVlc}
+            className="h-7 px-2.5 text-xs gap-1.5 border-white/20 bg-white/5 hover:bg-white/10 text-white cursor-pointer shrink-0"
+            title="Switch playback seamlessly to VLC Desktop"
+          >
+            <Tv className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isLaunchingVlc ? 'Launching...' : 'Play in VLC'}</span>
+          </Button>
         </DialogHeader>
 
         {/* Video Player Container */}
@@ -396,31 +531,51 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   {playbackError}
                 </p>
               </div>
-              <Button
-                onClick={() => {
-                  setPlaybackError(null);
-                  if (videoRef.current) {
-                    videoRef.current.load();
-                    videoRef.current.play().catch(() => {});
-                  }
-                }}
-                className="bg-primary text-primary-foreground gap-1.5 text-xs h-8 cursor-pointer"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Retry Playback</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => {
+                    setPlaybackError(null);
+                    if (videoRef.current) {
+                      videoRef.current.load();
+                      videoRef.current.play().catch(() => {});
+                    }
+                  }}
+                  className="bg-primary text-primary-foreground gap-1.5 text-xs h-8 cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Retry Playback</span>
+                </Button>
+                {video && (
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await api.launchVlc(video.chat_id, video.message_id, video.filename);
+                        showOsd('Launched in Desktop VLC');
+                      } catch (e) {
+                        console.debug('Failed to launch VLC:', e);
+                      }
+                    }}
+                    className="border-white/20 text-white gap-1.5 text-xs h-8 cursor-pointer"
+                  >
+                    <Tv className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Launch VLC</span>
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
           <video
             ref={videoRef}
-            src={streamUrl}
+            src={open ? streamUrl : undefined}
             autoPlay
             playsInline
             onClick={togglePlayPause}
             className="w-full h-full object-contain cinema-video-player cursor-pointer"
             preload="metadata"
             onLoadedMetadata={handleLoadedMetadata}
+            onCanPlay={handleCanPlay}
             onTimeUpdate={handleTimeUpdate}
             onProgress={updateBufferStatus}
             onPlay={() => setIsPlaying(true)}
@@ -428,8 +583,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               setIsPlaying(false);
               syncProgress(Math.floor(currentTimeSec));
             }}
+            onEnded={handleEnded}
             onError={() => {
-              setPlaybackError('The browser could not decode this media stream. Check network connection or download the file directly.');
+              if (!useTransmux) {
+                setForceTransmux(true);
+                showOsd('Auto-switching to real-time transmuxed stream...');
+              } else {
+                setPlaybackError('The browser could not decode this media stream. Open in Desktop VLC or download directly.');
+              }
             }}
           >
             <track
@@ -527,6 +688,30 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               <RotateCw className="w-3.5 h-3.5" />
             </button>
 
+            {/* Restart from beginning if progressed > 30s */}
+            {currentTimeSec > 30 && (
+              <button
+                onClick={() => {
+                  handleSeek(0);
+                  if (video) {
+                    api.updatePlaybackProgress({
+                      chat_id: video.chat_id,
+                      message_id: video.message_id,
+                      filename: video.filename,
+                      position_seconds: 0,
+                      duration_seconds: duration,
+                    }).catch(() => {});
+                  }
+                  showOsd('Restarted from beginning');
+                }}
+                aria-label="Restart from 0:00"
+                className="px-2 h-8 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer text-[10px] font-mono"
+                title="Restart from 0:00"
+              >
+                0:00
+              </button>
+            )}
+
             {/* Volume Control */}
             <div className="flex items-center gap-1 pl-2 border-l border-white/10">
               <button
@@ -590,7 +775,6 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
 
-            {/* Direct Download Button */}
             <a
               href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
               download={video.filename}
@@ -600,6 +784,17 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Download</span>
             </a>
+
+            <button
+              onClick={handleTriggerFdm}
+              disabled={isTriggeringFdm}
+              aria-label="Download with Free Download Manager (FDM)"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer text-xs font-semibold disabled:opacity-50"
+              title="Download with Free Download Manager (FDM)"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>FDM</span>
+            </button>
           </div>
         </div>
 

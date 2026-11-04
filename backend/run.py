@@ -38,6 +38,9 @@ class EndpointFilter(logging.Filter):
     SILENT_PATHS = (
         "/api/governor/status",
         "/api/auth/status",
+        "/api/auth/secondary/status",
+        "/api/auth/qr/status",
+        "/api/auth/secondary/qr/status",
         "/api/history",
         "/api/system/network",
         "/socket.io/",

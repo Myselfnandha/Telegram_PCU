@@ -81,7 +81,13 @@ class NetworkService:
             })
 
         local_url = f"http://{primary_ip}:{port}"
+        try:
+            from app.services.network_monitor import network_monitor
+            online = network_monitor.is_online
+        except Exception:
+            online = True
         return {
+            "online": online,
             "primary_ip": primary_ip,
             "lan_ip": primary_ip,
             "port": port,

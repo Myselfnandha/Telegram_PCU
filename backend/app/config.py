@@ -56,6 +56,37 @@ BOT_TOKEN = os.getenv("TG_BOT_TOKEN", os.getenv("BOT_TOKEN", "")).strip()
 SESSION_NAME = os.getenv("TG_SESSION_NAME", "tg_suite_user_session").strip()
 SESSION_FILE_PATH = SESSION_DIR / SESSION_NAME
 SESSION_STRING = os.getenv("TG_SESSION_STRING", "").strip()
+
+SESSION_NAME_2 = os.getenv("TG_SESSION_NAME_2", "tg_suite_secondary_session").strip()
+SESSION_FILE_PATH_2 = SESSION_DIR / SESSION_NAME_2
+SESSION_STRING_2 = os.getenv("TG_SESSION_STRING_2", "").strip()
+ENABLE_MULTI_ACCOUNT_TURBO = os.getenv("ENABLE_MULTI_ACCOUNT_TURBO", "true").lower() in ("1", "true", "yes")
+
+def set_multi_account_turbo(enabled: bool) -> None:
+    """Updates ENABLE_MULTI_ACCOUNT_TURBO in runtime environment and .env file."""
+    global ENABLE_MULTI_ACCOUNT_TURBO
+    ENABLE_MULTI_ACCOUNT_TURBO = enabled
+    os.environ["ENABLE_MULTI_ACCOUNT_TURBO"] = "true" if enabled else "false"
+    target_env = ENV_FILE if ENV_FILE.exists() else (BACKEND_DIR / ".env")
+    try:
+        lines = []
+        found = False
+        if target_env.exists():
+            with open(target_env, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("ENABLE_MULTI_ACCOUNT_TURBO="):
+                        lines.append(f"ENABLE_MULTI_ACCOUNT_TURBO={'true' if enabled else 'false'}\n")
+                        found = True
+                    else:
+                        lines.append(line)
+        if not found:
+            lines.append(f"ENABLE_MULTI_ACCOUNT_TURBO={'true' if enabled else 'false'}\n")
+        with open(target_env, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception as e:
+        import logging
+        logging.getLogger("config").warning(f"Could not persist ENABLE_MULTI_ACCOUNT_TURBO to {target_env}: {e}")
+
 AUTO_SAVE_STREAM = os.getenv("TG_AUTO_SAVE_STREAM", "false").lower() in ("1", "true", "yes")
 DEFAULT_SUBTITLE_LANG = os.getenv("DEFAULT_SUBTITLE_LANG", "eng,tam,hin").strip()
 
@@ -81,6 +112,31 @@ def update_session_string_in_env(session_string: str) -> None:
     except Exception as e:
         import logging
         logging.getLogger("config").warning(f"Could not persist TG_SESSION_STRING to {target_env}: {e}")
+
+
+def update_secondary_session_string_in_env(session_string: str) -> None:
+    """Updates TG_SESSION_STRING_2 in backend/.env file and in runtime environment."""
+    os.environ["TG_SESSION_STRING_2"] = session_string
+    target_env = ENV_FILE if ENV_FILE.exists() else (BACKEND_DIR / ".env")
+    try:
+        lines = []
+        found = False
+        if target_env.exists():
+            with open(target_env, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("TG_SESSION_STRING_2="):
+                        lines.append(f"TG_SESSION_STRING_2={session_string}\n")
+                        found = True
+                    else:
+                        lines.append(line)
+        if not found:
+            lines.append(f"TG_SESSION_STRING_2={session_string}\n")
+        with open(target_env, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception as e:
+        import logging
+        logging.getLogger("config").warning(f"Could not persist TG_SESSION_STRING_2 to {target_env}: {e}")
+
 
 
 # Upload Thresholds & Chunking

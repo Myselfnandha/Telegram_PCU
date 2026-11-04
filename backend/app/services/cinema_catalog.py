@@ -19,6 +19,11 @@ logger = logging.getLogger("cinema_catalog")
 _THUMB_CACHE_DIR = os.path.expanduser("~/.cache/tg_power_suite/thumbs")
 os.makedirs(_THUMB_CACHE_DIR, exist_ok=True)
 
+from telethon import utils
+
+_SHARED_BRIDGE_CACHE: Dict[int, Any] = {}
+SHARED_BRIDGE_CHANNEL = -1002372906767
+
 VIDEO_EXTENSIONS = (
     ".mp4", ".mkv", ".avi", ".mov", ".webm", ".ts",
     ".flv", ".wmv", ".m4v", ".3gp", ".vob", ".mpg", ".mpeg"
@@ -35,6 +40,8 @@ class CinemaCatalog:
     def __init__(self):
         self._message_cache: Dict[Tuple[Union[int, str], int], Tuple[Any, float]] = {}
         self._videos_cache: Dict[str, dict] = {}
+        self._in_flight_resolves: Dict[Any, asyncio.Future] = {}
+        self._in_flight_lock = asyncio.Lock()
         self.file_ref_max_age = 7200.0  # 2 hours file_reference freshness window
         self.cache_ttl = 300.0  # 5 minutes in-memory cache TTL
 
@@ -49,54 +56,229 @@ class CinemaCatalog:
         Fetch a Telegram message with guaranteed-valid file_reference.
         Automatically heals missing peer entities by scanning dialogs if needed.
         """
-        key = (clean_chat_id, message_id)
-        str_key = (str(clean_chat_id), message_id)
+        client_id = getattr(getattr(client, "session", None), "user_id", None) or id(client)
+        client_key = (client_id, clean_chat_id, message_id)
+        client_str_key = (client_id, str(clean_chat_id), message_id)
+        legacy_key = (clean_chat_id, message_id)
+        legacy_str_key = (str(clean_chat_id), message_id)
         now = time.time()
 
+        is_secondary = getattr(client, "_is_secondary_client", False) is True
         if not force_refresh:
-            entry = self._message_cache.get(key) or self._message_cache.get(str_key)
+            entry = self._message_cache.get(client_key) or self._message_cache.get(client_str_key)
+            if not entry and not is_secondary:
+                entry = self._message_cache.get(legacy_key) or self._message_cache.get(legacy_str_key)
             if entry:
                 msg, ts = entry
                 if (now - ts) < self.file_ref_max_age and hasattr(msg, "media") and msg.media:
                     return msg
 
-        msg = None
-        try:
-            msg = await client.get_messages(clean_chat_id, ids=message_id)
-        except Exception as e:
-            logger.debug(f"Direct fetch for message {message_id} from {clean_chat_id} notice: {e}")
+        resolve_key = (client_id, str(clean_chat_id), message_id)
+        async with self._in_flight_lock:
+            fut = self._in_flight_resolves.get(resolve_key)
+            if fut is None or fut.done():
+                loop = asyncio.get_running_loop()
+                fut = loop.create_future()
+                self._in_flight_resolves[resolve_key] = fut
+                is_leader = True
+            else:
+                is_leader = False
+
+        if not is_leader:
             try:
-                entity = await client.get_entity(clean_chat_id)
-                msg = await client.get_messages(entity, ids=message_id)
+                return await asyncio.shield(fut)
             except Exception:
+                return None
+
+        try:
+            raw_str = str(clean_chat_id).strip()
+            my_id = getattr(getattr(client, "session", None), "user_id", None)
+            if not my_id:
                 try:
-                    # Prime dialogs cache if entity is unknown after restart
-                    await client.get_dialogs(limit=100)
-                    entity = await client.get_entity(clean_chat_id)
+                    from app.telegram_client import TelegramClientManager
+                    me_info = TelegramClientManager.get_cached_me() or {}
+                    my_id = me_info.get("id")
+                except Exception:
+                    my_id = None
+            if not my_id:
+                try:
+                    my_id = getattr(sniffer_service, "_own_user_id", None)
+                except Exception:
+                    pass
+
+            target_cid = clean_chat_id
+            if raw_str.lower() in ("me", "self") or (my_id and raw_str in (str(my_id), f"-100{my_id}")):
+                target_cid = "me"
+            elif raw_str.lstrip("-").isdigit():
+                target_cid = int(raw_str)
+
+            candidate_cids = [target_cid]
+            clean_digits = raw_str.lstrip("-").replace("100", "", 1) if raw_str.startswith("-100") else raw_str.lstrip("-")
+            if clean_digits.isdigit():
+                num = int(clean_digits)
+                channel_num = int(f"-100{clean_digits}")
+                if num not in candidate_cids:
+                    candidate_cids.append(num)
+                if channel_num not in candidate_cids:
+                    candidate_cids.append(channel_num)
+
+            msg = None
+            try:
+                msg = await client.get_messages(target_cid, ids=message_id)
+            except Exception as e:
+                logger.debug(f"Direct fetch for message {message_id} from {clean_chat_id} notice: {e}")
+                try:
+                    entity = await client.get_entity(target_cid)
                     msg = await client.get_messages(entity, ids=message_id)
                 except Exception:
                     try:
-                        target_str = str(clean_chat_id).lstrip("-").replace("100", "", 1)
-                        async for d in client.iter_dialogs(limit=400):
-                            did_str = str(d.id).lstrip("-").replace("100", "", 1)
-                            if d.id == clean_chat_id or did_str == target_str or str(d.id).endswith(str(clean_chat_id)):
-                                msg = await client.get_messages(d.entity, ids=message_id)
+                        await client.get_dialogs(limit=100)
+                        entity = await client.get_entity(target_cid)
+                        msg = await client.get_messages(entity, ids=message_id)
+                    except Exception:
+                        try:
+                            target_str = str(clean_chat_id).lstrip("-").replace("100", "", 1)
+                            async for d in client.iter_dialogs(limit=400):
+                                did_str = str(d.id).lstrip("-").replace("100", "", 1)
+                                if d.id == clean_chat_id or did_str == target_str or str(d.id).endswith(str(clean_chat_id)):
+                                    msg = await client.get_messages(d.entity, ids=message_id)
+                                    break
+                        except Exception as e2:
+                            logger.debug(f"Dialog-primed fallback fetch failed for {clean_chat_id}: {e2}")
+
+            if not msg or not getattr(msg, "media", None):
+                alt_cids = [cid for cid in candidate_cids if cid != target_cid]
+                for cid in alt_cids:
+                    try:
+                        msg = await client.get_messages(cid, ids=message_id)
+                        if msg and getattr(msg, "media", None):
+                            break
+                    except Exception:
+                        try:
+                            entity = await client.get_entity(cid)
+                            msg = await client.get_messages(entity, ids=message_id)
+                            if msg and getattr(msg, "media", None):
                                 break
-                    except Exception as e2:
-                        logger.debug(f"Dialog-primed fallback fetch failed for {clean_chat_id}: {e2}")
+                        except Exception:
+                            pass
 
-        if msg and hasattr(msg, "media") and msg.media:
-            self._message_cache[key] = (msg, now)
-            self._message_cache[str_key] = (msg, now)
-            sniffer_service._message_cache[key] = msg
-            sniffer_service._message_cache[str_key] = msg
-            return msg
+            if (not msg or not hasattr(msg, "media") or not msg.media) and is_secondary:
+                try:
+                    from app.telegram_client import TelegramClientManager
+                    primary_client = await TelegramClientManager.get_client()
+                    if primary_client and primary_client is not client:
+                        for tid in candidate_cids:
+                            try:
+                                p_entity = await primary_client.get_entity(tid)
+                                if p_entity and getattr(p_entity, "username", None):
+                                    sec_entity = await client.get_entity(p_entity.username)
+                                    msg = await client.get_messages(sec_entity, ids=message_id)
+                                    if msg and hasattr(msg, "media") and msg.media:
+                                        break
+                            except Exception:
+                                pass
+                        if not msg or not hasattr(msg, "media") or not msg.media:
+                            p_msg = await primary_client.get_messages(target_cid, ids=message_id)
+                            if not p_msg or not getattr(p_msg, "media", None):
+                                for cid in candidate_cids:
+                                    try:
+                                        p_msg = await primary_client.get_messages(cid, ids=message_id)
+                                        if p_msg and getattr(p_msg, "media", None):
+                                            target_cid = cid
+                                            break
+                                    except Exception:
+                                        pass
+                            if p_msg and getattr(p_msg, "media", None):
+                                finfo = utils._get_file_info(p_msg.media)
+                                floc = getattr(finfo, "location", None)
+                                doc_id = getattr(floc, "id", None)
+                                if doc_id and doc_id in _SHARED_BRIDGE_CACHE:
+                                    msg = _SHARED_BRIDGE_CACHE[doc_id]
+                                else:
+                                    cid_raw = str(target_cid).lstrip("-").replace("100", "", 1)
+                                    bridge_raw = str(SHARED_BRIDGE_CHANNEL).lstrip("-").replace("100", "", 1)
+                                    if cid_raw != bridge_raw:
+                                        fwd = await primary_client.forward_messages(SHARED_BRIDGE_CHANNEL, p_msg.id, target_cid)
+                                        if fwd:
+                                            sec_msg = await client.get_messages(SHARED_BRIDGE_CHANNEL, ids=fwd.id)
+                                            if sec_msg and getattr(sec_msg, "media", None):
+                                                if doc_id:
+                                                    _SHARED_BRIDGE_CACHE[doc_id] = sec_msg
+                                                msg = sec_msg
+                except Exception as cross_err:
+                    logger.debug(f"Cross-client resolution notice for {clean_chat_id}: {cross_err}")
 
-        cached = sniffer_service._message_cache.get(key) or sniffer_service._message_cache.get(str_key)
-        if cached:
-            return cached
+            if msg and hasattr(msg, "media") and msg.media:
+                self._message_cache[client_key] = (msg, now)
+                self._message_cache[client_str_key] = (msg, now)
+                if not is_secondary:
+                    self._message_cache[legacy_key] = (msg, now)
+                    self._message_cache[legacy_str_key] = (msg, now)
+                    sniffer_service._message_cache[legacy_key] = msg
+                    sniffer_service._message_cache[legacy_str_key] = msg
+                if not fut.done():
+                    fut.set_result(msg)
+                return msg
 
-        return None
+            if not is_secondary:
+                cached = sniffer_service._message_cache.get(legacy_key) or sniffer_service._message_cache.get(legacy_str_key)
+                if cached:
+                    if not fut.done():
+                        fut.set_result(cached)
+                    return cached
+
+            if not fut.done():
+                fut.set_result(None)
+            return None
+        except BaseException as exc:
+            if not fut.done():
+                fut.set_exception(exc)
+            raise
+        finally:
+            async with self._in_flight_lock:
+                if self._in_flight_resolves.get(resolve_key) is fut:
+                    self._in_flight_resolves.pop(resolve_key, None)
+
+    async def remove_deleted_video(self, clean_chat_id: Union[int, str], message_id: int):
+        """
+        Removes a deleted Telegram video from in-memory cache and SQLite persistence,
+        and broadcasts real-time update to connected clients.
+        """
+        str_cid = str(clean_chat_id).lstrip("-").replace("100", "", 1)
+        # 1. Clear from in-memory cache
+        for k in list(self._videos_cache.keys()):
+            kid = k.split("_")[0].lstrip("-").replace("100", "", 1)
+            if kid == str_cid:
+                cached_data = self._videos_cache[k].get("data", {})
+                vids = cached_data.get("videos", [])
+                new_vids = [v for v in vids if v.get("message_id") != message_id]
+                if len(new_vids) != len(vids):
+                    cached_data["videos"] = new_vids
+                    cached_data["count"] = len(new_vids)
+                    self._videos_cache[k]["data"] = cached_data
+
+        # 2. Prune from SQLite database cache
+        try:
+            for cid_candidate in (str(clean_chat_id), str_cid):
+                db_cached = await get_cinema_cached_videos_db(cid_candidate)
+                if db_cached and "videos" in db_cached:
+                    vids = db_cached["videos"]
+                    new_vids = [v for v in vids if v.get("message_id") != message_id]
+                    if len(new_vids) != len(vids):
+                        await save_cinema_cached_videos_db(cid_candidate, new_vids)
+                        logger.info(f"Purged deleted video message {message_id} from cinema cache for chat {cid_candidate}")
+                        try:
+                            from app.socket_handlers import sio
+                            await sio.emit("cinema:videos_updated", {
+                                "chat_id": cid_candidate,
+                                "count": len(new_vids),
+                                "videos": new_vids,
+                                "updated_at": time.time()
+                            })
+                        except Exception:
+                            pass
+        except Exception as e:
+            logger.debug(f"Failed to prune deleted video from database cache: {e}")
 
     async def get_videos(
         self,
@@ -256,6 +438,41 @@ class CinemaCatalog:
                 base_clean = os.path.splitext(clean_name)[0]
                 encoded_mp4 = urllib.parse.quote(f"{base_clean}.mp4")
 
+                res_str = f"{height}p" if height else None
+                if not res_str:
+                    import re
+                    m = re.search(r'\b(2160p|4k|1080p|720p|480p|360p)\b', clean_name, re.I)
+                    if m:
+                        matched = m.group(1).lower()
+                        res_str = "2160p" if matched == "4k" else matched
+                        if not height:
+                            height = 2160 if res_str == "2160p" else int(res_str.rstrip("p"))
+                            width = int(height * 16 / 9)
+
+                # Heuristic fallback if height/resolution is still unknown
+                if not res_str:
+                    sz = int(msg.file.size)
+                    if duration > 0:
+                        bps = (sz * 8) / duration
+                        if bps >= 2_200_000:
+                            res_str = "1080p"
+                            height, width = 1080, 1920
+                        elif bps >= 1_000_000:
+                            res_str = "720p"
+                            height, width = 720, 1280
+                        elif bps >= 400_000:
+                            res_str = "480p"
+                            height, width = 480, 854
+                        else:
+                            res_str = "360p"
+                            height, width = 360, 640
+                    elif sz >= 2 * 1024 * 1024 * 1024:
+                        res_str = "1080p"
+                        height, width = 1080, 1920
+                    elif sz >= 900 * 1024 * 1024:
+                        res_str = "720p"
+                        height, width = 720, 1280
+
                 videos.append({
                     "message_id": msg.id,
                     "chat_id": str(chat_id),
@@ -265,7 +482,7 @@ class CinemaCatalog:
                     "duration": duration,
                     "width": width,
                     "height": height,
-                    "resolution": f"{height}p" if height else None,
+                    "resolution": res_str,
                     "date": int(msg.date.timestamp()) if msg.date else 0,
                     "mime_type": msg.file.mime_type or "video/mp4",
                     "has_thumb": has_thumb,
@@ -293,7 +510,7 @@ class CinemaCatalog:
 
             asyncio.create_task(_prefetch(clean_chat_id, combined_msgs))
 
-            # Merge with existing SQLite cache so older episodes are preserved
+            # Merge with existing SQLite cache while pruning messages deleted in Telegram
             existing_videos_map = {}
             try:
                 db_cached = await get_cinema_cached_videos_db(str(chat_id))
@@ -305,7 +522,20 @@ class CinemaCatalog:
                 logger.debug(f"Could not load existing db videos to merge: {e}")
 
             new_videos_map = {v["message_id"]: v for v in videos}
-            merged_videos_dict = {**existing_videos_map, **new_videos_map}
+            if videos:
+                min_scanned_id = min(v["message_id"] for v in videos)
+                max_scanned_id = max(v["message_id"] for v in videos)
+                pruned_existing = {}
+                for mid, v in existing_videos_map.items():
+                    # If an existing video was in the scanned ID range but Telegram no longer returned it,
+                    # it was deleted on Telegram — prune it so ghost cards never linger in UI
+                    if min_scanned_id <= mid <= max_scanned_id and mid not in new_videos_map:
+                        continue
+                    pruned_existing[mid] = v
+                merged_videos_dict = {**pruned_existing, **new_videos_map}
+            else:
+                merged_videos_dict = {**existing_videos_map, **new_videos_map}
+
             videos = sorted(merged_videos_dict.values(), key=lambda x: x.get("message_id", 0), reverse=True)
 
         except Exception as e:

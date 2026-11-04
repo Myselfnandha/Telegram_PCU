@@ -174,6 +174,28 @@ class FastStreamEngine:
         self, client, sender, file_loc, offset: int, limit: int = 1024 * 1024
     ) -> bytes:
         """Executes a single GetFileRequest with RateGovernor pacing, sender re-acquisition on reset, and FloodWait backoff."""
+        doc_id = getattr(file_loc, "id", None)
+        access_hash = getattr(file_loc, "access_hash", None)
+        file_ref = getattr(file_loc, "file_reference", None)
+        dc_id = getattr(file_loc, "dc_id", None) or getattr(getattr(client, "session", None), "dc_id", 4)
+        if doc_id and access_hash and file_ref:
+            try:
+                from app.services.rust_bridge import rust_bridge
+                if await rust_bridge.is_healthy():
+                    rust_data = await rust_bridge.stream_chunk(
+                        dc_id=dc_id,
+                        doc_id=doc_id,
+                        access_hash=access_hash,
+                        file_reference=file_ref,
+                        offset=offset,
+                        limit=limit,
+                        priority="bulk"
+                    )
+                    if rust_data and len(rust_data) > 0:
+                        return rust_data
+            except Exception:
+                pass
+
         req = GetFileRequest(file_loc, offset=offset, limit=limit)
         active_sender = sender
         for attempt in range(5):
