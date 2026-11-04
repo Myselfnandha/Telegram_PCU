@@ -27,8 +27,6 @@ import {
   Check,
   CheckSquare,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   ChevronUp,
   Clapperboard,
   Copy,
@@ -113,22 +111,6 @@ function getDateGroupInfo(dateVal?: number | string): { key: string; label: stri
     label,
     subLabel: date.getFullYear() !== now.getFullYear() ? `${date.getFullYear()}` : undefined,
   };
-}
-
-/**
- * Generates an array of page numbers with ellipsis (-1) for responsive pagination.
- */
-function generatePagePills(current: number, total: number): number[] {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }
-  if (current <= 4) {
-    return [1, 2, 3, 4, 5, -1, total];
-  }
-  if (current >= total - 3) {
-    return [1, -1, total - 4, total - 3, total - 2, total - 1, total];
-  }
-  return [1, -1, current - 1, current, current + 1, -1, total];
 }
 
 export const CinemaView: React.FC = () => {
