@@ -58,7 +58,7 @@ export function extractMovieMetadata(filename: string): {
 
   // 1. Extract 4-digit Year (1900 - 2099)
   let year: number | undefined;
-  const yearMatch = clean.match(/(?:[\(\[\{])?\b(19\d{2}|20\d{2})\b(?:[\)\]\}])?/);
+  const yearMatch = clean.match(/(?:[([{])?\b(19\d{2}|20\d{2})\b(?:[)\]}])?/);
   if (yearMatch) {
     year = parseInt(yearMatch[1], 10);
   }
@@ -82,7 +82,7 @@ export function extractMovieMetadata(filename: string): {
     .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
     .replace(/\b(2160p|4k|1080p|720p|480p|uhd|fhd|hd|hdr|remux|bluray|web-dl|webrip|x264|x265|hevc|ddp|atmos|esub)\b/gi, ' ')
     .replace(/\b(?:part|chapter|vol(?:ume)?|pt)\s*[:.\-_]?\s*(\d{1,2}|[ivx]+)\b/gi, ' ')
-    .replace(/[\(\)\[\]\{\}]/g, ' ')
+    .replace(/[()[\]{}]/g, ' ')
     .replace(/^(?:org|com|net|tv|hd|link|linkzz|official|tamilmv|tamilblasters)\s+/i, '')
     .trim();
 

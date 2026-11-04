@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import type { CinemaVideo, ContinueWatchingItem } from '@/types';
 import { api } from '@/services/api';
@@ -37,7 +37,6 @@ import {
   Film,
   Grid3x3,
   HardDrive,
-  Layers,
   LayoutGrid,
   List,
   MessageSquare,
@@ -48,7 +47,6 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
-  Sparkles,
   Tv,
   X,
 } from 'lucide-react';
@@ -56,12 +54,66 @@ import {
   draftWebSeriesBySeason,
   formatMediaDate,
   normalizeDateToSeconds,
-  type WebSeriesDraft,
   type WebSeriesSeason,
-  type WebSeriesEpisode,
   type SeriesSortOption,
   type EpisodeSortOption,
 } from '@/lib/seriesDraftEngine';
+import {
+  draftMoviesByFranchiseAndYear,
+  type MovieCollectionDraft,
+  type MovieSortOption,
+} from '@/lib/movieDraftEngine';
+
+/**
+ * Differentiates videos by calendar date for timeline break lines in an infinite feed.
+ */
+function getDateGroupInfo(dateVal?: number | string): { key: string; label: string; subLabel?: string } {
+  const sec = normalizeDateToSeconds(dateVal);
+  if (!sec || sec <= 0) {
+    return { key: 'undated', label: 'Archive / Undated', subLabel: 'Older uploads' };
+  }
+
+  const date = new Date(sec * 1000);
+  const now = new Date();
+
+  const isSameDay = (d1: Date, d2: Date) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+
+  const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+  if (isSameDay(date, now)) {
+    return {
+      key: dayKey,
+      label: 'Today',
+      subLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+  }
+  if (isSameDay(date, yesterday)) {
+    return {
+      key: dayKey,
+      label: 'Yesterday',
+      subLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+  }
+
+  const label = date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+  });
+
+  return {
+    key: dayKey,
+    label,
+    subLabel: date.getFullYear() !== now.getFullYear() ? `${date.getFullYear()}` : undefined,
+  };
+}
 
 /**
  * Generates an array of page numbers with ellipsis (-1) for responsive pagination.
@@ -112,6 +164,23 @@ export const CinemaView: React.FC = () => {
   const [seriesViewStyle, setSeriesViewStyle] = useState<'split' | 'grouped' | 'flat'>('split');
   const [selectedShowId, setSelectedShowId] = useState<string>('');
 
+  // Movie Draft States
+  const [movieSortMode, setMovieSortMode] = useState<MovieSortOption>('date-desc');
+  const [movieCollectionType, setMovieCollectionType] = useState<'all' | 'franchise' | 'year'>('all');
+  const [movieViewStyle, setMovieViewStyle] = useState<'split' | 'bundled' | 'flat'>('split');
+  const [selectedMovieCollectionId, setSelectedMovieCollectionId] = useState<string>('');
+  const [expandedMovieCollections, setExpandedMovieCollections] = useState<Record<string, boolean>>({});
+
+  // Centered Draggable Filter Navigation State
+  const navDragRef = useRef<HTMLDivElement>(null);
+  const [isNavDragging, setIsNavDragging] = useState(false);
+  const navDragState = useRef({
+    isDown: false,
+    startX: 0,
+    scrollLeft: 0,
+    hasMoved: false,
+  });
+
   // Client-side pagination to eliminate DOM bloat (e.g. 23,000 down to ~1,500 nodes)
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(() => {
@@ -119,15 +188,15 @@ export const CinemaView: React.FC = () => {
     return saved ? Number(saved) : 24;
   });
 
-  const handleSetViewMode = (mode: 'large' | 'dense' | 'files') => {
-    setViewMode(mode);
-    localStorage.setItem('cinema_view_mode', mode);
-  };
-
   const handleSetPageSize = (size: number) => {
     setPageSize(size);
     setCurrentPage(1);
     localStorage.setItem('cinema_page_size', String(size));
+  };
+
+  const handleSetViewMode = (mode: 'large' | 'dense' | 'files') => {
+    setViewMode(mode);
+    localStorage.setItem('cinema_view_mode', mode);
   };
 
   const loadVideos = async (forceRefresh = false) => {
@@ -182,8 +251,6 @@ export const CinemaView: React.FC = () => {
     loadContinueWatching();
     loadOfflineSaver();
     setSelectedIds(new Set());
-    setCurrentPage(1);
-
     scrollRightSideToTop(true);
 
     const unsubCinema = socketService.onCinemaUpdate((data) => {
@@ -196,11 +263,6 @@ export const CinemaView: React.FC = () => {
       unsubCinema();
     };
   }, [selectedChat.id]);
-
-  // Reset page when search, filter, or sort changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, filter, sortBy]);
 
   const handleExportPlaylist = async () => {
     if (selectedIds.size === 0) return;
@@ -260,16 +322,31 @@ export const CinemaView: React.FC = () => {
     });
   };
 
-  const handleSelectAllCurrentPage = () => {
-    const pageIds = paginatedVideos.map((v) => v.message_id);
-    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const handleSelectAll = () => {
+    const allIds = filteredVideos.map((v) => v.message_id);
+    const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id));
 
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (allPageSelected) {
-        pageIds.forEach((id) => next.delete(id));
+      if (allSelected) {
+        allIds.forEach((id) => next.delete(id));
       } else {
-        pageIds.forEach((id) => next.add(id));
+        allIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectDateGroup = (groupVideos: CinemaVideo[]) => {
+    const groupIds = groupVideos.map((v) => v.message_id);
+    const allGroupSelected = groupIds.length > 0 && groupIds.every((id) => selectedIds.has(id));
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allGroupSelected) {
+        groupIds.forEach((id) => next.delete(id));
+      } else {
+        groupIds.forEach((id) => next.add(id));
       }
       return next;
     });
@@ -481,6 +558,171 @@ export const CinemaView: React.FC = () => {
     }));
   };
 
+  // Movie Collection Binge Action
+  const handleBingeMovieCollection = async (collection: MovieCollectionDraft) => {
+    if (!collection.movies.length) return;
+    try {
+      addToast({
+        type: 'info',
+        title: `Launching ${collection.collectionTitle}`,
+        message: `Queuing ${collection.movies.length} movies in VLC...`,
+      });
+      const videoItems = collection.movies.map((m) => m.video);
+      const res = await api.launchVlcBatch(videoItems, collection.collectionTitle);
+      if (res.success) {
+        addToast({
+          type: 'success',
+          title: 'VLC Movie Binge Started',
+          message: res.message || `Playing ${collection.movies.length} movies in VLC Player!`,
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Playback Error',
+        message: err.message || 'Check that desktop VLC is running on TG Power Suite.',
+      });
+    }
+  };
+
+  // Movie Collection M3U Export Action
+  const handleDownloadMovieCollectionM3u = async (collection: MovieCollectionDraft) => {
+    if (!collection.movies.length) return;
+    try {
+      addToast({
+        type: 'info',
+        title: 'Preparing Movie Playlist',
+        message: `Creating media stream links for ${collection.movies.length} movies...`,
+      });
+      const videoItems = collection.movies.map((m) => m.video);
+      const playbackInfo = await Promise.all(
+        videoItems.map((v) => api.getMobilePlaybackInfo(v.chat_id, v.message_id, v.filename))
+      );
+      const lines = ['#EXTM3U'];
+      const cachingVal = Number(localStorage.getItem('tg_network_caching') || 1500);
+      const audioLang = localStorage.getItem('tg_audio_lang') || 'tam,eng,hin,tel,mal,kan,all';
+      const subLang = localStorage.getItem('tg_sub_lang') || 'eng,tam,hin,all';
+
+      videoItems.forEach((v, idx) => {
+        const info = playbackInfo[idx];
+        const streamUrl = info.lan_ip && info.lan_ip !== '127.0.0.1' ? info.lan_stream_url : info.stream_url;
+        if (!streamUrl) return;
+        lines.push(`#EXTINF:-1,${cleanFileName(v.filename)}`);
+        lines.push(`#EXTVLCOPT:network-caching=${cachingVal}`);
+        lines.push(`#EXTVLCOPT:file-caching=${cachingVal}`);
+        lines.push('#EXTVLCOPT:http-reconnect');
+        lines.push('#EXTVLCOPT:no-spdif');
+        lines.push('#EXTVLCOPT:input-fast-seek');
+        lines.push('#EXTVLCOPT:avcodec-hw=any');
+        lines.push(`#EXTVLCOPT:sub-language=${subLang}`);
+        lines.push(`#EXTVLCOPT:audio-language=${audioLang}`);
+        if (info.lan_subtitles_url) {
+          lines.push(`#EXTVLCOPT:input-slave=${info.lan_subtitles_url}`);
+          lines.push(`#EXTVLCOPT:sub-file=${info.lan_subtitles_url}`);
+        }
+        lines.push(streamUrl);
+      });
+
+      const blob = new Blob([lines.join('\n')], { type: 'audio/x-mpegurl' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${collection.collectionTitle.replace(/\s+/g, '_')}.m3u`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      addToast({
+        type: 'success',
+        title: 'Movie Playlist Downloaded',
+        message: `Exported ${collection.movies.length} movies to ${collection.collectionTitle.replace(/\s+/g, '_')}.m3u`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Playlist Export Failed',
+        message: err.message || 'Could not prepare movie playlist.',
+      });
+    }
+  };
+
+  // Toggle selection of all movies in a collection
+  const handleSelectMovieCollection = (collection: MovieCollectionDraft) => {
+    const movieIds = collection.movies.map((m) => m.video.message_id);
+    const allSelected = movieIds.length > 0 && movieIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        movieIds.forEach((id) => next.delete(id));
+      } else {
+        movieIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const toggleExpandMovieCollection = (collectionId: string) => {
+    setExpandedMovieCollections((prev) => ({
+      ...prev,
+      [collectionId]: prev[collectionId] === undefined ? false : !prev[collectionId],
+    }));
+  };
+
+  // Draggable Filter Navigation Mouse Handlers
+  const handleNavMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = navDragRef.current;
+    if (!el) return;
+    navDragState.current = {
+      isDown: true,
+      startX: e.pageX - el.offsetLeft,
+      scrollLeft: el.scrollLeft,
+      hasMoved: false,
+    };
+    setIsNavDragging(true);
+  };
+
+  const handleNavMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const state = navDragState.current;
+    if (!state.isDown || !navDragRef.current) return;
+    const x = e.pageX - navDragRef.current.offsetLeft;
+    const walk = (x - state.startX) * 1.5;
+    if (Math.abs(walk) > 4) {
+      state.hasMoved = true;
+    }
+    navDragRef.current.scrollLeft = state.scrollLeft - walk;
+  };
+
+  const handleNavMouseUp = () => {
+    navDragState.current.isDown = false;
+    setIsNavDragging(false);
+  };
+
+  const handleNavMouseLeave = () => {
+    navDragState.current.isDown = false;
+    setIsNavDragging(false);
+  };
+
+  // Automatic Movie Drafting & Grouping by Franchise & Release Year
+  const {
+    franchises: movieFranchises,
+    yearCollections: movieYearCollections,
+  } = useMemo(() => {
+    return draftMoviesByFranchiseAndYear(videos, {
+      sortBy: movieSortMode,
+      filterQuery: search,
+    });
+  }, [videos, movieSortMode, search]);
+
+  const activeMovieCollections = useMemo(() => {
+    if (movieCollectionType === 'franchise') return movieFranchises;
+    if (movieCollectionType === 'year') return movieYearCollections;
+    return [...movieFranchises, ...movieYearCollections];
+  }, [movieFranchises, movieYearCollections, movieCollectionType]);
+
+  const activeSelectedMovieCollection = useMemo(() => {
+    if (!activeMovieCollections.length) return null;
+    return activeMovieCollections.find((c) => c.id === selectedMovieCollectionId) || activeMovieCollections[0];
+  }, [activeMovieCollections, selectedMovieCollectionId]);
+
   // Automatic Web Series Drafting & Grouping by Season
   const { drafts: webSeriesDrafts } = useMemo(() => {
     return draftWebSeriesBySeason(videos, {
@@ -535,6 +777,53 @@ export const CinemaView: React.FC = () => {
       catalogEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
+
+  const handleSelectAllCurrentPage = () => {
+    const pageIds = paginatedVideos.map((v) => v.message_id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  // Infinite timeline grouping differentiated by date with break lines
+  const dateGroups = useMemo(() => {
+    interface DateGroup {
+      key: string;
+      label: string;
+      subLabel?: string;
+      videos: CinemaVideo[];
+      totalSize: number;
+    }
+    const groups: DateGroup[] = [];
+    const map = new Map<string, DateGroup>();
+
+    filteredVideos.forEach((video) => {
+      const info = getDateGroupInfo(video.date);
+      let g = map.get(info.key);
+      if (!g) {
+        g = {
+          key: info.key,
+          label: info.label,
+          subLabel: info.subLabel,
+          videos: [],
+          totalSize: 0,
+        };
+        map.set(info.key, g);
+        groups.push(g);
+      }
+      g.videos.push(video);
+      g.totalSize += (video.size || video.file_size || 0);
+    });
+
+    return groups;
+  }, [filteredVideos]);
 
   const hasContinueWatching = continueWatching.length > 0;
   const showContinueWatching = hasContinueWatching && isContinueWatchingOpen;
@@ -636,9 +925,20 @@ export const CinemaView: React.FC = () => {
           </div>
         </div>
 
-        {/* Search, Filter, Sort, and View Mode Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-border/40">
-          <div role="tablist" aria-label="Video category filters" className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {/* Centered Draggable Filter Navigation Bar */}
+        <div className="flex items-center justify-center w-full pt-2.5 pb-1 border-t border-border/40">
+          <div
+            ref={navDragRef}
+            onMouseDown={handleNavMouseDown}
+            onMouseMove={handleNavMouseMove}
+            onMouseUp={handleNavMouseUp}
+            onMouseLeave={handleNavMouseLeave}
+            role="tablist"
+            aria-label="Video category filters"
+            className={`inline-flex items-center gap-1.5 p-1 rounded-full bg-muted/40 border border-border/60 shadow-xs backdrop-blur-md overflow-x-auto scrollbar-none select-none max-w-full touch-pan-x transition-colors ${
+              isNavDragging ? 'cursor-grabbing select-none' : 'cursor-grab'
+            }`}
+          >
             {(
               [
                 { id: 'all', label: 'All Videos' },
@@ -646,21 +946,43 @@ export const CinemaView: React.FC = () => {
                 { id: 'series', label: 'Series / Episodes' },
                 { id: 'hd', label: '1080p & 4K' },
               ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={filter === tab.id}
-                onClick={() => setFilter(tab.id)}
-                className={`text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                  filter === tab.id
-                    ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
-                    : 'bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+            ).map((tab) => {
+              const isActive = filter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={(e) => {
+                    if (navDragState.current.hasMoved) {
+                      e.preventDefault();
+                      return;
+                    }
+                    setFilter(tab.id);
+                  }}
+                  className={`text-xs px-4 py-1.5 rounded-full transition-all shrink-0 select-none ${
+                    isActive
+                      ? 'bg-foreground text-background font-bold shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Search, Sort, and View Mode Sub-Toolbar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+            <span>
+              {filter === 'movies'
+                ? `${movieFranchises.length} Franchises • ${movieYearCollections.length} Year Archives`
+                : filter === 'series'
+                ? `${webSeriesDrafts.length} Web Series`
+                : `${filteredVideos.length} Videos Available`}
+            </span>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
@@ -917,34 +1239,638 @@ export const CinemaView: React.FC = () => {
             </div>
           )}
 
-          {/* Web Series by Season Spotlight Banner when in 'all' view */}
-          {filter === 'all' && webSeriesDrafts.length > 0 && !loading && (
-            <div className="p-3.5 rounded-2xl border border-primary/30 bg-primary/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <Tv className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <span>{webSeriesDrafts.length} Web Series Auto-Drafted by Season</span>
-                    <Badge variant="outline" className="text-[9px] h-4 border-primary/40 text-primary font-mono bg-primary/10">
-                      Smart Season Bundles
-                    </Badge>
+          {/* Dedicated Movies Showcase (active when filter === 'movies') */}
+          {filter === 'movies' && !loading && (
+            <div className="space-y-4">
+              {/* Movies Toolbar */}
+              <div className="p-3.5 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 shadow-inner">
+                    <Film className="w-4 h-4" />
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Episodes automatically grouped into seasons with VLC binge playback and date-based sorting.
-                  </p>
+                  <div>
+                    <div className="text-xs font-semibold text-foreground flex items-center gap-2">
+                      <span>Drafted Movie Collections</span>
+                      <Badge variant="secondary" className="text-[10px] font-mono px-2 py-0">
+                        {movieFranchises.length} Franchises • {movieYearCollections.length} Year Archives
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Franchises, sagas, and chronological archives with 1-click VLC binge playback.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  {/* Collection Sub-Filter Tabs */}
+                  <div className="flex items-center p-0.5 rounded-lg border border-border bg-background text-xs">
+                    <button
+                      onClick={() => setMovieCollectionType('all')}
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        movieCollectionType === 'all'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      All ({movieFranchises.length + movieYearCollections.length})
+                    </button>
+                    <button
+                      onClick={() => setMovieCollectionType('franchise')}
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        movieCollectionType === 'franchise'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Franchises ({movieFranchises.length})
+                    </button>
+                    <button
+                      onClick={() => setMovieCollectionType('year')}
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        movieCollectionType === 'year'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Years ({movieYearCollections.length})
+                    </button>
+                  </div>
+
+                  {/* Movie Sort Mode */}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-background text-xs">
+                    <ArrowDownUp className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground font-medium">Sort:</span>
+                    <select
+                      value={movieSortMode}
+                      onChange={(e) => setMovieSortMode(e.target.value as MovieSortOption)}
+                      aria-label="Sort Movie Collections By"
+                      className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer"
+                    >
+                      <option value="date-desc" className="bg-card text-foreground">Date: Newest First</option>
+                      <option value="date-asc" className="bg-card text-foreground">Date: Oldest First</option>
+                      <option value="year-desc" className="bg-card text-foreground">Release Year: Newest First</option>
+                      <option value="year-asc" className="bg-card text-foreground">Release Year: Oldest First</option>
+                      <option value="title-asc" className="bg-card text-foreground">Title (A-Z)</option>
+                      <option value="size-desc" className="bg-card text-foreground">Largest Size</option>
+                    </select>
+                  </div>
+
+                  {/* View Style Switcher: Split vs Bundled vs Flat */}
+                  <div className="flex items-center p-0.5 rounded-lg border border-border bg-background text-xs">
+                    <button
+                      onClick={() => setMovieViewStyle('split')}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                        movieViewStyle === 'split'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Split View
+                    </button>
+                    <button
+                      onClick={() => setMovieViewStyle('bundled')}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                        movieViewStyle === 'bundled'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Bundled
+                    </button>
+                    <button
+                      onClick={() => setMovieViewStyle('flat')}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                        movieViewStyle === 'flat'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Flat Movies
+                    </button>
+                  </div>
                 </div>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setFilter('series')}
-                className="h-8 text-xs gap-1.5 cursor-pointer font-medium border-primary/40 hover:bg-primary hover:text-primary-foreground transition-all shrink-0"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Explore Series by Season</span>
-              </Button>
+
+              {/* Split View for Movies */}
+              {movieViewStyle === 'split' && (
+                activeMovieCollections.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl border border-dashed border-border/80 bg-card/20 flex flex-col items-center justify-center gap-2">
+                    <Film className="w-10 h-10 text-muted-foreground/40 mb-1" />
+                    <p className="text-sm font-semibold text-foreground">No Movie Collections Found</p>
+                    <p className="text-xs text-muted-foreground max-w-sm">
+                      No matching movie franchises or release year groupings found in this channel.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
+                    {/* Left Pane: Movie Collections List */}
+                    <div className="w-full lg:w-72 shrink-0 space-y-2 p-3 rounded-2xl border border-border/70 bg-card/75 backdrop-blur-md shadow-xs">
+                      <div className="flex items-center justify-between pb-2 border-b border-border/40 px-1">
+                        <span className="text-xs font-semibold text-foreground">
+                          {movieCollectionType === 'franchise'
+                            ? `Franchises (${activeMovieCollections.length})`
+                            : movieCollectionType === 'year'
+                            ? `Years (${activeMovieCollections.length})`
+                            : `Collections (${activeMovieCollections.length})`}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono">Select Collection</span>
+                      </div>
+                      <div className="space-y-1.5 max-h-[640px] overflow-y-auto scrollbar-thin pr-1">
+                        {activeMovieCollections.map((collection) => {
+                          const isSelected = activeSelectedMovieCollection?.id === collection.id;
+                          return (
+                            <button
+                              key={collection.id}
+                              onClick={() => setSelectedMovieCollectionId(collection.id)}
+                              className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
+                                isSelected
+                                  ? 'border-primary bg-primary/10 ring-1 ring-primary/40 text-foreground'
+                                  : 'border-border/60 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              <div className="w-10 h-10 rounded-lg overflow-hidden bg-zinc-950 border border-border/60 shrink-0 flex items-center justify-center">
+                                {collection.leadThumbUrl ? (
+                                  <img src={collection.leadThumbUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <Clapperboard className="w-5 h-5 text-primary/50" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-semibold truncate text-foreground leading-snug">
+                                  {collection.collectionTitle}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 font-mono">
+                                  <span>{collection.totalMovies} {collection.totalMovies === 1 ? 'Movie' : 'Movies'}</span>
+                                  <span>•</span>
+                                  <span>{formatBytes(collection.totalBytes)}</span>
+                                  {collection.latestDateFormatted && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-primary truncate">{collection.latestDateFormatted}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Right Pane: Selected Collection's Movies Grid */}
+                    {activeSelectedMovieCollection && (() => {
+                      const allSelected =
+                        activeSelectedMovieCollection.movies.length > 0 &&
+                        activeSelectedMovieCollection.movies.every((m) => selectedIds.has(m.video.message_id));
+
+                      return (
+                        <div className="flex-1 min-w-0 w-full rounded-2xl border border-border/80 bg-card/85 backdrop-blur-md p-4 sm:p-5 shadow-sm space-y-4">
+                          {/* Collection Header & Quick Actions */}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-border/40">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-950 border border-border/60 shrink-0 flex items-center justify-center">
+                                {activeSelectedMovieCollection.leadThumbUrl ? (
+                                  <img src={activeSelectedMovieCollection.leadThumbUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <Clapperboard className="w-6 h-6 text-primary" />
+                                )}
+                              </div>
+                              <div>
+                                <h3 className="text-sm sm:text-base font-bold text-foreground">
+                                  {activeSelectedMovieCollection.collectionTitle}
+                                </h3>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap font-mono">
+                                  <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 border-primary/30 text-primary font-semibold">
+                                    {activeSelectedMovieCollection.totalMovies} {activeSelectedMovieCollection.totalMovies === 1 ? 'Movie' : 'Movies'}
+                                  </Badge>
+                                  <span>{formatBytes(activeSelectedMovieCollection.totalBytes)}</span>
+                                  {activeSelectedMovieCollection.latestYear && (
+                                    <>
+                                      <span>•</span>
+                                      <span>
+                                        {activeSelectedMovieCollection.earliestYear && activeSelectedMovieCollection.earliestYear !== activeSelectedMovieCollection.latestYear
+                                          ? `${activeSelectedMovieCollection.earliestYear} – ${activeSelectedMovieCollection.latestYear}`
+                                          : `${activeSelectedMovieCollection.latestYear}`}
+                                      </span>
+                                    </>
+                                  )}
+                                  {activeSelectedMovieCollection.latestDateFormatted && (
+                                    <span className="flex items-center gap-1 text-primary">
+                                      <Calendar className="w-3 h-3" />
+                                      Latest: {activeSelectedMovieCollection.latestDateFormatted}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons for Collection */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => handleBingeMovieCollection(activeSelectedMovieCollection)}
+                                className="h-8 px-3 text-xs gap-1.5 font-medium bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-xs cursor-pointer"
+                                title={`Play all ${activeSelectedMovieCollection.movies.length} movies in VLC`}
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span>Binge in VLC</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleDownloadMovieCollectionM3u(activeSelectedMovieCollection)}
+                                className="h-8 px-2.5 text-xs gap-1 cursor-pointer"
+                                title="Download Collection M3U Playlist"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>Playlist</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSelectMovieCollection(activeSelectedMovieCollection)}
+                                className={`h-8 px-2 text-xs gap-1 cursor-pointer ${
+                                  allSelected ? 'bg-primary/10 text-primary border-primary/40' : ''
+                                }`}
+                              >
+                                <CheckSquare className="w-3 h-3" />
+                                <span>{allSelected ? 'Deselect All' : 'Select All'}</span>
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Movie Cards Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5 pt-1">
+                            {activeSelectedMovieCollection.movies.map((item) => {
+                              const movieVideo = item.video;
+                              const movieThumb = movieVideo.thumb_url || `/stream/${encodeURIComponent(String(movieVideo.chat_id))}/${movieVideo.message_id}/thumb`;
+                              const isMovieSelected = selectedIds.has(movieVideo.message_id);
+
+                              return (
+                                <div
+                                  key={`${movieVideo.chat_id}_${movieVideo.message_id}`}
+                                  className={`rounded-xl border bg-background/60 hover:bg-accent/40 backdrop-blur-xs p-2.5 transition-all flex flex-col justify-between shadow-xs group ${
+                                    isMovieSelected ? 'border-primary ring-2 ring-primary/30' : 'border-border/60 hover:border-primary/40'
+                                  }`}
+                                >
+                                  {/* Thumbnail Frame */}
+                                  <div className="relative aspect-[16/10] rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
+                                    <img
+                                      src={movieThumb}
+                                      alt={item.cleanTitle}
+                                      loading="lazy"
+                                      className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
+                                      onError={(e) => {
+                                        (e.currentTarget as HTMLElement).style.display = 'none';
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-zinc-900 pointer-events-none -z-0">
+                                      <Film className="w-6 h-6 text-zinc-600" />
+                                    </div>
+                                    <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-1 flex-wrap">
+                                      {item.partNumber && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-primary text-primary-foreground shadow-xs">
+                                          Part {item.partNumber}
+                                        </span>
+                                      )}
+                                      {item.year && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/75 text-white backdrop-blur-md">
+                                          {item.year}
+                                        </span>
+                                      )}
+                                      {item.resolution && (
+                                        <span className="px-1 py-0.5 rounded text-[8px] font-mono font-semibold bg-primary/20 text-primary border border-primary/30">
+                                          {item.resolution}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="absolute top-1.5 right-1.5 z-10">
+                                      <button
+                                        onClick={() => toggleSelectVideo(movieVideo.message_id)}
+                                        className={`w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer ${
+                                          isMovieSelected ? 'bg-primary text-primary-foreground shadow' : 'bg-black/60 text-white/70 hover:text-white'
+                                        }`}
+                                        title="Select movie"
+                                      >
+                                        {isMovieSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                      </button>
+                                    </div>
+                                    <div className="absolute bottom-1.5 right-1.5 z-10">
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/75 text-white backdrop-blur-md">
+                                        {item.durationFormatted}
+                                      </span>
+                                    </div>
+                                    <div
+                                      onClick={() => handleStartPlay(movieVideo)}
+                                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer z-20"
+                                      title="Stream Movie"
+                                    >
+                                      <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <Play className="w-4 h-4 fill-current ml-0.5" />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Movie Meta */}
+                                  <div className="pt-2 space-y-1.5 flex-1 flex flex-col justify-between">
+                                    <div>
+                                      <div
+                                        onClick={() => handleStartPlay(movieVideo)}
+                                        className="text-xs font-semibold text-foreground line-clamp-1 hover:text-primary transition-colors cursor-pointer"
+                                        title={item.cleanTitle}
+                                      >
+                                        {item.cleanTitle}
+                                      </div>
+                                      <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono mt-1">
+                                        <span>{item.sizeFormatted}</span>
+                                        {item.formattedDate && (
+                                          <span className="flex items-center gap-1 text-primary">
+                                            <Calendar className="w-2.5 h-2.5" />
+                                            {item.formattedDate}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center gap-1.5 pt-1.5 border-t border-border/40">
+                                      <Button
+                                        size="sm"
+                                        variant="default"
+                                        onClick={() => handleStartPlay(movieVideo)}
+                                        className="h-6 flex-1 text-[10px] px-2 gap-1 cursor-pointer bg-primary text-primary-foreground hover:opacity-90 font-medium"
+                                      >
+                                        <Play className="w-2.5 h-2.5 fill-current" />
+                                        <span>Play</span>
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => void handlePlayInVlc(movieVideo)}
+                                        className="h-6 px-2 text-[10px] gap-1 cursor-pointer text-orange-400 hover:text-orange-300"
+                                        title="Play in VLC"
+                                      >
+                                        <span>VLC</span>
+                                      </Button>
+                                      <button
+                                        onClick={() => handleCopyStreamLink(movieVideo)}
+                                        className="w-6 h-6 rounded text-muted-foreground hover:text-foreground flex items-center justify-center hover:bg-muted/60 transition-colors cursor-pointer"
+                                        title="Copy link"
+                                      >
+                                        <Copy className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )
+              )}
+
+              {/* Bundled View for Movies */}
+              {movieViewStyle === 'bundled' && (
+                activeMovieCollections.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl border border-dashed border-border/80 bg-card/20 flex flex-col items-center justify-center gap-2">
+                    <Film className="w-10 h-10 text-muted-foreground/40 mb-1" />
+                    <p className="text-sm font-semibold text-foreground">No Movie Collections Found</p>
+                    <p className="text-xs text-muted-foreground max-w-sm">
+                      No matching movie franchises or release year groupings found in this channel.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {activeMovieCollections.map((collection) => {
+                      const isExpanded = expandedMovieCollections[collection.id] !== false;
+                      const allSelected =
+                        collection.movies.length > 0 &&
+                        collection.movies.every((m) => selectedIds.has(m.video.message_id));
+
+                      return (
+                        <div
+                          key={collection.id}
+                          className="rounded-2xl border border-border/80 bg-card/85 backdrop-blur-md overflow-hidden shadow-sm hover:border-primary/40 transition-all p-4 space-y-3.5"
+                        >
+                          {/* Collection Header */}
+                          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-border/60 shrink-0 shadow-sm flex items-center justify-center">
+                                {collection.leadThumbUrl ? (
+                                  <img
+                                    src={collection.leadThumbUrl}
+                                    alt={collection.collectionTitle}
+                                    loading="lazy"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <Clapperboard className="w-6 h-6 text-primary/40" />
+                                )}
+                              </div>
+
+                              <div className="min-w-0">
+                                <h4 className="text-sm font-semibold text-foreground truncate" title={collection.collectionTitle}>
+                                  {collection.collectionTitle}
+                                </h4>
+                                <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground flex-wrap">
+                                  <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 border-primary/30 text-primary font-semibold">
+                                    {collection.totalMovies} {collection.totalMovies === 1 ? 'Movie' : 'Movies'}
+                                  </Badge>
+                                  <span>•</span>
+                                  <span className="font-mono">{formatBytes(collection.totalBytes)}</span>
+                                  {collection.latestDateFormatted && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="flex items-center gap-1 font-mono text-[10px] text-primary">
+                                        <Calendar className="w-2.5 h-2.5" />
+                                        Latest: {collection.latestDateFormatted}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => handleBingeMovieCollection(collection)}
+                                className="h-8 px-3 text-xs gap-1.5 font-medium bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-xs cursor-pointer"
+                                title={`Play all ${collection.movies.length} movies in VLC`}
+                              >
+                                <Play className="w-3 h-3 fill-current" />
+                                <span>Binge in VLC</span>
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleDownloadMovieCollectionM3u(collection)}
+                                className="h-8 px-2.5 text-xs gap-1 cursor-pointer"
+                                title="Download Collection M3U playlist file"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>Playlist</span>
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSelectMovieCollection(collection)}
+                                className={`h-8 px-2 text-xs gap-1 cursor-pointer ${
+                                  allSelected ? 'bg-primary/10 text-primary border-primary/40' : ''
+                                }`}
+                              >
+                                <CheckSquare className="w-3 h-3" />
+                                <span>{allSelected ? 'Deselect All' : 'Select All'}</span>
+                              </Button>
+
+                              <button
+                                onClick={() => toggleExpandMovieCollection(collection.id)}
+                                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
+                                title="Toggle movie collection drawer"
+                              >
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                <span>{isExpanded ? 'Hide' : 'Movies'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Collapsible Movies Grid */}
+                          {isExpanded && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 pt-2 border-t border-border/40">
+                              {collection.movies.map((item) => {
+                                const movieVideo = item.video;
+                                const movieThumb = movieVideo.thumb_url || `/stream/${encodeURIComponent(String(movieVideo.chat_id))}/${movieVideo.message_id}/thumb`;
+                                const isMovieSelected = selectedIds.has(movieVideo.message_id);
+
+                                return (
+                                  <div
+                                    key={`${movieVideo.chat_id}_${movieVideo.message_id}`}
+                                    className={`rounded-xl border bg-background/50 hover:bg-accent/40 backdrop-blur-xs p-2.5 transition-all flex flex-col justify-between shadow-xs group ${
+                                      isMovieSelected ? 'border-primary ring-2 ring-primary/30' : 'border-border/60 hover:border-primary/40'
+                                    }`}
+                                  >
+                                    <div className="relative aspect-[16/10] rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
+                                      <img
+                                        src={movieThumb}
+                                        alt={item.cleanTitle}
+                                        loading="lazy"
+                                        className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
+                                        onError={(e) => {
+                                          (e.currentTarget as HTMLElement).style.display = 'none';
+                                        }}
+                                      />
+                                      <div className="absolute inset-0 flex items-center justify-center bg-zinc-900 pointer-events-none -z-0">
+                                        <Film className="w-6 h-6 text-zinc-600" />
+                                      </div>
+                                      <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-1">
+                                        {item.partNumber && (
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-primary text-primary-foreground shadow-xs">
+                                            Part {item.partNumber}
+                                          </span>
+                                        )}
+                                        {item.year && (
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/75 text-white backdrop-blur-md">
+                                            {item.year}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="absolute top-1.5 right-1.5 z-10">
+                                        <button
+                                          onClick={() => toggleSelectVideo(movieVideo.message_id)}
+                                          className={`w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer ${
+                                            isMovieSelected ? 'bg-primary text-primary-foreground shadow' : 'bg-black/60 text-white/70 hover:text-white'
+                                          }`}
+                                          title="Select movie"
+                                        >
+                                          {isMovieSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                        </button>
+                                      </div>
+                                      <div className="absolute bottom-1.5 right-1.5 z-10">
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/75 text-white backdrop-blur-md">
+                                          {item.durationFormatted}
+                                        </span>
+                                      </div>
+                                      <div
+                                        onClick={() => handleStartPlay(movieVideo)}
+                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer z-20"
+                                        title="Stream Movie"
+                                      >
+                                        <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                          <Play className="w-4 h-4 fill-current ml-0.5" />
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="pt-2 space-y-1.5 flex-1 flex flex-col justify-between">
+                                      <div>
+                                        <div
+                                          onClick={() => handleStartPlay(movieVideo)}
+                                          className="text-xs font-semibold text-foreground line-clamp-1 hover:text-primary transition-colors cursor-pointer"
+                                          title={item.cleanTitle}
+                                        >
+                                          {item.cleanTitle}
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono mt-1">
+                                          <span>{item.sizeFormatted}</span>
+                                          {item.formattedDate && (
+                                            <span className="flex items-center gap-1">
+                                              <Calendar className="w-2.5 h-2.5 text-muted-foreground/60" />
+                                              {item.formattedDate}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5 pt-1.5 border-t border-border/40">
+                                        <Button
+                                          size="sm"
+                                          variant="default"
+                                          onClick={() => handleStartPlay(movieVideo)}
+                                          className="h-6 flex-1 text-[10px] px-2 gap-1 cursor-pointer bg-primary text-primary-foreground hover:opacity-90 font-medium"
+                                        >
+                                          <Play className="w-2.5 h-2.5 fill-current" />
+                                          <span>Play</span>
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="secondary"
+                                          onClick={() => void handlePlayInVlc(movieVideo)}
+                                          className="h-6 px-2 text-[10px] gap-1 cursor-pointer text-orange-400 hover:text-orange-300"
+                                          title="Play in desktop VLC"
+                                        >
+                                          <span>VLC</span>
+                                        </Button>
+                                        <button
+                                          onClick={() => handleCopyStreamLink(movieVideo)}
+                                          className="w-6 h-6 rounded text-muted-foreground hover:text-foreground flex items-center justify-center hover:bg-muted/60 transition-colors cursor-pointer"
+                                          title="Copy direct stream link"
+                                        >
+                                          <Copy className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
             </div>
           )}
 
@@ -1611,8 +2537,8 @@ export const CinemaView: React.FC = () => {
             </div>
           )}
 
-          {/* Videos Grid / Table Content (Shown when in flat mode, movies, hd, all, or flat series) */}
-          {(filter !== 'series' || seriesViewStyle === 'flat') && (
+          {/* Videos Grid / Table Content (Shown when in all, hd, or flat mode for series/movies) */}
+          {((filter !== 'series' && filter !== 'movies') || (filter === 'series' && seriesViewStyle === 'flat') || (filter === 'movies' && movieViewStyle === 'flat')) && (
             <>
               {loading && videos.length === 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -1649,30 +2575,63 @@ export const CinemaView: React.FC = () => {
                   : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5'
               }`}
             >
-              {paginatedVideos.map((video) => {
-                const media = parseMediaInfo(video.filename);
-                const thumbUrl = `/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/thumb`;
-                const isSelected = selectedIds.has(video.message_id);
-                const isDense = viewMode === 'dense';
-                const fileSize = video.size || video.file_size || 0;
-                const resolution =
-                  media.resolution ||
-                  video.resolution ||
-                  (video.height
-                    ? (video.height >= 2160
-                      ? '4K'
-                      : video.height >= 1080
-                      ? '1080p'
-                      : video.height >= 720
-                      ? '720p'
-                      : `${video.height}p`)
-                    : null);
-                const ext = (video.filename.split('.').pop() || '').toUpperCase();
-
+              {dateGroups.map((group) => {
+                const groupSelected = group.videos.length > 0 && group.videos.every((v) => selectedIds.has(v.message_id));
                 return (
-                  <div
-                    key={`${video.chat_id}_${video.message_id}`}
-                    className={`group relative rounded-2xl border bg-card/85 backdrop-blur-md overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col justify-between ${
+                  <React.Fragment key={`date-group-${group.key}`}>
+                    {/* Date Break Line */}
+                    <div className="col-span-full my-6 flex items-center gap-3 select-none">
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-border/70" />
+                      <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-card/90 text-foreground border border-border shadow-xs backdrop-blur-md">
+                        <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span>{group.label}</span>
+                        {group.subLabel && (
+                          <span className="text-[10px] text-muted-foreground font-mono font-normal">({group.subLabel})</span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-2 py-0.5 rounded-full font-normal">
+                          {group.videos.length} {group.videos.length === 1 ? 'file' : 'files'} • {formatBytes(group.totalSize)}
+                        </span>
+                        <button
+                          onClick={() => handleToggleSelectDateGroup(group.videos)}
+                          title={groupSelected ? `Deselect all on ${group.label}` : `Select all on ${group.label}`}
+                          className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer border ${
+                            groupSelected
+                              ? 'bg-primary text-primary-foreground border-primary font-bold'
+                              : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60 hover:bg-muted'
+                          }`}
+                        >
+                          {groupSelected ? 'Deselect' : 'Select'}
+                        </button>
+                      </div>
+                      <div className="h-px flex-1 bg-gradient-to-l from-transparent via-border to-border/70" />
+                    </div>
+
+                    {/* Infinite Video Cards for this Date */}
+                    {group.videos.map((video) => {
+                      const media = parseMediaInfo(video.filename);
+                      const thumbUrl = `/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/thumb`;
+                      const isSelected = selectedIds.has(video.message_id);
+                      const isDense = viewMode === 'dense';
+                      const fileSize = video.size || video.file_size || 0;
+                      const resolution =
+                        media.resolution ||
+                        video.resolution ||
+                        (video.height
+                          ? (video.height >= 2160
+                            ? '4K'
+                            : video.height >= 1080
+                            ? '1080p'
+                            : video.height >= 720
+                            ? '720p'
+                            : `${video.height}p`)
+                          : null);
+                      const ext = (video.filename.split('.').pop() || '').toUpperCase();
+
+                      return (
+                        <div
+                          key={`${video.chat_id}_${video.message_id}`}
+                          style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
+                          className={`group relative rounded-2xl border bg-card/85 backdrop-blur-md overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col justify-between ${
                       isSelected
                         ? 'border-primary ring-2 ring-primary/40 bg-card'
                         : 'border-border/70 hover:border-primary/50'
@@ -1894,8 +2853,11 @@ export const CinemaView: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
-          ) : (
+            </React.Fragment>
+          );
+        })}
+      </div>
+    ) : (
             /* Files Explorer Table View */
             <div className="rounded-2xl border border-border/70 bg-card/80 backdrop-blur-md overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
@@ -1904,11 +2866,11 @@ export const CinemaView: React.FC = () => {
                     <tr>
                       <th className="py-3 px-3 w-10 text-center">
                         <button
-                          onClick={handleSelectAllCurrentPage}
+                          onClick={handleSelectAll}
                           className="w-4 h-4 rounded border border-muted-foreground/40 inline-flex items-center justify-center cursor-pointer"
-                          title="Select / Deselect Current Page"
+                          title="Select / Deselect All Filtered Videos"
                         >
-                          {paginatedVideos.length > 0 && paginatedVideos.every((v) => selectedIds.has(v.message_id)) && (
+                          {filteredVideos.length > 0 && filteredVideos.every((v) => selectedIds.has(v.message_id)) && (
                             <Check className="w-3 h-3 text-primary stroke-[3]" />
                           )}
                         </button>
@@ -1922,170 +2884,210 @@ export const CinemaView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
-                    {paginatedVideos.map((video) => {
-                      const media = parseMediaInfo(video.filename);
-                      const isSelected = selectedIds.has(video.message_id);
-                      const fileSize = video.size || video.file_size || 0;
-                      const resolution =
-                        media.resolution ||
-                        video.resolution ||
-                        (video.height
-                          ? (video.height >= 2160
-                            ? '4K'
-                            : video.height >= 1080
-                            ? '1080p'
-                            : video.height >= 720
-                            ? '720p'
-                            : `${video.height}p`)
-                          : null);
-                      const ext = (video.filename.split('.').pop() || '').toUpperCase();
-
+                    {dateGroups.map((group) => {
+                      const groupSelected = group.videos.length > 0 && group.videos.every((v) => selectedIds.has(v.message_id));
                       return (
-                        <tr
-                          key={`${video.chat_id}_${video.message_id}`}
-                          className={`hover:bg-muted/30 transition-colors ${
-                            isSelected ? 'bg-primary/5' : ''
-                          }`}
-                        >
-                          <td className="py-2.5 px-3 text-center">
-                            <button
-                              onClick={() => toggleSelectVideo(video.message_id)}
-                              className={`w-4 h-4 rounded inline-flex items-center justify-center transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'border border-border hover:border-primary'
-                              }`}
-                            >
-                              {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : null}
-                            </button>
-                          </td>
+                        <React.Fragment key={`date-group-table-${group.key}`}>
+                          {/* Date Break Line in Table */}
+                          <tr className="bg-muted/15 select-none hover:bg-muted/15">
+                            <td colSpan={7} className="py-2.5 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-border/70" />
+                                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-card/90 text-foreground border border-border shadow-xs backdrop-blur-md">
+                                  <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                                  <span>{group.label}</span>
+                                  {group.subLabel && (
+                                    <span className="text-[10px] text-muted-foreground font-mono font-normal">({group.subLabel})</span>
+                                  )}
+                                  <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-2 py-0.5 rounded-full font-normal">
+                                    {group.videos.length} {group.videos.length === 1 ? 'file' : 'files'} • {formatBytes(group.totalSize)}
+                                  </span>
+                                  <button
+                                    onClick={() => handleToggleSelectDateGroup(group.videos)}
+                                    title={groupSelected ? `Deselect all on ${group.label}` : `Select all on ${group.label}`}
+                                    className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer border ${
+                                      groupSelected
+                                        ? 'bg-primary text-primary-foreground border-primary font-bold'
+                                        : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60 hover:bg-muted'
+                                    }`}
+                                  >
+                                    {groupSelected ? 'Deselect' : 'Select'}
+                                  </button>
+                                </div>
+                                <div className="h-px flex-1 bg-gradient-to-l from-transparent via-border to-border/70" />
+                              </div>
+                            </td>
+                          </tr>
 
-                          <td className="py-2.5 px-3">
-                            <div className="font-semibold text-foreground flex items-center gap-2">
-                              <span>{media.cleanTitle}</span>
-                              {media.year && (
-                                <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.2 rounded">
-                                  {media.year}
-                                </span>
-                              )}
-                              {media.seasonEpisode && (
-                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/30 text-primary">
-                                  {media.seasonEpisode}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground/60 truncate max-w-md font-mono mt-0.5" title={video.filename}>
-                              {video.filename}
-                            </div>
-                          </td>
+                          {/* Infinite Video Rows for this Date */}
+                          {group.videos.map((video) => {
+                            const media = parseMediaInfo(video.filename);
+                            const isSelected = selectedIds.has(video.message_id);
+                            const fileSize = video.size || video.file_size || 0;
+                            const resolution =
+                              media.resolution ||
+                              video.resolution ||
+                              (video.height
+                                ? (video.height >= 2160
+                                  ? '4K'
+                                  : video.height >= 1080
+                                  ? '1080p'
+                                  : video.height >= 720
+                                  ? '720p'
+                                  : `${video.height}p`)
+                                : null);
+                            const ext = (video.filename.split('.').pop() || '').toUpperCase();
 
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {ext && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-muted/80 text-foreground border border-border/70">
-                                  {ext}
-                                </span>
-                              )}
-                              {resolution && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                  {resolution}
-                                </span>
-                              )}
-                              {media.audio && (
-                                <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-muted text-muted-foreground">
-                                  {media.audio}
-                                </span>
-                              )}
-                              {!ext && !resolution && !media.audio && (
-                                <span className="text-muted-foreground text-[10px]">--</span>
-                              )}
-                            </div>
-                          </td>
-
-                          <td className="py-2.5 px-3 font-mono text-muted-foreground">
-                            {formatDuration(video.duration)}
-                          </td>
-
-                          <td className="py-2.5 px-3 font-mono font-medium text-foreground">
-                            {formatBytes(fileSize)}
-                          </td>
-
-                          <td className="py-2.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
-                            {formatMediaDate(video.date) || '--'}
-                          </td>
-
-                          <td className="py-2.5 px-3 text-right">
-                            <div className="inline-flex items-center gap-1.5">
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => handleStartPlay(video)}
-                                className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
-                                title="Stream in Browser (Auto-Resumes)"
+                            return (
+                              <tr
+                                key={`${video.chat_id}_${video.message_id}`}
+                                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 44px' }}
+                                className={`hover:bg-muted/30 transition-colors ${
+                                  isSelected ? 'bg-primary/5' : ''
+                                }`}
                               >
-                                <Play className="w-3 h-3 fill-current" />
-                                <span>Stream</span>
-                              </Button>
+                                <td className="py-2.5 px-3 text-center">
+                                  <button
+                                    onClick={() => toggleSelectVideo(video.message_id)}
+                                    className={`w-4 h-4 rounded inline-flex items-center justify-center transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'border border-border hover:border-primary'
+                                    }`}
+                                  >
+                                    {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : null}
+                                  </button>
+                                </td>
 
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => void handlePlayInVlc(video)}
-                                className="h-7 px-2 text-xs font-medium gap-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 cursor-pointer"
-                                title="Play in Desktop VLC"
-                              >
-                                <PlayCircle className="w-3 h-3" />
-                                <span>VLC</span>
-                              </Button>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-semibold text-foreground flex items-center gap-2">
+                                    <span>{media.cleanTitle}</span>
+                                    {media.year && (
+                                      <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.2 rounded">
+                                        {media.year}
+                                      </span>
+                                    )}
+                                    {media.seasonEpisode && (
+                                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/30 text-primary">
+                                        {media.seasonEpisode}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground/60 truncate max-w-md font-mono mt-0.5" title={video.filename}>
+                                    {video.filename}
+                                  </div>
+                                </td>
 
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
-                                  >
-                                    <MoreVertical className="w-3.5 h-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-52 bg-card/95 border-border shadow-xl backdrop-blur-md">
-                                  <DropdownMenuItem
-                                    onClick={() => setQrModalVideo(video)}
-                                    className="cursor-pointer gap-2 py-2 text-xs"
-                                  >
-                                    <QrCode className="w-3.5 h-3.5 text-amber-400" />
-                                    <span>Stream to Mobile / TV (QR)</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => void handleTriggerFdm(video)}
-                                    className="cursor-pointer gap-2 py-2 text-xs"
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span>Send to FDM Downloader</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem asChild className="cursor-pointer gap-2 py-2 text-xs">
-                                    <a
-                                      href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
-                                      download={video.filename}
-                                      className="flex items-center gap-2 w-full text-foreground"
+                                <td className="py-2.5 px-3">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {ext && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-muted/80 text-foreground border border-border/70">
+                                        {ext}
+                                      </span>
+                                    )}
+                                    {resolution && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                        {resolution}
+                                      </span>
+                                    )}
+                                    {media.audio && (
+                                      <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-muted text-muted-foreground">
+                                        {media.audio}
+                                      </span>
+                                    )}
+                                    {!ext && !resolution && !media.audio && (
+                                      <span className="text-muted-foreground text-[10px]">--</span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-3 font-mono text-muted-foreground">
+                                  {formatDuration(video.duration)}
+                                </td>
+
+                                <td className="py-2.5 px-3 font-mono font-medium text-foreground">
+                                  {formatBytes(fileSize)}
+                                </td>
+
+                                <td className="py-2.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
+                                  {formatMediaDate(video.date) || '--'}
+                                </td>
+
+                                <td className="py-2.5 px-3 text-right">
+                                  <div className="inline-flex items-center gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      onClick={() => handleStartPlay(video)}
+                                      className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
+                                      title="Stream in Browser (Auto-Resumes)"
                                     >
-                                      <Download className="w-3.5 h-3.5 text-sky-400" />
-                                      <span>Direct File Download</span>
-                                    </a>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator className="bg-border/50" />
-                                  <DropdownMenuItem
-                                    onClick={() => handleCopyStreamLink(video)}
-                                    className="cursor-pointer gap-2 py-2 text-xs"
-                                  >
-                                    <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                                    <span>Copy Direct Stream URL</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </td>
-                        </tr>
+                                      <Play className="w-3 h-3 fill-current" />
+                                      <span>Stream</span>
+                                    </Button>
+
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => void handlePlayInVlc(video)}
+                                      className="h-7 px-2 text-xs font-medium gap-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 cursor-pointer"
+                                      title="Play in Desktop VLC"
+                                    >
+                                      <PlayCircle className="w-3 h-3" />
+                                      <span>VLC</span>
+                                    </Button>
+
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 w-7 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
+                                        >
+                                          <MoreVertical className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-52 bg-card/95 border-border shadow-xl backdrop-blur-md">
+                                        <DropdownMenuItem
+                                          onClick={() => setQrModalVideo(video)}
+                                          className="cursor-pointer gap-2 py-2 text-xs"
+                                        >
+                                          <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                                          <span>Stream to Mobile / TV (QR)</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => void handleTriggerFdm(video)}
+                                          className="cursor-pointer gap-2 py-2 text-xs"
+                                        >
+                                          <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                                          <span>Send to FDM Downloader</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild className="cursor-pointer gap-2 py-2 text-xs">
+                                          <a
+                                            href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
+                                            download={video.filename}
+                                            className="flex items-center gap-2 w-full text-foreground"
+                                          >
+                                            <Download className="w-3.5 h-3.5 text-sky-400" />
+                                            <span>Direct File Download</span>
+                                          </a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator className="bg-border/50" />
+                                        <DropdownMenuItem
+                                          onClick={() => handleCopyStreamLink(video)}
+                                          className="cursor-pointer gap-2 py-2 text-xs"
+                                        >
+                                          <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                                          <span>Copy Direct Stream URL</span>
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -2094,95 +3096,32 @@ export const CinemaView: React.FC = () => {
             </div>
           )}
 
-          {/* Clean Pagination Bar */}
+          {/* Infinite Timeline Archive Summary */}
           {filteredVideos.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl border border-border/60 bg-card/60 backdrop-blur-md shadow-sm">
-              <div className="text-xs text-muted-foreground">
-                Showing{' '}
-                <span className="font-semibold text-foreground">
-                  {pageSize > 0 ? (currentPage - 1) * pageSize + 1 : 1}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl border border-border/60 bg-card/60 backdrop-blur-md shadow-sm select-none">
+              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                <Film className="w-4 h-4 text-primary" />
+                <span>
+                  Showing all <span className="font-semibold text-foreground">{filteredVideos.length}</span> videos across{' '}
+                  <span className="font-semibold text-foreground">{dateGroups.length}</span> date timeline sections
                 </span>
-                –
-                <span className="font-semibold text-foreground">
-                  {pageSize > 0 ? Math.min(currentPage * pageSize, filteredVideos.length) : filteredVideos.length}
-                </span>{' '}
-                of <span className="font-semibold text-foreground">{filteredVideos.length}</span> videos
               </div>
 
-              {/* Page Number Buttons */}
-              {totalPages > 1 && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="h-8 px-2.5 text-xs gap-1 cursor-pointer"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Prev</span>
-                  </Button>
-
-                  {generatePagePills(currentPage, totalPages).map((p, idx) =>
-                    p === -1 ? (
-                      <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground">
-                        …
-                      </span>
-                    ) : (
-                      <Button
-                        key={p}
-                        variant={currentPage === p ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => handlePageChange(p)}
-                        className={`h-8 w-8 p-0 text-xs cursor-pointer ${
-                          currentPage === p
-                            ? 'font-bold shadow-xs'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {p}
-                      </Button>
-                    )
-                  )}
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="h-8 px-2.5 text-xs gap-1 cursor-pointer"
-                  >
-                    <span className="hidden sm:inline">Next</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              )}
-
-              {/* Page Size Selector */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span>Per page:</span>
-                {[24, 48, 96].map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => handleSetPageSize(size)}
-                    className={`px-2 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer ${
-                      pageSize === size
-                        ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                        : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+                <span>
+                  Total Volume:{' '}
+                  <span className="font-semibold text-foreground">
+                    {formatBytes(filteredVideos.reduce((acc, v) => acc + (v.size || v.file_size || 0), 0))}
+                  </span>
+                </span>
+                <span>•</span>
                 <button
-                  onClick={() => handleSetPageSize(0)}
-                  className={`px-2 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer ${
-                    pageSize === 0
-                      ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                      : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
+                  onClick={handleSelectAll}
+                  className="text-primary hover:underline font-semibold cursor-pointer"
                 >
-                  All
+                  {filteredVideos.length > 0 && filteredVideos.every((v) => selectedIds.has(v.message_id))
+                    ? 'Deselect All'
+                    : 'Select All'}
                 </button>
               </div>
             </div>
