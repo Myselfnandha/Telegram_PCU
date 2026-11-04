@@ -153,9 +153,11 @@ export interface CinemaVideo {
   width?: number;
   height?: number;
   resolution?: string;
+  is_series?: boolean;
   series_name?: string;
   season?: number;
   episode?: number;
+  has_thumb?: boolean;
   thumb_url?: string;
   stream_url?: string;
   stream_transmux_url?: string;

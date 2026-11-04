@@ -12,6 +12,7 @@ import logging
 from typing import Dict, List, Any, Optional, Union, Tuple
 from fastapi import HTTPException
 from app.services.sniffer_service import sniffer_service, auto_rename
+from app.services.subtitle_service import subtitle_service
 from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_videos_db
 
 logger = logging.getLogger("cinema_catalog")
@@ -314,6 +315,13 @@ class CinemaCatalog:
                             v["file_size"] = v["size"]
                         if "resolution" not in v and v.get("height"):
                             v["resolution"] = f"{v['height']}p"
+                        if "is_series" not in v:
+                            parsed_s = subtitle_service.parse_media_title(v.get("filename", ""))
+                            v["is_series"] = bool(parsed_s.get("is_series", False))
+                            if v["is_series"]:
+                                v["series_name"] = parsed_s.get("title")
+                                v["season"] = parsed_s.get("season")
+                                v["episode"] = parsed_s.get("episode")
 
                     self._videos_cache[cache_key] = {
                         "data": db_cached,
@@ -473,6 +481,12 @@ class CinemaCatalog:
                         res_str = "720p"
                         height, width = 720, 1280
 
+                parsed_series = subtitle_service.parse_media_title(clean_name)
+                is_series = bool(parsed_series.get("is_series", False))
+                series_name = parsed_series.get("title") if is_series else None
+                season_val = parsed_series.get("season")
+                episode_val = parsed_series.get("episode")
+
                 videos.append({
                     "message_id": msg.id,
                     "chat_id": str(chat_id),
@@ -483,6 +497,10 @@ class CinemaCatalog:
                     "width": width,
                     "height": height,
                     "resolution": res_str,
+                    "is_series": is_series,
+                    "series_name": series_name,
+                    "season": season_val,
+                    "episode": episode_val,
                     "date": int(msg.date.timestamp()) if msg.date else 0,
                     "mime_type": msg.file.mime_type or "video/mp4",
                     "has_thumb": has_thumb,

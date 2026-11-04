@@ -29,11 +29,40 @@ class StreamEngine:
     def __init__(self):
         self._in_flight_chunks: Dict[Tuple[str, int, int], asyncio.Future] = {}
         self._chunk_lock: Optional[asyncio.Lock] = None
+        self._active_stream_wire_tasks: Dict[Tuple[str, int], Set[asyncio.Task]] = {}
+        self._active_stop_events: Dict[Tuple[str, int], Set[asyncio.Event]] = {}
 
     def _get_chunk_lock(self) -> asyncio.Lock:
         if self._chunk_lock is None:
             self._chunk_lock = asyncio.Lock()
         return self._chunk_lock
+
+    def abort_message_stream(self, chat_id: Union[str, int], message_id: int):
+        """
+        Hard aborts all active MTProto chunk downloads, pipelined lookahead tasks,
+        and unfulfilled chunk futures for a specific message stream.
+        Called immediately on seek or fast-forward to release sender sockets and Rust permits.
+        """
+        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
+        media_key = (norm_cid, int(message_id))
+
+        # 1. Trigger all registered stop events
+        stop_events = self._active_stop_events.pop(media_key, set())
+        for ev in stop_events:
+            ev.set()
+
+        # 2. Cancel all in-flight wire tasks for this media
+        wire_tasks = self._active_stream_wire_tasks.pop(media_key, set())
+        for task in wire_tasks:
+            if not task.done():
+                task.cancel()
+
+        # 3. Cancel and clear matching in-flight chunk futures
+        matching_keys = [k for k in list(self._in_flight_chunks.keys()) if k[0] == norm_cid and k[1] == int(message_id)]
+        for k in matching_keys:
+            fut = self._in_flight_chunks.pop(k, None)
+            if fut and not fut.done():
+                fut.cancel()
 
     async def stream_media(
         self,
@@ -59,7 +88,15 @@ class StreamEngine:
         first_chunk_sent = False
         effective_start = start
         norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
+        media_key = (norm_cid, int(message_id))
         stream_wire_tasks = set()
+
+        if media_key not in self._active_stream_wire_tasks:
+            self._active_stream_wire_tasks[media_key] = set()
+        if media_key not in self._active_stop_events:
+            self._active_stop_events[media_key] = set()
+        if external_stop_event:
+            self._active_stop_events[media_key].add(external_stop_event)
 
         if external_stop_event and external_stop_event.is_set():
             logger.debug(f"STREAM [{clean_name}] Aborted stream before start (superseded by seek)")
@@ -138,9 +175,13 @@ class StreamEngine:
 
         queue: asyncio.Queue = asyncio.Queue(maxsize=32 if is_media_player else 128)
         stop_event = external_stop_event or asyncio.Event()
+        if media_key in self._active_stop_events:
+            self._active_stop_events[media_key].add(stop_event)
 
-        async def _download_chunk_from_mtproto(target_offset: int, target_size: int, worker_client: Any, is_emergency: bool) -> bytes:
+        async def _download_chunk_from_mtproto(target_offset: int, target_size: int, worker_client: Any, is_emergency: bool, is_head_chunk: bool = False) -> bytes:
             nonlocal file_loc, message, active_clients
+            if stop_event.is_set() and not is_head_chunk:
+                raise asyncio.CancelledError("Stream aborted by seek")
             cached_data = stream_buffer.get_slice(norm_cid, message_id, target_offset, target_size)
             if cached_data and len(cached_data) == target_size:
                 return cached_data
@@ -238,9 +279,13 @@ class StreamEngine:
 
             file_ref_attempts = 0
             for attempt in range(6):
+                if stop_event.is_set() and not is_head_chunk:
+                    raise asyncio.CancelledError("Stream aborted by seek")
                 try:
                     c_t0 = time.time()
                     await rate_governor.acquire_chunk_slot(target_size, is_emergency=is_emergency, is_unlimited=not is_media_player)
+                    if stop_event.is_set() and not is_head_chunk:
+                        raise asyncio.CancelledError("Stream aborted by seek")
                     chunk_timeout = 12.0 if is_media_player else 20.0
                     async with sender_pool.borrow(worker_client, dc_id, priority=is_media_player) as s:
                         res = await asyncio.wait_for(
@@ -405,6 +450,7 @@ class StreamEngine:
                 else:
                     is_lead = False
 
+            wt = None
             if is_lead:
                 async def _background_wire_runner():
                     try:
@@ -412,12 +458,17 @@ class StreamEngine:
                             if not wire_fut.done():
                                 wire_fut.cancel()
                             return
-                        data = await _download_chunk_from_mtproto(c_offset, chunk_size, worker_client, is_emergency)
+                        data = await _download_chunk_from_mtproto(
+                            c_offset, chunk_size, worker_client, is_emergency, is_head_chunk=(c_idx == 0)
+                        )
                         if not wire_fut.done():
                             wire_fut.set_result(data)
-                    except BaseException as e:
+                    except (asyncio.CancelledError, BaseException) as e:
                         if not wire_fut.done():
-                            wire_fut.set_exception(e)
+                            if isinstance(e, asyncio.CancelledError):
+                                wire_fut.cancel()
+                            else:
+                                wire_fut.set_exception(e)
                     finally:
                         async with lock:
                             if self._in_flight_chunks.get(chunk_key) is wire_fut:
@@ -426,7 +477,10 @@ class StreamEngine:
                 wt = asyncio.create_task(_background_wire_runner())
                 wt._chunk_idx = c_idx
                 stream_wire_tasks.add(wt)
+                if media_key in self._active_stream_wire_tasks:
+                    self._active_stream_wire_tasks[media_key].add(wt)
                 wt.add_done_callback(stream_wire_tasks.discard)
+                wt.add_done_callback(lambda t: self._active_stream_wire_tasks.get(media_key, set()).discard(t))
             else:
                 logger.info(
                     f"STREAM [{clean_name}] Chunk {c_idx+1}/{total_chunks} at {c_offset:,}: "
@@ -434,9 +488,19 @@ class StreamEngine:
                 )
 
             try:
-                data = await asyncio.shield(wire_fut)
+                if c_idx == 0:
+                    # Lead chunk 0 is shielded so initial seek keyframes complete into RAM buffer
+                    data = await asyncio.shield(wire_fut)
+                else:
+                    # Lookahead chunks are speculative; do not shield so seeking cancels them instantly
+                    data = await wire_fut
                 return c_idx, data
             except asyncio.CancelledError:
+                if c_idx > 0 and stop_event.is_set():
+                    if not wire_fut.done():
+                        wire_fut.cancel()
+                    if is_lead and wt and not wt.done():
+                        wt.cancel()
                 cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
                 if cached_data and len(cached_data) == chunk_size:
                     return c_idx, cached_data
@@ -674,6 +738,10 @@ class StreamEngine:
             raise
         finally:
             stop_event.set()
+            if media_key in self._active_stop_events:
+                self._active_stop_events[media_key].discard(stop_event)
+                if not self._active_stop_events[media_key]:
+                    self._active_stop_events.pop(media_key, None)
             if producer_task and not producer_task.done():
                 producer_task.cancel()
                 try:
@@ -683,6 +751,12 @@ class StreamEngine:
             for wt in list(stream_wire_tasks):
                 if getattr(wt, "_chunk_idx", 1) > 0 and not wt.done():
                     wt.cancel()
+            if media_key in self._active_stream_wire_tasks:
+                for wt in list(self._active_stream_wire_tasks[media_key]):
+                    if getattr(wt, "_chunk_idx", 1) > 0 and not wt.done():
+                        wt.cancel()
+                if not self._active_stream_wire_tasks[media_key]:
+                    self._active_stream_wire_tasks.pop(media_key, None)
 
 
 stream_engine = StreamEngine()

@@ -1158,7 +1158,8 @@ async def test_stream_engine_shielded_chunk_completion_on_cancel():
     msg_id = 99992
 
     with patch("app.services.stream_engine.sender_pool.borrow") as mock_borrow, \
-         patch("app.services.rust_bridge.rust_bridge.is_healthy", AsyncMock(return_value=False)):
+         patch("app.services.rust_bridge.rust_bridge.is_healthy", AsyncMock(return_value=False)), \
+         patch("app.telegram_client.TelegramClientManager.get_active_streaming_clients", AsyncMock(return_value=[mock_client])):
         mock_borrow.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_borrow.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -1290,4 +1291,95 @@ async def test_stream_engine_seek_lead_priority_and_lookahead_cancellation():
         # Cancel the stream to simulate subsequent seek
         stop_ev.set()
         await gen.aclose()
+
+
+@pytest.mark.asyncio
+async def test_stream_engine_abort_message_stream_cancels_all_lookahead_tasks():
+    """
+    Verifies that calling abort_message_stream immediately cancels all active in-flight wire tasks
+    and unfulfilled chunk futures for that stream so that subsequent seeks get 100% available bandwidth.
+    """
+    from app.services.stream_engine import StreamEngine
+    from telethon.tl.types import Document
+
+    engine = StreamEngine()
+    chat_id = "test_abort_chat"
+    msg_id = 77123
+
+    active_wire_calls = 0
+    cancelled_wire_calls = 0
+
+    async def hanging_mock_call(s, req, flood_sleep_threshold=0):
+        nonlocal active_wire_calls, cancelled_wire_calls
+        active_wire_calls += 1
+        try:
+            await asyncio.sleep(10.0)  # Emulate slow network chunk download
+            res = MagicMock()
+            res.bytes = b"H" * (1024 * 1024)
+            return res
+        except asyncio.CancelledError:
+            cancelled_wire_calls += 1
+            raise
+        finally:
+            active_wire_calls -= 1
+
+    mock_client = MagicMock()
+    mock_client._call = hanging_mock_call
+    mock_client.session = MagicMock(dc_id=4)
+    fake_message = MagicMock()
+    fake_message.media = Document(
+        id=msg_id,
+        access_hash=12345,
+        file_reference=b"ref_abort",
+        date=None,
+        mime_type="video/mp4",
+        size=100 * 1024 * 1024,
+        dc_id=4,
+        thumbs=None,
+        video_thumbs=None,
+        attributes=[],
+    )
+    fake_message.file = MagicMock(size=100 * 1024 * 1024, name="abort_test.mp4")
+
+    with patch("app.services.stream_engine.sender_pool.borrow") as mock_borrow, \
+         patch("app.services.rust_bridge.rust_bridge.is_healthy", AsyncMock(return_value=False)), \
+         patch("app.telegram_client.TelegramClientManager.get_active_streaming_clients", AsyncMock(return_value=[mock_client])):
+        mock_borrow.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        mock_borrow.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        gen = engine.stream_media(
+            client=mock_client,
+            chat_id=chat_id,
+            message_id=msg_id,
+            start=0,
+            length=20 * 1024 * 1024,
+            file_size=100 * 1024 * 1024,
+            is_media_player=True,
+            clean_name="abort_test.mp4",
+            message=fake_message
+        )
+
+        stream_task = asyncio.create_task(gen.__anext__())
+        # Let the pipeline start wire tasks
+        await asyncio.sleep(0.05)
+
+        media_key = (chat_id, msg_id)
+        assert media_key in engine._active_stream_wire_tasks
+        assert len(engine._active_stream_wire_tasks[media_key]) > 0
+
+        # Now simulate user scrubbing / fast-forward seek: call abort_message_stream
+        engine.abort_message_stream(chat_id, msg_id)
+
+        # Confirm all wire tasks were cancelled
+        await asyncio.sleep(0.05)
+        assert media_key not in engine._active_stream_wire_tasks
+        assert cancelled_wire_calls > 0
+
+        stream_task.cancel()
+        try:
+            await stream_task
+        except (asyncio.CancelledError, StopAsyncIteration, ConnectionResetError):
+            pass
+        await gen.aclose()
+
 

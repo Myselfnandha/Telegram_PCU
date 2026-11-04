@@ -666,7 +666,7 @@ async def handle_proxy_download(
                     logger.info(f"STREAM [{clean_name}] Direct tail RAM hit: {len(probe_slice):,}B at offset {start:,} (0ms TTFB)")
                     return Response(content=probe_slice, status_code=status_code, headers=headers)
 
-    is_probe_request = (start < 2 * 1024 * 1024 and length <= 4 * 1024 * 1024) or (file_size > 0 and start >= (file_size - 8 * 1024 * 1024))
+    is_probe_request = (length <= 512 * 1024) and (start < 2 * 1024 * 1024 or (file_size > 0 and start >= (file_size - 4 * 1024 * 1024)))
 
     if is_probe_request and length <= 512 * 1024:
         chunk_size = 512 * 1024
@@ -731,7 +731,9 @@ async def handle_proxy_download(
         cached_prefix = cached_slice
 
     if start == 0 and file_size > 2 * 1024 * 1024 and media_key not in _SLIDING_STREAM_BUFFER._tails:
-        asyncio.create_task(_SLIDING_STREAM_BUFFER.prewarm_tail(client, clean_chat_id, message_id, message, file_size))
+        pt = asyncio.create_task(_SLIDING_STREAM_BUFFER.prewarm_tail(client, clean_chat_id, message_id, message, file_size))
+        _ACTIVE_PREFETCH_TASKS[media_key] = pt
+        pt.add_done_callback(lambda _t: _ACTIVE_PREFETCH_TASKS.pop(media_key, None) if _ACTIVE_PREFETCH_TASKS.get(media_key) is _t else None)
 
     req_client_host = getattr(getattr(request, "client", None), "host", "127.0.0.1") or "127.0.0.1"
     ua_lower = user_agent.lower() if user_agent else ""
@@ -752,21 +754,27 @@ async def handle_proxy_download(
 
     if curr_task and not is_probe_request:
         if is_media_player:
+            if start > 0:
+                pref_t = _ACTIVE_PREFETCH_TASKS.pop(media_key, None)
+                if pref_t and not pref_t.done():
+                    pref_t.cancel()
+
             old_handle = _ACTIVE_STREAM_ITERS.get(session_key)
             if old_handle:
                 old_task_entry = _ACTIVE_STREAM_TASKS.get(session_key)
                 old_start = old_task_entry[1] if old_task_entry else 0
-                is_real_seek = (start > 2 * 1024 * 1024 and abs(start - old_start) > 2 * 1024 * 1024)
+                is_real_seek = (abs(start - old_start) > 256 * 1024)
                 if is_real_seek:
                     logger.info(
                         f"STREAM [{clean_name}] Fast seek detected ({start:,} vs {old_start:,}) for {client_tag}@{req_client_host}: "
-                        f"Instantly cancelling previous stream iterator to free MTProto senders."
+                        f"Instantly cancelling previous stream iterator and wire tasks to free MTProto senders."
                     )
                 else:
                     logger.debug(
                         f"STREAM [{clean_name}] Superseded initial container stream at offset {start:,} for {client_tag}@{req_client_host}."
                     )
                 old_handle.stop_event.set()
+                stream_engine.abort_message_stream(norm_chat_id, message_id)
                 asyncio.create_task(old_handle.close())
 
             old_task_entry = _ACTIVE_STREAM_TASKS.get(session_key)
@@ -1683,6 +1691,127 @@ async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, fi
     
     msg = f"VLC launched (resumed at {start_sec}s)." if start_sec > 10 else "VLC launched."
     return {"success": True, "pid": proc.pid, "player": "vlc", "resumed_seconds": start_sec, "message": msg}
+
+
+@router.post("/api/media/vlc/launch_batch", dependencies=[Depends(verify_auth)])
+async def launch_vlc_batch(payload: Dict[str, Any], request: Request):
+    """
+    Launch VLC with an ordered batch/season of media streams queued for continuous binge watching.
+    Restricted to direct loopback clients.
+    """
+    import shutil
+    import subprocess
+    import urllib.parse
+    from app.config import PROXY_PORT
+
+    peer = getattr(request.client, "host", "") if request.client else ""
+    if peer not in ("127.0.0.1", "::1", "localhost", "testclient", "testserver"):
+        raise HTTPException(status_code=403, detail="Desktop VLC launch is available only from the local machine.")
+    if any(header in request.headers for header in ("cf-connecting-ip", "x-forwarded-for", "x-real-ip")):
+        raise HTTPException(status_code=403, detail="Proxied VLC launch requests are not allowed.")
+
+    vlc_bin = shutil.which("vlc")
+    if not vlc_bin:
+        raise HTTPException(status_code=503, detail="VLC is not installed or not available on PATH.")
+
+    items = payload.get("items", [])
+    title = payload.get("title", "Season Binge")
+    if not items:
+        raise HTTPException(status_code=400, detail="No video items provided for batch playback.")
+
+    vlc_args = [
+        vlc_bin,
+        "--no-video-title-show",
+        "--network-caching=2000",
+        "--file-caching=2000",
+        "--http-reconnect",
+        "--no-spdif",
+        "--avcodec-hw=any",
+    ]
+
+    for item in items:
+        cid = item.get("chat_id")
+        mid = item.get("message_id")
+        fname = item.get("filename") or f"video_{mid}.mp4"
+        if not cid or not mid:
+            continue
+        grant = playback_grants.issue(str(cid), int(mid))
+        safe_name = urllib.parse.quote(fname)
+        safe_cid = urllib.parse.quote(str(cid), safe="")
+        ep_url = f"http://127.0.0.1:{PROXY_PORT}/dl/{safe_cid}/{mid}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
+        vlc_args.append(ep_url)
+
+    if len(vlc_args) <= 7:
+        raise HTTPException(status_code=400, detail="No valid media streams could be constructed.")
+
+    from app.services.manager_detector import get_desktop_env
+    desktop_env = get_desktop_env()
+
+    try:
+        proc = subprocess.Popen(
+            vlc_args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=desktop_env,
+            start_new_session=True,
+            close_fds=True,
+        )
+        if hasattr(proc, "wait"):
+            asyncio.create_task(asyncio.to_thread(proc.wait))
+    except OSError as exc:
+        logger.exception("Could not launch batch VLC")
+        raise HTTPException(status_code=500, detail=f"Failed to launch VLC: {exc}")
+
+    return {
+        "success": True,
+        "pid": proc.pid,
+        "player": "vlc",
+        "queued_items": len(items),
+        "message": f"VLC launched with {len(items)} episodes of {title}.",
+    }
+
+
+@router.post("/api/media/vlc/batch_playlist", dependencies=[Depends(verify_auth)])
+async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
+    """
+    Generates an .m3u playlist file for a batch of videos / web series season.
+    """
+    import urllib.parse
+    from app.config import PROXY_HOST, PROXY_PORT
+
+    items = payload.get("items", [])
+    title = payload.get("title", "Season_Playlist")
+    if not items:
+        raise HTTPException(status_code=400, detail="No video items provided for batch playlist.")
+
+    lines = ["#EXTM3U"]
+    for item in items:
+        cid = item.get("chat_id")
+        mid = item.get("message_id")
+        fname = item.get("filename") or f"video_{mid}.mp4"
+        if not cid or not mid:
+            continue
+        grant = playback_grants.issue(str(cid), int(mid))
+        safe_name = urllib.parse.quote(fname)
+        safe_cid = urllib.parse.quote(str(cid), safe="")
+        ep_url = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{safe_cid}/{mid}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
+        lines.append(f"#EXTINF:-1,{fname}")
+        lines.append("#EXTVLCOPT:network-caching=2000")
+        lines.append("#EXTVLCOPT:file-caching=2000")
+        lines.append("#EXTVLCOPT:http-reconnect")
+        lines.append(ep_url)
+
+    clean_title = "".join(c for c in title if c.isalnum() or c in " .-_").strip() or "playlist"
+    m3u_content = "\n".join(lines)
+    return Response(
+        content=m3u_content,
+        media_type="audio/x-mpegurl",
+        headers={
+            "Content-Disposition": f'attachment; filename="{clean_title}.m3u"',
+            "Content-Type": "audio/x-mpegurl; charset=utf-8",
+        },
+    )
 
 
 

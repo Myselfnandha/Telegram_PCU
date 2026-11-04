@@ -351,6 +351,14 @@ class ApiService {
     return this.request(`/api/media/vlc/launch/${encodeURIComponent(String(chatId))}/${messageId}${q}`, { method: 'POST' });
   }
 
+  async launchVlcBatch(items: CinemaVideo[], title?: string): Promise<{ success: boolean; pid?: number; message?: string }> {
+    return this.request('/api/media/vlc/launch_batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, title: title || 'Season Binge' }),
+    });
+  }
+
   async getContinueWatching(): Promise<ContinueWatchingItem[]> {
     return this.request<ContinueWatchingItem[]>('/api/media/continue_watching');
   }

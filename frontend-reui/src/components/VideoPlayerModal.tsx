@@ -204,17 +204,21 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   };
 
   const seekDebounceRef = useRef<any>(null);
+  const pendingSeekTargetRef = useRef<number | null>(null);
 
   const handleSeek = (targetSec: number, immediate: boolean = false) => {
     const total = duration > 0 ? duration : 999999;
     const bounded = Math.max(0, Math.min(total, targetSec));
+    pendingSeekTargetRef.current = bounded;
     setCurrentTimeSec(bounded);
     showOsd(`Seek: ${formatDuration(Math.floor(bounded))}`);
 
     if (seekDebounceRef.current) clearTimeout(seekDebounceRef.current);
     const applySeek = () => {
+      const target = pendingSeekTargetRef.current !== null ? pendingSeekTargetRef.current : bounded;
+      pendingSeekTargetRef.current = null;
       if (videoRef.current) {
-        videoRef.current.currentTime = bounded;
+        videoRef.current.currentTime = target;
         videoRef.current.play().catch(() => {});
         setIsPlaying(true);
       }
@@ -223,12 +227,15 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     if (immediate) {
       applySeek();
     } else {
-      seekDebounceRef.current = setTimeout(applySeek, 120);
+      seekDebounceRef.current = setTimeout(applySeek, 150);
     }
   };
 
   const handleSeekDelta = (deltaSec: number) => {
-    handleSeek(currentTimeSec + deltaSec, false);
+    const currentBase = pendingSeekTargetRef.current !== null
+      ? pendingSeekTargetRef.current
+      : (videoRef.current?.currentTime ?? currentTimeSec);
+    handleSeek(currentBase + deltaSec, false);
   };
 
   const togglePlayPause = () => {
