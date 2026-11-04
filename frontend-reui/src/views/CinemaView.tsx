@@ -2611,7 +2611,6 @@ export const CinemaView: React.FC = () => {
                       const media = parseMediaInfo(video.filename);
                       const thumbUrl = `/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/thumb`;
                       const isSelected = selectedIds.has(video.message_id);
-                      const isDense = viewMode === 'dense';
                       const fileSize = video.size || video.file_size || 0;
                       const resolution =
                         media.resolution ||
