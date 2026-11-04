@@ -163,19 +163,6 @@ export const CinemaView: React.FC = () => {
     hasMoved: false,
   });
 
-  // Client-side pagination to eliminate DOM bloat (e.g. 23,000 down to ~1,500 nodes)
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(() => {
-    const saved = localStorage.getItem('cinema_page_size');
-    return saved ? Number(saved) : 24;
-  });
-
-  const handleSetPageSize = (size: number) => {
-    setPageSize(size);
-    setCurrentPage(1);
-    localStorage.setItem('cinema_page_size', String(size));
-  };
-
   const handleSetViewMode = (mode: 'large' | 'dense' | 'files') => {
     setViewMode(mode);
     localStorage.setItem('cinema_view_mode', mode);
@@ -742,37 +729,6 @@ export const CinemaView: React.FC = () => {
         return 0;
       });
   }, [videos, search, filter, sortBy]);
-
-  // Windowed pagination slice
-  const totalPages = pageSize > 0 ? Math.ceil(filteredVideos.length / pageSize) || 1 : 1;
-  const paginatedVideos = useMemo(() => {
-    if (pageSize <= 0) return filteredVideos;
-    const start = (currentPage - 1) * pageSize;
-    return filteredVideos.slice(start, start + pageSize);
-  }, [filteredVideos, currentPage, pageSize]);
-
-  const handlePageChange = (newPage: number) => {
-    const clamped = Math.max(1, Math.min(newPage, totalPages));
-    setCurrentPage(clamped);
-    const catalogEl = document.getElementById('cinema-files-catalog');
-    if (catalogEl) {
-      catalogEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handleSelectAllCurrentPage = () => {
-    const pageIds = paginatedVideos.map((v) => v.message_id);
-    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allSelected) {
-        pageIds.forEach((id) => next.delete(id));
-      } else {
-        pageIds.forEach((id) => next.add(id));
-      }
-      return next;
-    });
-  };
 
   // Infinite timeline grouping differentiated by date with break lines
   const dateGroups = useMemo(() => {
