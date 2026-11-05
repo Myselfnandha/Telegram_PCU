@@ -2,7 +2,7 @@ import os
 import time
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union, Any, Dict
 from fastapi import APIRouter, HTTPException, Query
 from telethon.tl.types import User, Channel, Chat
 from telethon.tl.functions.contacts import GetContactsRequest
@@ -117,6 +117,65 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
     _chats_cache = result
     _cache_time = time.time()
     return result
+
+
+def update_dialog_on_message(chat_id: Union[int, str], msg: Any) -> None:
+    """
+    Updates the in-memory dialogs cache when a new live message arrives.
+    Bumps the target chat towards the top of the dialogs list and updates unread counts.
+    Emits a 'chats:dialog_updated' event via Socket.IO so docked channel lists update in real-time.
+    """
+    global _chats_cache, _cache_time
+    if not _chats_cache:
+        return
+
+    clean_str = str(chat_id).strip()
+    clean_digits = clean_str.lstrip("-").replace("100", "", 1) if clean_str.startswith("-100") else clean_str.lstrip("-")
+    is_saved = clean_str.lower() in ("me", "self")
+
+    found_idx = -1
+    for i, c in enumerate(_chats_cache):
+        c_str = str(c.id).strip()
+        c_digits = c_str.lstrip("-").replace("100", "", 1) if c_str.startswith("-100") else c_str.lstrip("-")
+        if is_saved and c.type == "saved_messages":
+            found_idx = i
+            break
+        elif not is_saved and (c_str == clean_str or c_digits == clean_digits):
+            found_idx = i
+            break
+
+    if found_idx != -1:
+        target_chat = _chats_cache.pop(found_idx)
+        # Increment unread count if message is inbound
+        is_out = getattr(msg, "out", False)
+        if not is_out and not is_saved:
+            target_chat.unread_count = (target_chat.unread_count or 0) + 1
+
+        # Position after pinned chats
+        insert_idx = 0
+        if not target_chat.pinned:
+            for idx, c in enumerate(_chats_cache):
+                if not c.pinned:
+                    insert_idx = idx
+                    break
+            else:
+                insert_idx = len(_chats_cache)
+        _chats_cache.insert(insert_idx, target_chat)
+        _cache_time = time.time()
+
+        try:
+            from app.socket_handlers import sio
+            payload = {
+                "chat_id": str(target_chat.id),
+                "dialogs": [c.model_dump() for c in _chats_cache[:100]]
+            }
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(sio.emit("chats:dialog_updated", payload))
+            except RuntimeError:
+                pass
+        except Exception as e:
+            logger.debug(f"Socket emit for dialogs update notice: {e}")
 
 
 import os

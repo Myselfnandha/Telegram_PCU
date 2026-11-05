@@ -242,7 +242,7 @@ class ApiService {
     return this.request('/api/settings/speed_limit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ speed_limit: limitMbS }),
+      body: JSON.stringify({ limit_mb_s: limitMbS }),
     });
   }
 

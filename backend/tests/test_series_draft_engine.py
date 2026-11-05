@@ -109,3 +109,27 @@ def test_batch_vlc_launch_empty_items_rejected(client):
     """
     response = client.post("/api/media/vlc/launch_batch", json={"items": []})
     assert response.status_code == 400
+
+
+def test_movie_franchise_batch_playlist(client):
+    """
+    Arrange: a movie saga collection with chapters/parts.
+    Act: generate batch playlist via /api/media/vlc/batch_playlist.
+    Assert: HTTP 200, valid M3U containing movie stream URLs.
+    """
+    payload = {
+        "title": "John_Wick_Saga",
+        "items": [
+            {"chat_id": "-100999999", "message_id": 201, "filename": "John Wick Chapter 1 (2014) 1080p.mkv"},
+            {"chat_id": "-100999999", "message_id": 202, "filename": "John Wick Chapter 2 (2017) 1080p.mkv"},
+            {"chat_id": "-100999999", "message_id": 203, "filename": "John Wick Chapter 3 Parabellum (2019) 1080p.mkv"},
+            {"chat_id": "-100999999", "message_id": 204, "filename": "John Wick Chapter 4 (2023) 2160p UHD.mkv"}
+        ]
+    }
+    response = client.post("/api/media/vlc/batch_playlist", json=payload)
+    assert response.status_code == 200
+    text = response.text
+    assert "#EXTM3U" in text
+    assert "John Wick Chapter 1" in text
+    assert "John Wick Chapter 4" in text
+    assert "playback_token=" in text

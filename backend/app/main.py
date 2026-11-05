@@ -187,6 +187,8 @@ async def lifespan(app: FastAPI):
                 logger.info(f"Telegram client ready: {me_info.get('first_name')} (@{me_info.get('username')})")
             
             sniffer_service.attach_to_client(client)
+            from app.services.telegram_sync import telegram_sync_service
+            telegram_sync_service.attach_to_client(client)
 
             if await TelegramClientManager.is_secondary_authorized():
                 sec_client = await TelegramClientManager.get_secondary_client()

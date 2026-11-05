@@ -163,7 +163,10 @@ export const ChatPickerModal: React.FC<ChatPickerModalProps> = ({
             </div>
           ) : (
             filteredChats.map((chat) => {
-              const isSelected = String(chat.id) === String(selectedChatId);
+              const isSelected =
+                String(chat.id) === String(selectedChatId) ||
+                ((selectedChatId === 'me' || selectedChatId === 'self') && chat.type === 'saved_messages') ||
+                String(chat.id).replace(/^-100/, '').replace(/^-/, '') === String(selectedChatId).replace(/^-100/, '').replace(/^-/, '');
               return (
                 <button
                   key={chat.id}

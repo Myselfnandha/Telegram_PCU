@@ -45,10 +45,17 @@ export const scrollRightSideToTop = (smooth = true) => {
       }
     }
 
-    // 3. Scroll cinema view container or files catalog
-    const cinemaContainer =
-      document.getElementById('cinema-view-container') ||
-      document.getElementById('cinema-files-catalog');
+    // 3. Scroll cinema files catalog element to top
+    const filesCatalog = document.getElementById('cinema-files-catalog');
+    if (filesCatalog) {
+      try {
+        filesCatalog.scrollTo({ top: 0, behavior });
+      } catch {
+        filesCatalog.scrollTop = 0;
+      }
+    }
+
+    const cinemaContainer = document.getElementById('cinema-view-container');
     if (cinemaContainer && cinemaContainer.scrollTop > 0) {
       try {
         cinemaContainer.scrollTo({ top: 0, behavior });
@@ -60,11 +67,17 @@ export const scrollRightSideToTop = (smooth = true) => {
 };
 
 /**
- * Scrolls the right-side content by a specific delta (in pixels).
- * Used when overscrolling in the chat or dialogs feed to scroll the right side files.
+ * Scrolls the right-side files catalog by a specific delta (in pixels).
+ * Forwards overscroll wheel events from sidebar panels to the files catalog.
  */
 export const scrollRightSide = (delta: number) => {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+  const filesCatalog = document.getElementById('cinema-files-catalog');
+  if (filesCatalog && filesCatalog.scrollHeight > filesCatalog.clientHeight) {
+    filesCatalog.scrollTop += delta;
+    return;
+  }
 
   const mainEl = document.querySelector('main');
   const isMainScrollable =
@@ -75,7 +88,5 @@ export const scrollRightSide = (delta: number) => {
 
   if (isMainScrollable && mainEl) {
     mainEl.scrollTop += delta;
-  } else {
-    window.scrollBy({ top: delta, behavior: 'auto' });
   }
 };

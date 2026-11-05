@@ -7,12 +7,12 @@ import { cleanFileName, formatBytes, formatDuration, parseMediaInfo } from '@/li
 import { scrollRightSideToTop } from '@/lib/scrollUtils';
 import { ChatPickerModal } from '@/components/ChatPickerModal';
 import { DockedChannelPicker } from '@/components/DockedChannelPicker';
+import { DockedContinueWatching } from '@/components/DockedContinueWatching';
 import { VideoPlayerModal } from '@/components/VideoPlayerModal';
 import { MobileQrModal } from '@/components/MobileQrModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -34,7 +34,6 @@ import {
   ExternalLink,
   Film,
   Grid3x3,
-  HardDrive,
   LayoutGrid,
   List,
   MessageSquare,
@@ -46,7 +45,6 @@ import {
   Search,
   SlidersHorizontal,
   Tv,
-  X,
 } from 'lucide-react';
 import {
   draftWebSeriesBySeason,
@@ -117,7 +115,6 @@ export const CinemaView: React.FC = () => {
   const { selectedChat, setSelectedChat, addToast } = useApp();
   const [videos, setVideos] = useState<CinemaVideo[]>([]);
   const [continueWatching, setContinueWatching] = useState<ContinueWatchingItem[]>([]);
-  const [offlineSaver, setOfflineSaver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'movies' | 'series' | 'hd'>('all');
@@ -128,7 +125,10 @@ export const CinemaView: React.FC = () => {
     if (saved === 'large') return 'large';
     return 'dense';
   });
-  const [isContinueWatchingOpen, setContinueWatchingOpen] = useState(true);
+  const [isContinueWatchingOpen, setContinueWatchingOpen] = useState<boolean>(() => {
+    const saved = localStorage.getItem('cinema_resume_dock_open');
+    return saved !== 'false';
+  });
   const [isChannelDockOpen, setChannelDockOpen] = useState<boolean>(() => {
     const saved = localStorage.getItem('cinema_channel_dock_open');
     return saved !== 'false';
@@ -137,6 +137,7 @@ export const CinemaView: React.FC = () => {
   const [previewVideo, setPreviewVideo] = useState<CinemaVideo | null>(null);
   const [qrModalVideo, setQrModalVideo] = useState<CinemaVideo | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [launchingVlcId, setLaunchingVlcId] = useState<string | null>(null);
 
   // Web Series Draft States
   const [seriesSortMode, setSeriesSortMode] = useState<SeriesSortOption>('date-desc');
@@ -190,40 +191,36 @@ export const CinemaView: React.FC = () => {
     }
   };
 
-  const loadOfflineSaver = async () => {
-    try {
-      const res = await api.getOfflineSaverStatus();
-      setOfflineSaver(Boolean(res.enabled));
-    } catch {}
-  };
-
-  const toggleOfflineSaver = async () => {
-    const nextState = !offlineSaver;
-    setOfflineSaver(nextState);
-    try {
-      await api.toggleOfflineSaver(nextState);
-      addToast({
-        type: 'info',
-        title: 'Offline Auto-Saver',
-        message: nextState
-          ? '💾 Full videos will auto-save to ~/Videos/Telegram_Cinema'
-          : 'Offline auto-saver disabled.',
-      });
-    } catch (err: any) {
-      setOfflineSaver(!nextState);
-      addToast({ type: 'error', title: 'Error', message: err.message });
-    }
-  };
-
   useEffect(() => {
     loadVideos(false);
     loadContinueWatching();
-    loadOfflineSaver();
     setSelectedIds(new Set());
     scrollRightSideToTop(true);
 
+    const isChatMatching = (updateData: any, currentChatId: string | number) => {
+      if (!updateData || !currentChatId) return false;
+      const targetStr = String(currentChatId).trim().toLowerCase();
+      const targetDigits = targetStr.replace(/^-100/, '').replace(/^-/, '');
+
+      const candidateIds: string[] = [
+        updateData.chat_id,
+        updateData.canonical_chat_id,
+        ...(Array.isArray(updateData.chat_ids) ? updateData.chat_ids : []),
+      ]
+        .filter(Boolean)
+        .map((x) => String(x).trim().toLowerCase());
+
+      return candidateIds.some((cid) => {
+        if (cid === targetStr) return true;
+        const cidDigits = cid.replace(/^-100/, '').replace(/^-/, '');
+        if (cidDigits && targetDigits && cidDigits === targetDigits) return true;
+        if ((targetStr === 'me' || targetStr === 'self') && (cid === 'me' || cid === 'self')) return true;
+        return false;
+      });
+    };
+
     const unsubCinema = socketService.onCinemaUpdate((data) => {
-      if (data && String(data.chat_id) === String(selectedChat.id) && Array.isArray(data.videos)) {
+      if (data && isChatMatching(data, selectedChat.id) && Array.isArray(data.videos)) {
         setVideos(data.videos);
       }
     });
@@ -321,13 +318,6 @@ export const CinemaView: React.FC = () => {
     });
   };
 
-  const handleSelectEntireArchive = () => {
-    if (selectedIds.size === filteredVideos.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredVideos.map((v) => v.message_id)));
-    }
-  };
 
   const handleCopyStreamLink = (video: CinemaVideo) => {
     const url = `${window.location.origin}/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`;
@@ -340,18 +330,28 @@ export const CinemaView: React.FC = () => {
   };
 
   const handlePlayInVlc = async (video: CinemaVideo) => {
+    const key = `${video.chat_id}_${video.message_id}`;
+    if (launchingVlcId === key) return;
+    setLaunchingVlcId(key);
+    addToast({
+      type: 'info',
+      title: 'Opening in VLC...',
+      message: `Preparing streaming session for "${cleanFileName(video.filename)}"`,
+    });
     try {
       if (previewVideo) {
         setPreviewVideo(null);
       }
       const result = await api.launchVlc(video.chat_id, video.message_id, video.filename);
-      addToast({ type: 'success', title: 'VLC launched', message: result.message || `Playing ${video.filename} in VLC.` });
+      addToast({ type: 'success', title: 'VLC launched', message: result.message || `Playing ${cleanFileName(video.filename)} in VLC.` });
     } catch (error) {
       addToast({
         type: 'error',
         title: 'Could not launch VLC',
         message: error instanceof Error ? error.message : 'Check that VLC is installed on the TG Power Suite desktop.',
       });
+    } finally {
+      setTimeout(() => setLaunchingVlcId(null), 2500);
     }
   };
 
@@ -764,7 +764,6 @@ export const CinemaView: React.FC = () => {
   }, [filteredVideos]);
 
   const hasContinueWatching = continueWatching.length > 0;
-  const showContinueWatching = hasContinueWatching && isContinueWatchingOpen;
 
   const watchProgressMap = useMemo(() => {
     const map = new Map<string, ContinueWatchingItem>();
@@ -784,28 +783,32 @@ export const CinemaView: React.FC = () => {
   };
 
   return (
-    <div id="cinema-view-container" className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6 animate-in fade-in duration-300">
+    <div id="cinema-view-container" className="w-full h-full p-2 sm:p-2.5 flex flex-col gap-2 min-h-0 overflow-hidden animate-in fade-in duration-300">
       {/* Top Header & Archive Controls */}
-      <div className="p-5 rounded-2xl border border-border/60 bg-card/60 backdrop-blur-md shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-inner">
-              <Clapperboard className="w-5 h-5" />
+      <div className="shrink-0 p-2 sm:p-2.5 rounded-xl border border-border/60 bg-card/75 backdrop-blur-md shadow-xs space-y-1.5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7.5 h-7.5 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-inner">
+              <Clapperboard className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <span>Cinema Video Catalog</span>
-                <Badge variant="secondary" className="text-[10px]">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <span className="truncate">Cinema Video Catalog</span>
+                <Badge variant="secondary" className="text-[10px] h-3.5 px-1 py-0 font-mono shrink-0">
                   {videos.length} Videos
                 </Badge>
               </div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Browsing channel:{' '}
+              <div className="text-[11px] text-muted-foreground truncate">
+                Channel:{' '}
                 <button
                   onClick={() => {
                     if (!isChannelDockOpen) {
                       setChannelDockOpen(true);
                       localStorage.setItem('cinema_channel_dock_open', 'true');
+                      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                        setContinueWatchingOpen(false);
+                        localStorage.setItem('cinema_resume_dock_open', 'false');
+                      }
                     }
                   }}
                   className="font-medium text-foreground hover:underline cursor-pointer"
@@ -816,13 +819,21 @@ export const CinemaView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
             {hasContinueWatching && (
               <Button
-                variant={showContinueWatching ? 'secondary' : 'default'}
+                variant={isContinueWatchingOpen ? 'secondary' : 'default'}
                 size="sm"
-                onClick={() => setContinueWatchingOpen(!isContinueWatchingOpen)}
-                className="h-9 gap-1.5 cursor-pointer text-xs"
+                onClick={() => {
+                  const next = !isContinueWatchingOpen;
+                  setContinueWatchingOpen(next);
+                  localStorage.setItem('cinema_resume_dock_open', String(next));
+                  if (next && typeof window !== 'undefined' && window.innerWidth < 1024) {
+                    setChannelDockOpen(false);
+                    localStorage.setItem('cinema_channel_dock_open', 'false');
+                  }
+                }}
+                className="h-7.5 px-2.5 gap-1.5 cursor-pointer text-xs"
               >
                 <PlayCircle className="w-3.5 h-3.5 text-amber-400" />
                 <span>Resume ({continueWatching.length})</span>
@@ -836,8 +847,12 @@ export const CinemaView: React.FC = () => {
                 const next = !isChannelDockOpen;
                 setChannelDockOpen(next);
                 localStorage.setItem('cinema_channel_dock_open', String(next));
+                if (next && typeof window !== 'undefined' && window.innerWidth < 1024) {
+                  setContinueWatchingOpen(false);
+                  localStorage.setItem('cinema_resume_dock_open', 'false');
+                }
               }}
-              className="h-9 gap-1.5 cursor-pointer text-xs"
+              className="h-7.5 px-2.5 gap-1.5 cursor-pointer text-xs"
             >
               <MessageSquare className="w-3.5 h-3.5 text-primary" />
               <span>Channels {isChannelDockOpen ? '(Docked)' : ''}</span>
@@ -848,23 +863,16 @@ export const CinemaView: React.FC = () => {
               size="sm"
               onClick={() => loadVideos(true)}
               disabled={loading}
-              className="h-9 text-xs cursor-pointer"
+              className="h-7.5 px-2.5 text-xs cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
               Sync Archive
             </Button>
-
-            {/* Offline saver toggle */}
-            <div className="flex items-center gap-2 px-3 py-1 rounded-lg border border-border bg-background text-xs">
-              <HardDrive className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground">Auto-Saver:</span>
-              <Switch checked={offlineSaver} onCheckedChange={toggleOfflineSaver} aria-label="Toggle auto-offline video saver" />
-            </div>
           </div>
         </div>
 
-        {/* Centered Draggable Filter Navigation Bar */}
-        <div className="flex items-center justify-center w-full pt-2.5 pb-1 border-t border-border/40">
+        {/* Centered/Left Filter Navigation Bar and Search & Sort Controls */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-1.5 pt-1 border-t border-border/40">
           <div
             ref={navDragRef}
             onMouseDown={handleNavMouseDown}
@@ -873,7 +881,7 @@ export const CinemaView: React.FC = () => {
             onMouseLeave={handleNavMouseLeave}
             role="tablist"
             aria-label="Video category filters"
-            className={`inline-flex items-center gap-1.5 p-1 rounded-full bg-muted/40 border border-border/60 shadow-xs backdrop-blur-md overflow-x-auto scrollbar-none select-none max-w-full touch-pan-x transition-colors ${
+            className={`inline-flex items-center gap-1 p-0.5 rounded-full bg-muted/40 border border-border/60 shadow-2xs backdrop-blur-md overflow-x-auto scrollbar-none select-none max-w-full touch-pan-x transition-colors ${
               isNavDragging ? 'cursor-grabbing select-none' : 'cursor-grab'
             }`}
           >
@@ -898,9 +906,9 @@ export const CinemaView: React.FC = () => {
                     }
                     setFilter(tab.id);
                   }}
-                  className={`text-xs px-4 py-1.5 rounded-full transition-all shrink-0 select-none ${
+                  className={`text-[11px] px-2.5 py-0.5 rounded-full transition-all shrink-0 select-none cursor-pointer ${
                     isActive
-                      ? 'bg-foreground text-background font-bold shadow-sm'
+                      ? 'bg-foreground text-background font-bold shadow-xs'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium'
                   }`}
                 >
@@ -909,30 +917,17 @@ export const CinemaView: React.FC = () => {
               );
             })}
           </div>
-        </div>
 
-        {/* Search, Sort, and View Mode Sub-Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-            <span>
-              {filter === 'movies'
-                ? `${movieFranchises.length} Franchises • ${movieYearCollections.length} Year Archives`
-                : filter === 'series'
-                ? `${webSeriesDrafts.length} Web Series`
-                : `${filteredVideos.length} Videos Available`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            {/* View Mode Toggle: Large Grid vs Dense Grid vs Files Table */}
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
+            {/* View Mode Toggle */}
             <div role="group" aria-label="View display mode" className="flex items-center p-0.5 rounded-lg border border-border bg-background">
               <button
                 onClick={() => handleSetViewMode('large')}
                 aria-label="Switch to large grid layout"
                 aria-pressed={viewMode === 'large'}
-                className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                className={`p-1 rounded-md transition-all cursor-pointer ${
                   viewMode === 'large'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title="Large Poster Grid"
@@ -943,9 +938,9 @@ export const CinemaView: React.FC = () => {
                 onClick={() => handleSetViewMode('dense')}
                 aria-label="Switch to dense grid layout"
                 aria-pressed={viewMode === 'dense'}
-                className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                className={`p-1 rounded-md transition-all cursor-pointer ${
                   viewMode === 'dense'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title="Dense Media Grid"
@@ -956,9 +951,9 @@ export const CinemaView: React.FC = () => {
                 onClick={() => handleSetViewMode('files')}
                 aria-label="Switch to files table layout"
                 aria-pressed={viewMode === 'files'}
-                className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                className={`p-1 rounded-md transition-all cursor-pointer ${
                   viewMode === 'files'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title="Files Explorer Table"
@@ -968,30 +963,30 @@ export const CinemaView: React.FC = () => {
             </div>
 
             {/* Sort Dropdown */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-background text-xs">
-              <ArrowDownUp className="w-3.5 h-3.5 text-muted-foreground" />
+            <div className="flex items-center gap-1 px-2 h-7 rounded-lg border border-border bg-background text-xs">
+              <ArrowDownUp className="w-3 h-3 text-muted-foreground" />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
                 aria-label="Sort videos by"
                 className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer"
               >
-                <option value="newest" className="bg-card text-foreground">Date: Newest First</option>
-                <option value="oldest" className="bg-card text-foreground">Date: Oldest First</option>
+                <option value="newest" className="bg-card text-foreground">Date: Newest</option>
+                <option value="oldest" className="bg-card text-foreground">Date: Oldest</option>
                 <option value="size" className="bg-card text-foreground">Largest Size</option>
                 <option value="title" className="bg-card text-foreground">Title (A-Z)</option>
               </select>
             </div>
 
             {/* Search Input */}
-            <div className="relative w-full sm:w-56">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <div className="relative w-full sm:w-44 lg:w-52">
+              <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
-                placeholder="Search titles..."
+                placeholder="Search archive..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search video archive titles"
-                className="pl-8 h-8 text-xs"
+                className="pl-7 h-7 text-xs bg-background/60"
               />
             </div>
           </div>
@@ -1000,7 +995,7 @@ export const CinemaView: React.FC = () => {
 
       {/* Floating Batch Selection Toolbar */}
       {selectedIds.size > 0 && (
-        <div className="sticky top-20 z-30 flex items-center justify-between p-3.5 rounded-2xl bg-card/95 border border-primary/50 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-2">
+        <div className="sticky top-0 z-30 flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-card/95 border border-primary/50 shadow-xl backdrop-blur-xl animate-in slide-in-from-top-2 shrink-0">
           <div className="flex items-center gap-2">
             <CheckSquare className="w-4 h-4 text-primary" />
             <span className="text-xs font-semibold text-foreground">
@@ -1013,7 +1008,7 @@ export const CinemaView: React.FC = () => {
               size="sm"
               variant="outline"
               onClick={handleExportPlaylist}
-              className="h-8 text-xs gap-1.5 cursor-pointer"
+              className="h-7 text-xs gap-1.5 cursor-pointer"
               title="Download .M3U playlist file for VLC or other external players"
             >
               <Download className="w-3.5 h-3.5" />
@@ -1023,7 +1018,7 @@ export const CinemaView: React.FC = () => {
               size="sm"
               variant="outline"
               onClick={handleBatchFdm}
-              className="h-8 text-xs gap-1.5 cursor-pointer text-emerald-400 hover:text-emerald-300 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20"
+              className="h-7 text-xs gap-1.5 cursor-pointer text-emerald-400 hover:text-emerald-300 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20"
               title="Send selected videos to Free Download Manager"
             >
               <ExternalLink className="w-3.5 h-3.5" />
@@ -1033,7 +1028,7 @@ export const CinemaView: React.FC = () => {
               size="sm"
               variant="ghost"
               onClick={() => setSelectedIds(new Set())}
-              className="h-8 text-xs cursor-pointer"
+              className="h-7 text-xs cursor-pointer"
             >
               Clear Selection
             </Button>
@@ -1041,8 +1036,8 @@ export const CinemaView: React.FC = () => {
         </div>
       )}
 
-      {/* Main Layout Area */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
+      {/* Main Layout Area: Docked Left Channels, Center Scrolling Files Catalog, Docked Right Continue Watching */}
+      <div className="flex-1 min-h-0 flex flex-row gap-2 sm:gap-2.5 items-stretch w-full overflow-hidden">
         {/* Left Side Docked Channel Picker */}
         {isChannelDockOpen && (
           <DockedChannelPicker
@@ -1055,127 +1050,8 @@ export const CinemaView: React.FC = () => {
           />
         )}
 
-        {/* Video Catalog (Expands to full remaining width) */}
-        <div id="cinema-files-catalog" className="flex-1 min-w-0 w-full space-y-5">
-          {/* Top Horizontal Continue Watching Shelf */}
-          {showContinueWatching && (
-            <div className="p-4 rounded-2xl border border-border/70 bg-card/75 backdrop-blur-xl shadow-sm space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-border/40">
-                <div className="flex items-center gap-2">
-                  <PlayCircle className="w-4 h-4 text-amber-400" />
-                  <h3 className="text-xs font-semibold text-foreground">Continue Watching</h3>
-                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500/30 text-amber-400 bg-amber-500/10 font-mono">
-                    {continueWatching.length}
-                  </Badge>
-                </div>
-                <button
-                  onClick={() => setContinueWatchingOpen(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
-                  title="Hide Continue Watching shelf"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Hide Shelf</span>
-                </button>
-              </div>
-
-              {/* Horizontal Scroll Shelf */}
-              <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-thin scroll-smooth">
-                {continueWatching.map((item) => {
-                  const media = parseMediaInfo(item.filename);
-                  const seconds = item.playback_seconds || item.last_position_seconds || 0;
-                  const total = item.total_seconds || item.duration_seconds || 0;
-                  const pct = item.percent !== undefined 
-                    ? item.percent 
-                    : (item.progress_percent !== undefined 
-                        ? Math.round(item.progress_percent) 
-                        : (total > 0 ? Math.round((seconds / total) * 100) : 0));
-                  const thumbUrl = item.thumb_url || item.thumbnail_url || `/stream/${encodeURIComponent(String(item.chat_id))}/${item.message_id}/thumb`;
-
-                  const startItemPlay = () => {
-                    setPreviewVideo({
-                      chat_id: item.chat_id,
-                      message_id: item.message_id,
-                      filename: item.filename,
-                      size: (item as any).file_size || 0,
-                      duration: total,
-                      thumb_url: thumbUrl,
-                      playback_seconds: seconds,
-                    });
-                  };
-
-                  return (
-                    <div
-                      key={`${item.chat_id}_${item.message_id}`}
-                      className="w-72 sm:w-80 shrink-0 p-2 rounded-xl border border-border/60 bg-background/50 hover:bg-accent/40 hover:border-border transition-all flex items-center gap-2.5 group relative shadow-xs"
-                    >
-                      {/* Compact Poster with Play Overlay and Progress Bar */}
-                      <div
-                        onClick={startItemPlay}
-                        className="relative w-24 h-15 shrink-0 rounded-lg overflow-hidden bg-zinc-950/90 border border-border/50 cursor-pointer shadow-sm group/thumb"
-                        title="Resume playback"
-                      >
-                        <img
-                          src={thumbUrl}
-                          alt=""
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-black/25 group-hover/thumb:bg-black/45 flex items-center justify-center transition-colors">
-                          <Play className="w-3.5 h-3.5 text-white fill-current opacity-85 group-hover/thumb:opacity-100 group-hover/thumb:scale-110 transition-all drop-shadow" />
-                        </div>
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/70">
-                          <div
-                            className="bg-amber-400 h-full rounded-r transition-all"
-                            style={{ width: `${Math.max(5, pct)}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Info & Action */}
-                      <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
-                        <div>
-                          <div
-                            className="text-xs font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors leading-tight"
-                            title={item.filename}
-                            onClick={startItemPlay}
-                          >
-                            {media.cleanTitle}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono mt-1">
-                            <span>{formatDuration(seconds)}</span>
-                            <span className="text-muted-foreground/40">•</span>
-                            <span className="text-amber-400 font-semibold">{pct}%</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={startItemPlay}
-                            className="h-6 px-2 text-[10px] gap-1 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
-                          >
-                            <Play className="w-2.5 h-2.5 fill-current" />
-                            <span>Resume</span>
-                          </Button>
-                          <button
-                            onClick={() => handleRemoveContinueWatching(item)}
-                            className="w-5 h-5 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors cursor-pointer ml-auto"
-                            title="Dismiss from history"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+        {/* Video Catalog (Expands to full remaining width; ONLY container that scrolls!) */}
+        <div id="cinema-files-catalog" className="flex-1 min-w-0 h-full overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
 
           {/* Dedicated Movies Showcase (active when filter === 'movies') */}
           {filter === 'movies' && !loading && (
@@ -2505,12 +2381,16 @@ export const CinemaView: React.FC = () => {
             <div
               className={`grid ${
                 viewMode === 'dense'
-                  ? isChannelDockOpen
-                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-4'
-                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-4'
-                  : isChannelDockOpen
-                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5'
-                  : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5'
+                  ? isChannelDockOpen && isContinueWatchingOpen && hasContinueWatching
+                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 gap-2.5 sm:gap-3'
+                    : isChannelDockOpen || (isContinueWatchingOpen && hasContinueWatching)
+                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-3'
+                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-2.5 sm:gap-3'
+                  : isChannelDockOpen && isContinueWatchingOpen && hasContinueWatching
+                  ? 'grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-3'
+                  : isChannelDockOpen || (isContinueWatchingOpen && hasContinueWatching)
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5'
+                  : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5'
               }`}
             >
               {dateGroups.map((group) => {
@@ -2518,21 +2398,21 @@ export const CinemaView: React.FC = () => {
                 return (
                   <React.Fragment key={`date-group-${group.key}`}>
                     {/* Date Break Line */}
-                    <div className="col-span-full my-6 flex items-center gap-3 select-none">
+                    <div className="col-span-full my-2 flex items-center gap-2 select-none">
                       <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-border/70" />
-                      <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-card/90 text-foreground border border-border shadow-xs backdrop-blur-md">
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-card/90 text-foreground border border-border shadow-2xs backdrop-blur-md">
                         <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
                         <span>{group.label}</span>
                         {group.subLabel && (
                           <span className="text-[10px] text-muted-foreground font-mono font-normal">({group.subLabel})</span>
                         )}
-                        <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-2 py-0.5 rounded-full font-normal">
+                        <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-1.5 py-0.5 rounded-full font-normal">
                           {group.videos.length} {group.videos.length === 1 ? 'file' : 'files'} • {formatBytes(group.totalSize)}
                         </span>
                         <button
                           onClick={() => handleToggleSelectDateGroup(group.videos)}
                           title={groupSelected ? `Deselect all on ${group.label}` : `Select all on ${group.label}`}
-                          className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer border ${
+                          className={`ml-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer border ${
                             groupSelected
                               ? 'bg-primary text-primary-foreground border-primary font-bold'
                               : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60 hover:bg-muted'
@@ -3065,6 +2945,35 @@ export const CinemaView: React.FC = () => {
           )}
           </>)}
         </div>
+
+        {/* Right Side Docked Continue Watching Shelf */}
+        {isContinueWatchingOpen && hasContinueWatching && (
+          <DockedContinueWatching
+            items={continueWatching}
+            onPlay={(item) => {
+              const seconds = item.playback_seconds || item.last_position_seconds || 0;
+              const total = item.total_seconds || item.duration_seconds || 0;
+              const thumbUrl =
+                item.thumb_url ||
+                item.thumbnail_url ||
+                `/stream/${encodeURIComponent(String(item.chat_id))}/${item.message_id}/thumb`;
+              setPreviewVideo({
+                chat_id: item.chat_id,
+                message_id: item.message_id,
+                filename: item.filename,
+                size: (item as any).file_size || 0,
+                duration: total,
+                thumb_url: thumbUrl,
+                playback_seconds: seconds,
+              });
+            }}
+            onRemove={handleRemoveContinueWatching}
+            onClose={() => {
+              setContinueWatchingOpen(false);
+              localStorage.setItem('cinema_resume_dock_open', 'false');
+            }}
+          />
+        )}
       </div>
 
       {/* Global Modals */}

@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import uuid
+import aiofiles
 import httpx
 from pathlib import Path
 from typing import Dict, List, Optional, Callable, Any
@@ -184,7 +185,7 @@ class DownloadManager:
 
                     task.downloaded_bytes = resume_offset
 
-                    with open(task.file_path, mode) as f:
+                    async with aiofiles.open(task.file_path, mode) as f:
                         async for chunk in resp.aiter_bytes(chunk_size=256 * 1024):
                             if task.cancel_event.is_set():
                                 raise asyncio.CancelledError("Download cancelled by user.")
@@ -196,7 +197,7 @@ class DownloadManager:
                                 task.status = DownloadStatus.DOWNLOADING
                                 self._notify(task)
 
-                            f.write(chunk)
+                            await f.write(chunk)
                             task.downloaded_bytes += len(chunk)
 
                             now = time.time()

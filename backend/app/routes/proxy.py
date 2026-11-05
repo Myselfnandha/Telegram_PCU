@@ -655,7 +655,7 @@ async def handle_proxy_download(
     if file_size > 0 and start >= (file_size - 4 * 1024 * 1024):
         tail_entry = _SLIDING_STREAM_BUFFER._tails.get((norm_chat_id, message_id)) or _SLIDING_STREAM_BUFFER._tails.get((str(chat_id), message_id))
         if tail_entry:
-            tail_offset = tail_entry.get("offset", 0)
+            tail_offset = tail_entry.get("start", tail_entry.get("offset", 0))
             tail_data = tail_entry.get("data", b"")
             if tail_offset <= start < (tail_offset + len(tail_data)):
                 slice_offset = start - tail_offset

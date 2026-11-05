@@ -8,6 +8,7 @@ from app.auth import verify_auth
 import app.auth as auth_service
 from app.services.queue_manager import queue_manager
 from app.services.sniffer_service import sniffer_service
+from app.services.stream_buffer import stream_buffer
 from app.telegram_client import TelegramClientManager
 
 logger = logging.getLogger("system_route")
@@ -38,9 +39,10 @@ def get_system_telemetry() -> Dict[str, Any]:
     active_uploads = [t for t in all_tasks if getattr(t, "status", None) and t.status.value == "uploading"]
     total_up_speed = sum(getattr(t, "speed", 0.0) for t in active_uploads)
 
-    # Active proxy streams & feed count
-    active_streams_count = getattr(sniffer_service, "active_streams_count", 0)
-    total_stream_bytes = getattr(sniffer_service, "total_streamed_bytes", 0)
+    # Active proxy streams & buffer metrics
+    buf_stats = stream_buffer.get_stats()
+    active_streams_count = buf_stats.get("active_streams_count", 0)
+    total_stream_bytes = buf_stats.get("total_buffered_bytes", 0)
 
     # MTProto info
     me_info = getattr(TelegramClientManager, "_cached_me", None)

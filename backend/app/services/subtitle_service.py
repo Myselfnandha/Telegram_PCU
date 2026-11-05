@@ -31,24 +31,69 @@ class SubtitleService:
         """
         clean = filename
         clean = os.path.splitext(clean)[0]
-        clean = re.sub(r"[._]", " ", clean).strip()
+        clean = re.sub(r"[._]", " ", clean)
+        # Separate attached numbers and letters (e.g. EP08Tamil -> EP08 Tamil), except 01x02 notation
+        clean = re.sub(r"([0-9]+)(?![xX]\d+)([a-zA-Z]+)", r"\1 \2", clean).strip()
 
-        # Check for Series Season / Episode: S01E02, 1x02, Season 1 Episode 2
-        series_match = re.search(r"(.*?)\s*(?:[sS](\d{1,2})[eE](\d{1,2})|(\d{1,2})[xX](\d{1,2})|[sS]eason\s*(\d{1,2})\s*[eE]pisode\s*(\d{1,2}))", clean, re.IGNORECASE)
-        if series_match:
-            raw_title = series_match.group(1).strip()
-            s_num = int(series_match.group(2) or series_match.group(4) or series_match.group(6) or 1)
-            e_num = int(series_match.group(3) or series_match.group(5) or series_match.group(7) or 1)
-            
-            title = re.sub(r"\b(720p|1080p|2160p|4k|bluray|web-dl|webrip|x264|x265|hevc|aac|dts|hdrip)\b.*", "", raw_title, flags=re.IGNORECASE).strip()
-            return {
-                "title": title or raw_title,
-                "is_series": True,
-                "season": s_num,
-                "episode": e_num,
-                "year": None,
-                "query": f"{title} S{s_num:02d}E{e_num:02d}"
-            }
+        # Check for Series Season / Episode conventions (highest precedence)
+        # 1) S01E02, S01 EP02, S01 EP 01 07, S01-EP02, S01.E02, S01E01-E04, S01 EP33 36
+        # 2) Season 1 Episode 2, Season 1 Ep 2
+        # 3) 01x02, 1x02
+        # 4) Season pack: S01 Complete, Season 1 Complete
+        # 5) Standalone Episode / Part: EP01, Episode 01, Part 1, Pt 01
+        patterns = [
+            # Pattern 1: S01E02, S01 EP02, S01 EP 01 07, S01 EP33 36
+            r"(.*?)\b(?:[sS](\d{1,2}))\s*(?:[-._])?\s*(?:[eE][pP]?\s*(\d{1,3})(?:\s*[-–_]\s*(\d{1,3})|\s+(\d{1,3}))?)\b(.*)",
+            # Pattern 2: Season 1 Episode 2, Season 1 Ep 2
+            r"(.*?)\b[sS]eason\s*(\d{1,2})\s*(?:[-._])?\s*(?:[eE]p(?:isode)?\s*(\d{1,3})(?:\s*[-–_]\s*(\d{1,3})|\s+(\d{1,3}))?)\b(.*)",
+            # Pattern 3: 01x02, 1x02, 01 x 02
+            r"(.*?)\b(\d{1,2})\s*[xX]\s*(\d{1,3})\b(.*)",
+            # Pattern 4: Season Pack: S01 Complete, Season 1 Complete
+            r"(.*?)\b(?:[sS](\d{1,2})|[sS]eason\s*(\d{1,2}))\s*(?:complete|full|pack)\b(.*)",
+            # Pattern 5: Standalone Episode: EP01, EP 01, Episode 01, Part 1, Pt 01
+            r"(.*?)\b(?:[eE][pP]?|episode|part|pt)\s*[:.\-_]?\s*(\d{1,3})(?:\s*[-–_]\s*(\d{1,3})|\s+(\d{1,3}))?\b(.*)",
+        ]
+
+        for idx, pattern in enumerate(patterns):
+            series_match = re.search(pattern, clean, re.IGNORECASE)
+            if series_match:
+                raw_title = series_match.group(1).strip()
+                s_num = 1
+                e_num = 1
+
+                if idx == 0:  # S01 EP02
+                    s_num = int(series_match.group(2) or 1)
+                    e_num = int(series_match.group(3) or 1)
+                elif idx == 1:  # Season 1 Episode 2
+                    s_num = int(series_match.group(2) or 1)
+                    e_num = int(series_match.group(3) or 1)
+                elif idx == 2:  # 01x02
+                    s_num = int(series_match.group(2) or 1)
+                    e_num = int(series_match.group(3) or 1)
+                elif idx == 3:  # Season pack
+                    s_num = int(series_match.group(2) or series_match.group(3) or 1)
+                    e_num = 1
+                elif idx == 4:  # Standalone EP / Part
+                    s_num = 1
+                    e_num = int(series_match.group(2) or 1)
+
+                # Clean release channel clutter and release tags from series title
+                clean_t = raw_title
+                clean_t = re.sub(r"^(?:vip\s*linkzz?|sklink|praky\s*tv|movieman\s*hd|onlyhd4u|tamilhq|sonytamizh|movies\s*tamizhaa|team\s*hdt|moviebox\s*studios|org|com|net|tv|hd|link|linkzz|official|tamilmv|tamilblasters)\b\s*", "", clean_t, flags=re.IGNORECASE)
+                clean_t = re.sub(r"\b(19\d{2}|20\d{2})\b", " ", clean_t)
+                clean_t = re.sub(r"[\(\)\[\]\{\}]", " ", clean_t)
+                clean_t = re.sub(r"\b(720p|1080p|2160p|4k|bluray|web-dl|webrip|x264|x265|hevc|aac|dts|hdrip|true|untouched)\b.*", "", clean_t, flags=re.IGNORECASE).strip()
+                clean_t = re.sub(r"\s+", " ", clean_t).strip()
+                title = clean_t or raw_title
+
+                return {
+                    "title": title or raw_title,
+                    "is_series": True,
+                    "season": s_num,
+                    "episode": e_num,
+                    "year": None,
+                    "query": f"{title} S{s_num:02d}E{e_num:02d}"
+                }
 
         # Check for Movie Year (1900 - 2099)
         year_match = re.search(r"(.*?)\s*\(?((?:19|20)\d{2})\)?", clean)

@@ -118,9 +118,10 @@ async def clear_history():
     """Clears all upload history records."""
     try:
         async with aiosqlite.connect(str(DB_PATH), timeout=10.0) as db:
-            await db.execute("DELETE FROM upload_history")
+            cursor = await db.execute("DELETE FROM upload_history")
             await db.commit()
-        return {"status": "success", "message": "Upload history cleared"}
+            deleted_count = cursor.rowcount if cursor.rowcount is not None and cursor.rowcount >= 0 else 0
+        return {"status": "success", "deleted": deleted_count, "message": "Upload history cleared"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

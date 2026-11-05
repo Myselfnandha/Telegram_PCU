@@ -32,7 +32,7 @@ const MainLayout: React.FC = () => {
   const { activeTab, theme } = useApp();
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col antialiased selection:bg-primary/20 selection:text-primary">
+    <div className="h-screen max-h-screen bg-background text-foreground flex flex-col antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-xl focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-ring font-medium text-xs transition-all"
@@ -53,19 +53,35 @@ const MainLayout: React.FC = () => {
       <NetworkWatchdogBanner />
       <FloodWaitBanner />
 
-      <div className="flex-1 flex w-full relative">
+      <div className="flex-1 min-h-0 flex w-full relative overflow-hidden">
         <main
           id="main-content"
           tabIndex={-1}
           aria-label="Main Workspace Content"
-          className="flex-1 min-w-0 w-full pb-16 relative focus:outline-none"
+          className="flex-1 min-h-0 min-w-0 w-full relative focus:outline-none flex flex-col overflow-hidden"
         >
           <Suspense fallback={<ViewLoadingFallback />}>
-            {activeTab === 'uploader' && <UploaderView />}
-            {activeTab === 'sniffer' && <SnifferView />}
+            {activeTab === 'uploader' && (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <UploaderView />
+              </div>
+            )}
+            {activeTab === 'sniffer' && (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <SnifferView />
+              </div>
+            )}
             {activeTab === 'cinema' && <CinemaView />}
-            {activeTab === 'history' && <HistoryView />}
-            {activeTab === 'settings' && <SettingsView />}
+            {activeTab === 'history' && (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <HistoryView />
+              </div>
+            )}
+            {activeTab === 'settings' && (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <SettingsView />
+              </div>
+            )}
           </Suspense>
         </main>
       </div>

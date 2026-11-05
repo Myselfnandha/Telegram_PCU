@@ -96,7 +96,14 @@ class StreamSlidingBuffer:
         """Append streamed data to the RAM sliding window, multi-segment cache, and initial header cache."""
         if not data:
             return
-        key = (str(chat_id), message_id)
+        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
+        keys = [(str(chat_id), message_id)]
+        if norm_cid != str(chat_id):
+            keys.append((norm_cid, message_id))
+        for key in keys:
+            self._push_for_key(key, offset, data)
+
+    def _push_for_key(self, key: Tuple[str, int], offset: int, data: bytes):
         now = time.time()
 
         # 1. Update initial header cache (0..4MB)
@@ -214,7 +221,14 @@ class StreamSlidingBuffer:
         """Cache container tail metadata (e.g. MKV Cues / MP4 Moov)."""
         if not data:
             return
-        key = (str(chat_id), message_id)
+        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
+        keys = [(str(chat_id), message_id)]
+        if norm_cid != str(chat_id):
+            keys.append((norm_cid, message_id))
+        for key in keys:
+            self._push_tail_for_key(key, offset, data)
+
+    def _push_tail_for_key(self, key: Tuple[str, int], offset: int, data: bytes):
         if key not in self._tails:
             self._tails[key] = {"start": offset, "data": bytearray(data)}
         else:
@@ -241,7 +255,19 @@ class StreamSlidingBuffer:
         Retrieve pre-cached RAM slice (header, tail, or multi-segment scrubbing buffer).
         Supports seamless contiguous multi-segment assembly across buffer boundaries.
         """
-        key = (str(chat_id), message_id)
+        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
+        candidate_keys = [(str(chat_id), message_id)]
+        if norm_cid != str(chat_id):
+            candidate_keys.append((norm_cid, message_id))
+            candidate_keys.append((f"-100{norm_cid}", message_id))
+
+        for key in candidate_keys:
+            res = self._get_slice_for_key(key, chat_id, message_id, start, length)
+            if res is not None:
+                return res
+        return None
+
+    def _get_slice_for_key(self, key: Tuple[str, int], chat_id: str, message_id: int, start: int, length: int) -> Optional[bytes]:
         now = time.time()
 
         # Fast Path 1: Exact / Contained Header Cache Hit (0ms playback start)
@@ -396,13 +422,13 @@ class StreamSlidingBuffer:
 
     async def prewarm_media(self, client: Any, chat_id: Union[str, int], message_id: int, file_size: int = 0):
         """Pre-warms initial header (up to 1MB in parallel) and tail (up to 1MB in parallel) into RAM buffer upon media launch."""
-        key = (str(chat_id), message_id)
-        if key in self._headers and len(self._headers[key]) >= 1024 * 1024:
+        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
+        if (norm_cid, message_id) in self._headers or (str(chat_id), message_id) in self._headers:
             return
         try:
-            clean_chat_id = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
-            msg = await client.get_messages(clean_chat_id, ids=message_id)
-            if not msg or not msg.media:
+            from app.services.cinema_catalog import cinema_catalog
+            msg = await cinema_catalog.get_streamable_message(client, chat_id, message_id)
+            if not msg or not getattr(msg, "media", None):
                 return
             file_info = utils._get_file_info(msg.media)
             file_loc = getattr(file_info, "location", None)
@@ -439,7 +465,8 @@ class StreamSlidingBuffer:
             logger.info(f"BUFFER [{chat_id}:{message_id}] Initial header pre-warmed (up to 1MB ready for instant start)")
 
             # Fetch tail if file > 2MB
-            if actual_file_size > 2 * 1024 * 1024 and key not in self._tails:
+            tail_key = (str(chat_id), message_id)
+            if actual_file_size > 2 * 1024 * 1024 and tail_key not in self._tails:
                 await self.prewarm_tail(client, chat_id, message_id, msg, actual_file_size)
         except Exception as e:
             logger.debug(f"Media prewarm notice: {e}")

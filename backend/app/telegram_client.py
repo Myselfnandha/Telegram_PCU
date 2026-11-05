@@ -440,6 +440,11 @@ class TelegramClientManager:
                                 rate_governor.configure_for_tier(is_premium=is_prem)
                                 logger.info(f"Telegram user client authorized as: {getattr(me, 'first_name', '')} (@{getattr(me, 'username', 'N/A')}, Premium: {is_prem})")
                                 asyncio.create_task(cls._client.get_dialogs(limit=300))
+                                try:
+                                    from app.services.telegram_sync import telegram_sync_service
+                                    telegram_sync_service.attach_to_client(cls._client)
+                                except Exception:
+                                    pass
                             except Exception as me_err:
                                 logger.debug(f"get_me notice: {me_err}")
                     elif BOT_TOKEN:
@@ -472,7 +477,7 @@ class TelegramClientManager:
         async with cls._lock:
             if cls._client:
                 try:
-                    await cls._pool.disconnect_all(cls._client)
+                    await sender_pool.disconnect_all(cls._client)
                 except Exception:
                     pass
                 try:

@@ -1,35 +1,20 @@
 import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import type { TabType } from '@/types';
-import { formatBytes, formatSpeed } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Activity,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  ChevronDown,
   Clapperboard,
   Clock,
-  Cpu,
   Download,
-  HardDrive,
   Moon,
   Radio,
   Send,
-  Server,
   Settings,
   ShieldCheck,
   Sparkles,
   Sun,
   Upload,
-  Wifi,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -38,8 +23,6 @@ export const Header: React.FC = () => {
     setActiveTab,
     authStatus,
     setAuthModalOpen,
-    telemetry,
-    isSocketConnected,
     theme,
     toggleTheme,
     uploadQueue,
@@ -184,28 +167,18 @@ export const Header: React.FC = () => {
   }, [activeTab]);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-card/85 backdrop-blur-xl transition-all">
-      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 h-16 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-card/85 backdrop-blur-xl transition-all shrink-0">
+      <div className="w-full px-3 sm:px-6 lg:px-8 h-13 sm:h-14 flex items-center justify-between gap-3">
         {/* Brand Section */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-emerald-500 flex items-center justify-center shadow-md shadow-sky-500/20 text-white transition-transform hover:scale-105 cursor-pointer">
-            <Send className="w-5 h-5 -rotate-12 translate-x-px" />
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-emerald-500 flex items-center justify-center shadow-md shadow-sky-500/20 text-white transition-transform hover:scale-105 cursor-pointer">
+            <Send className="w-4 h-4 -rotate-12 translate-x-px" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-tight text-foreground">TG Power Suite</span>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-sky-500/30 text-sky-400 bg-sky-500/10">
-                PRO
-              </Badge>
-            </div>
-            <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isSocketConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
-                }`}
-              />
-              <span>{isSocketConnected ? 'Live MTProto Core' : 'Reconnecting...'}</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-sm tracking-tight text-foreground">TG Power Suite</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-sky-500/30 text-sky-400 bg-sky-500/10">
+              PRO
+            </Badge>
           </div>
         </div>
 
@@ -229,7 +202,7 @@ export const Header: React.FC = () => {
               }}
             />
 
-            {tabs.map((tab, idx) => {
+            {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
@@ -241,7 +214,7 @@ export const Header: React.FC = () => {
                   aria-selected={isActive}
                   aria-label={`${tab.label} (Press ${tab.shortcut})`}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative z-10 flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 select-none group focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+                  className={`relative z-10 flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 select-none group focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                     isActive
                       ? 'text-foreground font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
@@ -268,7 +241,7 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Right Action Items */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {/* PWA Install Button */}
           {installPrompt && (
             <Button
@@ -276,97 +249,12 @@ export const Header: React.FC = () => {
               size="sm"
               onClick={handleInstallApp}
               aria-label="Install TG Power Suite as local app"
-              className="hidden sm:flex h-8 px-2.5 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10 cursor-pointer"
+              className="hidden sm:flex h-7 px-2 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Install App</span>
             </Button>
           )}
-
-          {/* Detailed Live Telemetry Dropdown */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                aria-label="View live hardware and network telemetry details"
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-border/60 bg-muted/20 hover:bg-muted/40 text-[11px] text-muted-foreground font-mono transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                title="Click for detailed system performance"
-              >
-                <div className="flex items-center gap-1">
-                  <Cpu className="w-3.5 h-3.5 text-sky-400" />
-                  <span>{telemetry?.cpu_percent ? `${Math.round(telemetry.cpu_percent)}%` : '--'}</span>
-                </div>
-                <div className="hidden sm:flex items-center gap-1">
-                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{telemetry?.ram_percent ? `${Math.round(telemetry.ram_percent)}%` : '--'}</span>
-                </div>
-                {telemetry?.upload_speed_bytes !== undefined && telemetry.upload_speed_bytes > 0 && (
-                  <div className="hidden lg:flex items-center gap-1 text-sky-400 font-semibold">
-                    <Upload className="w-3 h-3" />
-                    <span>{formatSpeed(telemetry.upload_speed_bytes)}</span>
-                  </div>
-                )}
-                <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-3.5 space-y-3 bg-card/95 backdrop-blur-xl border-border shadow-xl">
-              <div className="flex items-center justify-between pb-1 border-b border-border/40">
-                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Server className="w-3.5 h-3.5 text-primary" />
-                  Hardware & Network
-                </span>
-                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                  Healthy
-                </Badge>
-              </div>
-
-              {/* CPU Metric */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-muted-foreground">CPU Processor</span>
-                  <span className="font-semibold text-foreground">{Math.round(telemetry?.cpu_percent || 0)}%</span>
-                </div>
-                <Progress value={telemetry?.cpu_percent || 0} className="h-1.5 bg-muted/60" />
-              </div>
-
-              {/* RAM Metric */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-muted-foreground">RAM Memory</span>
-                  <span className="font-semibold text-foreground">{Math.round(telemetry?.ram_percent || 0)}%</span>
-                </div>
-                <Progress value={telemetry?.ram_percent || 0} className="h-1.5 bg-muted/60" />
-              </div>
-
-              {/* Disk Metric */}
-              {telemetry?.disk_free_gb && (
-                <div className="flex items-center justify-between text-xs font-mono pt-1 text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <HardDrive className="w-3.5 h-3.5" />
-                    Disk Free
-                  </span>
-                  <span className="font-semibold text-foreground">{telemetry.disk_free_gb.toFixed(1)} GB</span>
-                </div>
-              )}
-
-              {/* Bandwidth Speeds */}
-              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40 font-mono text-[11px]">
-                <div className="flex items-center gap-1.5 text-sky-400">
-                  <ArrowUpCircle className="w-3.5 h-3.5 shrink-0" />
-                  <div className="truncate">
-                    <div className="text-[9px] text-muted-foreground">UPLOAD</div>
-                    <div>{formatSpeed(telemetry?.upload_speed_bytes)}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-emerald-400">
-                  <ArrowDownCircle className="w-3.5 h-3.5 shrink-0" />
-                  <div className="truncate">
-                    <div className="text-[9px] text-muted-foreground">DOWNLOAD</div>
-                    <div>{formatSpeed(telemetry?.download_speed_bytes)}</div>
-                  </div>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
 
           <Button
             variant="ghost"
@@ -379,7 +267,7 @@ export const Header: React.FC = () => {
                 ? 'Onyx Dark'
                 : 'Daylight'
             }. Click to switch theme`}
-            className={`w-9 h-9 rounded-lg border transition-all cursor-pointer ${
+            className={`w-8 h-8 rounded-lg border transition-all cursor-pointer ${
               theme === 'cyber-emerald'
                 ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 shadow-sm shadow-emerald-500/10'
                 : 'border-border/50 hover:bg-accent'
@@ -393,11 +281,11 @@ export const Header: React.FC = () => {
             } — Click to switch`}
           >
             {theme === 'cyber-emerald' ? (
-              <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
             ) : theme === 'dark' ? (
-              <Moon className="w-4 h-4 text-sky-400" />
+              <Moon className="w-3.5 h-3.5 text-sky-400" />
             ) : (
-              <Sun className="w-4 h-4 text-amber-500" />
+              <Sun className="w-3.5 h-3.5 text-amber-500" />
             )}
           </Button>
 
@@ -409,7 +297,7 @@ export const Header: React.FC = () => {
                 ? `Telegram account connected as ${authStatus.first_name || authStatus.username || 'user'}. Click to manage session`
                 : 'Connect Telegram account via QR or phone'
             }
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
               authStatus?.authenticated
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
                 : 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm'

@@ -152,7 +152,8 @@ def _item_to_state_dict(item: UploadItem) -> Dict[str, Any]:
         "current_part": item.current_part,
         "total_parts": item.total_parts,
         "error": item.error_message,
-        "created_at": item.created_at
+        "created_at": item.created_at,
+        "scheduled_at": getattr(item, "scheduled_at", None)
     }
 
 
