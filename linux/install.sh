@@ -116,7 +116,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=$APP_DIR
 ExecStart=$VENV_DIR/bin/python $APP_DIR/backend/run.py
-Restart=always
+Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 
@@ -205,7 +205,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=$APP_DIR
 ExecStart=$VENV_DIR/bin/python $APP_DIR/backend/run.py
-Restart=always
+Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 

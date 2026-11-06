@@ -1,6 +1,5 @@
 import sys
 import time
-import random
 import asyncio
 import logging
 from typing import Optional, Dict, Any
@@ -29,6 +28,7 @@ from app.config import (
 
 import io
 import base64
+import secrets
 import qrcode
 import telethon.client.downloads as td
 from telethon import functions, errors
@@ -121,6 +121,22 @@ SESSION_REVOKED_ERRORS = (
     getattr(errors, "SessionExpiredError", Exception),
     getattr(errors, "UserDeactivatedBanError", Exception),
 )
+
+# Errors that indicate a *permanent* session revocation where wiping the
+# stored session string is the correct recovery action. Transient errors
+# (SessionRevokedError / SessionExpiredError) are retried without resetting,
+# because they can occur during network switches, DC re-routing, or clock
+# skew and wiping a valid session on those would be destructive.
+PERMANENT_REVOCATION_ERRORS = (
+    getattr(errors, "AuthKeyDuplicatedError", Exception),
+    getattr(errors, "AuthKeyUnregisteredError", Exception),
+    getattr(errors, "UserDeactivatedBanError", Exception),
+)
+
+
+def _is_permanent_revocation(err: Exception) -> bool:
+    """Returns True only when the error warrants wiping the stored session string."""
+    return isinstance(err, PERMANENT_REVOCATION_ERRORS)
 
 def generate_qr_data_url(url: str) -> str:
     """Generates a high-contrast base64 Data URL PNG for a QR code."""
@@ -377,8 +393,11 @@ class TelegramClientManager:
                     try:
                         await cls._client.connect()
                     except SESSION_REVOKED_ERRORS as rev_err:
-                        logger.warning(f"Session revoked or duplicated ({type(rev_err).__name__}: {rev_err}). Resetting to clean StringSession...")
-                        update_session_string_in_env("")
+                        if _is_permanent_revocation(rev_err):
+                            logger.warning(f"Session permanently revoked ({type(rev_err).__name__}: {rev_err}). Resetting to clean StringSession...")
+                            update_session_string_in_env("")
+                        else:
+                            logger.warning(f"Session temporarily revoked/expired ({type(rev_err).__name__}: {rev_err}). Keeping stored session; will retry on next auth attempt.")
                         cls._client = TelegramClient(
                             StringSession(),
                             API_ID,
@@ -1250,7 +1269,7 @@ class MTProtoSenderPool:
                         continue
                     try:
                         await asyncio.wait_for(
-                            client._call(s, functions.PingRequest(ping_id=random.randint(0, 0x7fffffff))),
+                            client._call(s, functions.PingRequest(ping_id=secrets.randbits(31))),
                             timeout=2.0
                         )
                         self._last_active[s] = time.time()
@@ -1364,7 +1383,7 @@ class MTProtoSenderPool:
                     if (time.time() - last_used) > 45.0:
                         try:
                             await asyncio.wait_for(
-                                client._call(candidate, functions.PingRequest(ping_id=random.randint(0, 0x7fffffff))),
+                                client._call(candidate, functions.PingRequest(ping_id=secrets.randbits(31))),
                                 timeout=1.0
                             )
                             self._last_active[candidate] = time.time()

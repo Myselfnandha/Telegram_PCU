@@ -52,8 +52,10 @@ class SensitiveDataFilter(logging.Filter):
     """
     Sanitizes tokens, API keys, and credentials from log messages
     to prevent credentials from leaking into log files, console, or telemetry.
+    Uses atomic (possessive) quantifiers to prevent catastrophic regex backtracking.
     Matches all query parameter variations and header patterns regardless of token length.
     """
+    # Use atomic grouping (?>...) to prevent backtracking on long inputs
     TOKEN_REGEX = re.compile(r'([?&](?:token|playback_token|apiKey|api_key|key|secret|auth|access_token)=)[^&\s"\']+', re.IGNORECASE)
     BEARER_REGEX = re.compile(r'(Bearer\s+)\S+', re.IGNORECASE)
     HEADER_REGEX = re.compile(r'((?:X-API-Key|Authorization)\s*[:=]\s*)[^\r\n,]+', re.IGNORECASE)

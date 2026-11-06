@@ -67,7 +67,7 @@ async def process_chat_media(req: ChannelRequest):
                         self.chat = chat_entity
                     async def reply(self, text):
                         try:
-                            return await client.send_message(self.chat_id, text, reply_to=self.message.id)
+                            return await client.send_message(self.chat, text, reply_to=self.message.id)
                         except Exception:
                             return None
 

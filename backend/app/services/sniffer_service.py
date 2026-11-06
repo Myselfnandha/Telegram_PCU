@@ -167,6 +167,8 @@ class SnifferService:
         self.socket_emitter = None
         self._resolved_peer_ids: Set[int] = set()
         self._my_id: Optional[int] = None
+        # Pre-compiled regex cache for keyword boundary matching (ReDoS-safe)
+        self._keyword_regex_cache: Dict[str, "re.Pattern"] = {}
 
         # tg-aligned persistent deduplication & dynamic pacing
         self._init_db()
@@ -451,9 +453,10 @@ class SnifferService:
         for kw in KEYWORD_BLOCK:
             if not kw:
                 continue
-            # Use boundary matching so short words like 'ts' don't match 'yts', 'artists', 'cats'
-            pattern = rf'(?:^|[\s\._\-\(\)\[\]]){re.escape(kw)}(?:$|[\s\._\-\(\)\[\]])'
-            if re.search(pattern, fname_lower):
+            # Use pre-compiled atomic regex to prevent ReDoS (catastrophic backtracking)
+            # Atomic groups (?>...) prevent backtracking on long inputs
+            pattern = self._get_keyword_regex(kw)
+            if pattern.search(fname_lower):
                 return True
         return False
 
@@ -465,10 +468,19 @@ class SnifferService:
         for kw in KEYWORD_ALLOW:
             if not kw:
                 continue
-            pattern = rf'(?:^|[\s\._\-\(\)\[\]]){re.escape(kw)}(?:$|[\s\._\-\(\)\[\]])'
-            if re.search(pattern, fname_lower):
+            pattern = self._get_keyword_regex(kw)
+            if pattern.search(fname_lower):
                 return True
         return False
+
+    def _get_keyword_regex(self, kw: str) -> "re.Pattern":
+        """Returns pre-compiled atomic regex for keyword boundary matching (ReDoS-safe)."""
+        if kw not in self._keyword_regex_cache:
+            # Atomic group (?>...) prevents catastrophic backtracking
+            # Pre-compiled once per keyword, reused across all filename checks
+            pattern = rf'(?>^|[\s\._\-\(\)\[\]]){re.escape(kw)}(?=$|[\s\._\-\(\)\[\]])'
+            self._keyword_regex_cache[kw] = re.compile(pattern)
+        return self._keyword_regex_cache[kw]
 
     def get_status(self) -> dict:
         from app.routes.chats import _chats_cache
@@ -555,8 +567,10 @@ class SnifferService:
         size_mb = best["size"] / (1024 * 1024)
         event = best["event"]
         import urllib.parse
+        from app.auth import API_AUTH_TOKEN
         encoded_fname = urllib.parse.quote(fname)
-        link = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{chat_id}/{message_id}/{encoded_fname}"
+        auth_suffix = f"?token={urllib.parse.quote(API_AUTH_TOKEN)}" if API_AUTH_TOKEN else ""
+        link = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{chat_id}/{message_id}/{encoded_fname}{auth_suffix}"
 
         self._cache_message((chat_id, message_id), event.message)
 

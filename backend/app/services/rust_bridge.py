@@ -220,8 +220,8 @@ class RustBridge:
                 self._consecutive_failures = getattr(self, "_consecutive_failures", 0) + 1
                 if self._consecutive_failures >= 3:
                     if now >= getattr(self, "_circuit_broken_until", 0.0):
-                        self.trip_circuit(30.0)
-                        logger.warning(f"Rust bridge circuit tripped for 30s due to {self._consecutive_failures} consecutive errors ({resp.status_code})")
+                        self.trip_circuit(5.0)
+                        logger.warning(f"Rust bridge circuit tripped for 5s due to {self._consecutive_failures} consecutive errors ({resp.status_code})")
                         asyncio.create_task(self.ensure_sessions_registered())
             logger.warning(f"Rust stream_chunk failed: {resp.status_code} {err_text}")
         except Exception as e:
@@ -230,8 +230,8 @@ class RustBridge:
             self._consecutive_failures = getattr(self, "_consecutive_failures", 0) + 1
             if self._consecutive_failures >= 3:
                 if now >= getattr(self, "_circuit_broken_until", 0.0):
-                    self.trip_circuit(30.0)
-                    logger.warning(f"Rust bridge circuit tripped for 30s due to {self._consecutive_failures} consecutive failures ({type(e).__name__})")
+                    self.trip_circuit(5.0)
+                    logger.warning(f"Rust bridge circuit tripped for 5s due to {self._consecutive_failures} consecutive failures ({type(e).__name__})")
                     asyncio.create_task(self.ensure_sessions_registered())
             logger.warning(f"Rust stream_chunk error: {type(e).__name__} ({e or 'timeout'})")
         return None

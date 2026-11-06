@@ -52,16 +52,17 @@ def canonicalize_chat_id(chat_id: Union[int, str], my_id: Optional[int] = None) 
     if my_id and raw in (str(my_id), f"-100{my_id}"):
         return "me", ["me", str(my_id), f"-100{my_id}"]
 
-    clean_digits = raw.lstrip("-")
-    if clean_digits.startswith("100"):
-        num_part = clean_digits[3:]
-    else:
-        num_part = clean_digits
-
-    if num_part.isdigit():
-        canonical = f"-100{num_part}"
-        aliases = [canonical, num_part, f"-{num_part}"]
+    if raw.startswith("-100") and raw[4:].isdigit():
+        channel_num = raw[4:]
+        canonical = raw
+        aliases = [canonical, channel_num, f"-{channel_num}"]
         return canonical, aliases
+
+    if raw.startswith("-") and raw[1:].isdigit():
+        return raw, [raw, raw[1:]]
+
+    if raw.isdigit():
+        return raw, [raw]
 
     return raw, [raw]
 

@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=%h/Desktop/TG_TOOL
 ExecStart=%h/Desktop/TG_TOOL/venv/bin/python %h/Desktop/TG_TOOL/backend/run.py
-Restart=always
+Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 Environment=DISPLAY=:0

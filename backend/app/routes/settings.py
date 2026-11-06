@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.auth import verify_auth
 from pydantic import BaseModel
 from app.config import get_env_dict, save_env_dict
 from app.services.manager_detector import detect_managers, MANAGER_LABELS
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 class SettingsUpdateRequest(BaseModel):
     settings: Dict[str, Any]
 
-@router.get("")
+@router.get("", dependencies=[Depends(verify_auth)])
 async def get_settings():
     """Retrieve current settings from environment / .env file."""
     env_dict = get_env_dict()
@@ -33,7 +34,7 @@ async def get_settings():
         "PORT": env_dict.get("PORT", "8088")
     }
 
-@router.post("")
+@router.post("", dependencies=[Depends(verify_auth)])
 async def update_settings(req: SettingsUpdateRequest):
     """Update settings in .env file."""
     try:

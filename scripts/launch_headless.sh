@@ -88,12 +88,20 @@ get_running_pid() {
         fi
     fi
 
-    # Secondary lookup via process pattern matching
     local proc_pid
     proc_pid=$(pgrep -f "backend/run.py" 2>/dev/null | head -n 1 || true)
     if [ -n "$proc_pid" ] && kill -0 "$proc_pid" 2>/dev/null; then
         echo "$proc_pid"
         return 0
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        local sys_pid
+        sys_pid=$(systemctl --user show --property MainPID --value tg-power-suite.service 2>/dev/null || true)
+        if [ -n "$sys_pid" ] && [ "$sys_pid" -gt 0 ] 2>/dev/null && kill -0 "$sys_pid" 2>/dev/null; then
+            echo "$sys_pid"
+            return 0
+        fi
     fi
 
     return 1
@@ -103,9 +111,6 @@ is_healthy() {
     curl -s -f -m 1 "$HEALTH_URL" >/dev/null 2>&1
 }
 
-# ------------------------------------------------------------------------------
-# Action Handlers
-# ------------------------------------------------------------------------------
 do_start() {
     local current_pid
     current_pid=$(get_running_pid || true)
@@ -121,10 +126,8 @@ do_start() {
 
     echo "🚀 Starting TG Power Suite in background (Headless)..."
 
-    # Launch detached via backend runner with daemon mode
     "$VENV_PYTHON" "$BACKEND_RUN" start --daemon
 
-    # Poll for healthy startup (up to 5 seconds)
     local ready=0
     for _ in {1..10}; do
         sleep 0.5
@@ -143,7 +146,6 @@ do_start() {
             "normal"
         return 0
     else
-        # Process may still be initializing or failed
         current_pid=$(get_running_pid || true)
         if [ -n "$current_pid" ]; then
             echo "⚠️ Server started with PID $current_pid, still warming up."
@@ -167,21 +169,39 @@ do_stop() {
     local current_pid
     current_pid=$(get_running_pid || true)
 
-    if [ -z "$current_pid" ]; then
-        echo "⭕ TG Power Suite is not running."
-        send_notification \
-            "TG Power Suite" \
-            "Application is not currently running." \
-            "low"
-        return 0
+    echo "🛑 Stopping TG Power Suite..."
+
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl --user stop tg-power-suite.service tg-rust-core.service 2>/dev/null || true
     fi
 
-    echo "🛑 Stopping TG Power Suite (PID: $current_pid)..."
-    "$VENV_PYTHON" "$BACKEND_RUN" stop
+    if [ -f "$VENV_PYTHON" ] && [ -f "$BACKEND_RUN" ]; then
+        "$VENV_PYTHON" "$BACKEND_RUN" stop 2>/dev/null || true
+    fi
 
+    if [ -n "$current_pid" ] && kill -0 "$current_pid" 2>/dev/null; then
+        kill -15 "$current_pid" 2>/dev/null || true
+        sleep 0.5
+        kill -9 "$current_pid" 2>/dev/null || true
+    fi
+
+    pkill -f "tg-rust-core" 2>/dev/null || true
+    pkill -f "backend/run.py" 2>/dev/null || true
+    pkill -f "scripts/tray_app.py" 2>/dev/null || true
+
+    rm -f "$PID_FILE"
+
+    sleep 0.5
+    local remaining
+    remaining=$(pgrep -f "tg-rust-core|backend/run.py" 2>/dev/null || true)
+    if [ -n "$remaining" ]; then
+        echo "$remaining" | xargs -r kill -9 2>/dev/null || true
+    fi
+
+    echo "✅ TG Power Suite stopped."
     send_notification \
         "TG Power Suite" \
-        "Background server stopped (PID: $current_pid)" \
+        "Background server stopped." \
         "normal"
 }
 

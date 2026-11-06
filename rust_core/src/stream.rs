@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use bytes::Bytes;
 use grammers_client::Client;
@@ -23,7 +23,7 @@ pub struct ChunkKey {
 
 pub struct ChunkRingCache {
     entries: RwLock<HashMap<ChunkKey, Bytes>>,
-    keys: RwLock<Vec<ChunkKey>>,
+    keys: RwLock<VecDeque<ChunkKey>>,
     max_entries: usize,
 }
 
@@ -31,7 +31,7 @@ impl ChunkRingCache {
     pub fn new(max_entries: usize) -> Self {
         Self {
             entries: RwLock::new(HashMap::with_capacity(max_entries)),
-            keys: RwLock::new(Vec::with_capacity(max_entries)),
+            keys: RwLock::new(VecDeque::with_capacity(max_entries)),
             max_entries,
         }
     }
@@ -45,13 +45,14 @@ impl ChunkRingCache {
         let mut map = self.entries.write().await;
         let mut keys = self.keys.write().await;
 
-        if map.len() >= self.max_entries {
-            if !keys.is_empty() {
-                let oldest = keys.remove(0);
-                map.remove(&oldest);
+        if !map.contains_key(&key) {
+            if map.len() >= self.max_entries {
+                if let Some(oldest) = keys.pop_front() {
+                    map.remove(&oldest);
+                }
             }
+            keys.push_back(key.clone());
         }
-        keys.push(key.clone());
         map.insert(key, data);
     }
 }
@@ -85,7 +86,7 @@ impl StreamEngine {
             }
         }
         let mut map = self.account_semaphores.write().await;
-        Arc::clone(map.entry(account_idx).or_insert_with(|| Arc::new(Semaphore::new(6))))
+        Arc::clone(map.entry(account_idx).or_insert_with(|| Arc::new(Semaphore::new(12))))
     }
 
     async fn copy_auth_to_dc(&self, client: &Client, dc_id: i32, account_idx: usize) -> Result<(), String> {

@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, Depends
 from fastapi.responses import StreamingResponse
 from starlette.requests import ClientDisconnect
 from app.auth import verify_auth
+from app.config import ENABLE_MULTI_ACCOUNT_TURBO
 from app.telegram_client import TelegramClientManager, sender_pool
 from app.services.sniffer_service import auto_rename, sniffer_service
 from app.services.manager_detector import trigger_manager, detect_managers
@@ -774,7 +775,6 @@ async def handle_proxy_download(
                         f"STREAM [{clean_name}] Superseded initial container stream at offset {start:,} for {client_tag}@{req_client_host}."
                     )
                 old_handle.stop_event.set()
-                stream_engine.abort_message_stream(norm_chat_id, message_id)
                 asyncio.create_task(old_handle.close())
 
             old_task_entry = _ACTIVE_STREAM_TASKS.get(session_key)

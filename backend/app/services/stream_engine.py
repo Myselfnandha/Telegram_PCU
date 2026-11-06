@@ -1,7 +1,7 @@
 import asyncio
 import time
 import logging
-from typing import Optional, Union, AsyncGenerator, Any, Dict, Tuple
+from typing import Optional, Union, AsyncGenerator, Any, Dict, Tuple, Set
 from telethon import utils, errors
 from telethon.tl.functions.upload import GetFileRequest
 
@@ -60,9 +60,7 @@ class StreamEngine:
         # 3. Cancel and clear matching in-flight chunk futures
         matching_keys = [k for k in list(self._in_flight_chunks.keys()) if k[0] == norm_cid and k[1] == int(message_id)]
         for k in matching_keys:
-            fut = self._in_flight_chunks.pop(k, None)
-            if fut and not fut.done():
-                fut.cancel()
+            self._in_flight_chunks.pop(k, None)
 
     async def stream_media(
         self,
@@ -489,27 +487,32 @@ class StreamEngine:
 
             try:
                 if c_idx == 0:
-                    # Lead chunk 0 is shielded so initial seek keyframes complete into RAM buffer
                     data = await asyncio.shield(wire_fut)
                 else:
-                    # Lookahead chunks are speculative; do not shield so seeking cancels them instantly
-                    data = await wire_fut
+                    data = await asyncio.wait_for(asyncio.shield(wire_fut) if is_lead else wire_fut, timeout=20.0)
                 return c_idx, data
             except asyncio.CancelledError:
-                if c_idx > 0 and stop_event.is_set():
-                    if not wire_fut.done():
-                        wire_fut.cancel()
+                if stop_event.is_set():
                     if is_lead and wt and not wt.done():
                         wt.cancel()
+                    raise
                 cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
                 if cached_data and len(cached_data) == chunk_size:
                     return c_idx, cached_data
-                raise
+                data = await _download_chunk_from_mtproto(
+                    c_offset, chunk_size, worker_client, is_emergency, is_head_chunk=(c_idx == 0)
+                )
+                return c_idx, data
             except Exception as fut_err:
+                if stop_event.is_set():
+                    raise
                 cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
                 if cached_data and len(cached_data) == chunk_size:
                     return c_idx, cached_data
-                raise fut_err
+                data = await _download_chunk_from_mtproto(
+                    c_offset, chunk_size, worker_client, is_emergency, is_head_chunk=(c_idx == 0)
+                )
+                return c_idx, data
 
         last_progress_log = time.time()
         delivered_chunks = 0
@@ -601,24 +604,26 @@ class StreamEngine:
                                         buffered[c_idx] = cached_data
                                         continue
                                     chunk_retries[c_idx] += 1
-                                    if chunk_retries[c_idx] >= 4:
+                                    if chunk_retries[c_idx] >= 6:
                                         stop_event.set()
                                         break
+                                    await asyncio.sleep(0.1)
                                     healthy_clients = [c for c in active_clients if not rate_governor.is_client_cooling_down(c)]
                                     retry_client = healthy_clients[0] if healthy_clients else client
                                     t = asyncio.create_task(fetch_one_chunk(c_idx, retry_client, is_emergency=True))
                                     in_flight[t] = c_idx
                                 except Exception as e:
                                     chunk_retries[c_idx] += 1
-                                    if chunk_retries[c_idx] >= 3:
+                                    if chunk_retries[c_idx] >= 6:
                                         logger.error(
                                             f"STREAM [{clean_name}] Chunk {c_idx} permanently failed after {chunk_retries[c_idx]} retries: {e}. Terminating stream."
                                         )
                                         stop_event.set()
                                         await queue.put(e)
                                         break
-                                    logger.warning(f"STREAM [{clean_name}] Chunk {c_idx} failed (attempt {chunk_retries[c_idx]}/3): {type(e).__name__} ({e or 'timeout'}). Retrying...")
+                                    logger.warning(f"STREAM [{clean_name}] Chunk {c_idx} failed (attempt {chunk_retries[c_idx]}/6): {type(e).__name__} ({e or 'timeout'}). Retrying...")
                                     if not stop_event.is_set():
+                                        await asyncio.sleep(0.1)
                                         healthy_clients = [c for c in active_clients if not rate_governor.is_client_cooling_down(c)]
                                         retry_client = healthy_clients[0] if healthy_clients else client
                                         t = asyncio.create_task(fetch_one_chunk(c_idx, retry_client, is_emergency=True))

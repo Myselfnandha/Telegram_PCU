@@ -77,22 +77,36 @@ def setup_file_logging():
     logging.getLogger("telethon.network").setLevel(logging.ERROR)
 
 def get_running_pid():
-    """Returns PID of active process if alive, else None."""
-    if not PID_FILE.exists():
-        return None
-    try:
-        pid = int(PID_FILE.read_text().strip())
-        if sys.platform != "win32":
-            os.kill(pid, 0)
-            return pid
-        else:
-            import psutil
-            if psutil.pid_exists(pid):
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            if sys.platform != "win32":
+                os.kill(pid, 0)
                 return pid
-    except (ValueError, OSError, ProcessLookupError):
-        pass
-    except Exception:
-        pass
+            else:
+                import psutil
+                if psutil.pid_exists(pid):
+                    return pid
+        except (ValueError, OSError, ProcessLookupError):
+            pass
+        except Exception:
+            pass
+
+    if sys.platform != "win32":
+        try:
+            res = subprocess.run(
+                ["systemctl", "--user", "show", "--property", "MainPID", "--value", "tg-power-suite.service"],
+                capture_output=True,
+                text=True
+            )
+            val = res.stdout.strip()
+            if val and val.isdigit():
+                spid = int(val)
+                if spid > 0:
+                    os.kill(spid, 0)
+                    return spid
+        except Exception:
+            pass
     return None
 
 def acquire_pid_lock():
@@ -120,7 +134,6 @@ def cli_status():
         print(f"  • Web Dashboard : http://localhost:{PORT}")
         print(f"  • Log File      : {LOG_FILE}\n")
     else:
-        # Check systemd user service
         if sys.platform != "win32":
             res = subprocess.run(["systemctl", "--user", "is-active", "tg-power-suite.service"], capture_output=True, text=True)
             if res.stdout.strip() == "active":
@@ -130,28 +143,48 @@ def cli_status():
         print("\n  ⭕ TG Power Suite is NOT running.\n")
 
 def cli_stop():
-    pid = get_running_pid()
     if sys.platform != "win32":
-        # Also check systemd service
-        subprocess.run(["systemctl", "--user", "stop", "tg-power-suite.service"], capture_output=True)
+        subprocess.run(["systemctl", "--user", "stop", "tg-power-suite.service", "tg-rust-core.service"], capture_output=True)
 
-    if not pid:
-        print("  ✅ TG Power Suite stopped.\n")
-        return
-
-    print(f"  🛑 Stopping TG Power Suite (PID: {pid})...")
-    try:
-        if sys.platform != "win32":
-            os.kill(pid, signal.SIGTERM)
-        else:
-            subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
-        time.sleep(1)
-        if get_running_pid():
+    pid = get_running_pid()
+    if pid:
+        print(f"  🛑 Stopping TG Power Suite (PID: {pid})...")
+        try:
             if sys.platform != "win32":
-                os.kill(pid, signal.SIGKILL)
-        print("  ✅ Successfully stopped.\n")
-    except Exception as e:
-        print(f"  ❌ Error stopping process: {e}\n")
+                os.kill(pid, signal.SIGTERM)
+            else:
+                subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+            time.sleep(1)
+            if get_running_pid():
+                if sys.platform != "win32":
+                    os.kill(pid, signal.SIGKILL)
+        except Exception as e:
+            print(f"  ❌ Error stopping process: {e}\n")
+
+    if sys.platform != "win32":
+        subprocess.run(["pkill", "-f", "tg-rust-core"], capture_output=True)
+        my_pid = os.getpid()
+        try:
+            res = subprocess.run(["pgrep", "-f", "backend/run.py"], capture_output=True, text=True)
+            for p_str in res.stdout.strip().split():
+                if p_str.isdigit():
+                    p = int(p_str)
+                    if p != my_pid:
+                        try:
+                            os.kill(p, signal.SIGKILL)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+    else:
+        subprocess.run(["taskkill", "/F", "/IM", "tg-rust-core.exe"], capture_output=True)
+
+    try:
+        PID_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    print("  ✅ Successfully stopped.\n")
 
 def cli_restart(enable_tray: bool = False, daemon: bool = True):
     print("  🔄 Restarting TG Power Suite...")
