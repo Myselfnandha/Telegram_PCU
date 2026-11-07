@@ -61,9 +61,11 @@ class CinemaCatalog:
         width = 0
         height = 0
 
+        has_video_attr = False
         if hasattr(msg.media, "document") and msg.media.document:
             for attr in msg.media.document.attributes:
                 if isinstance(attr, DocumentAttributeVideo):
+                    has_video_attr = True
                     duration = int(getattr(attr, "duration", 0))
                     width = int(getattr(attr, "w", 0))
                     height = int(getattr(attr, "h", 0))
@@ -74,8 +76,9 @@ class CinemaCatalog:
         mime = msg.file.mime_type or ""
         is_video_media = (
             getattr(msg, "video", None) is not None or
+            has_video_attr or
             mime.startswith("video/") or
-            any(filename.lower().endswith(ext) for ext in VIDEO_EXTENSIONS)
+            (bool(msg.file and msg.file.name) and any(msg.file.name.lower().endswith(ext) for ext in VIDEO_EXTENSIONS))
         )
 
         if not is_video_media:
@@ -158,7 +161,7 @@ class CinemaCatalog:
             "is_mkv": is_mkv,
             "stream_url": f"/dl/{chat_id}/{msg.id}/{encoded_name}",
             "stream_transmux_url": f"/stream/{chat_id}/{msg.id}/{encoded_mp4}",
-            "thumb_url": f"/dl/{chat_id}/{msg.id}/thumb" if has_thumb else None
+            "thumb_url": f"/stream/{chat_id}/{msg.id}/thumb"
         }
 
     async def process_incoming_video_message(self, client: Any, msg: Any, chat_id: Union[int, str]):

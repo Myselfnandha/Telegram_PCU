@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import {
   Clapperboard,
   Download,
+  Flame,
   Moon,
   Radio,
   Send,
@@ -247,6 +248,8 @@ export const Header: React.FC = () => {
             aria-label={`Current theme: ${
               theme === 'cyber-emerald'
                 ? 'Midnight Emerald'
+                : theme === 'crimson-neon'
+                ? 'Crimson Neon'
                 : theme === 'dark'
                 ? 'Onyx Dark'
                 : 'Daylight'
@@ -254,11 +257,15 @@ export const Header: React.FC = () => {
             className={`w-8 h-8 rounded-lg border transition-all cursor-pointer ${
               theme === 'cyber-emerald'
                 ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 shadow-sm shadow-emerald-500/10'
+                : theme === 'crimson-neon'
+                ? 'border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 shadow-sm shadow-rose-500/10'
                 : 'border-border/50 hover:bg-accent'
             }`}
             title={`Current: ${
               theme === 'cyber-emerald'
                 ? 'Midnight Emerald (Cyber Core)'
+                : theme === 'crimson-neon'
+                ? 'Crimson Neon (Red Core)'
                 : theme === 'dark'
                 ? 'Onyx Dark'
                 : 'Daylight'
@@ -266,6 +273,8 @@ export const Header: React.FC = () => {
           >
             {theme === 'cyber-emerald' ? (
               <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            ) : theme === 'crimson-neon' ? (
+              <Flame className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
             ) : theme === 'dark' ? (
               <Moon className="w-3.5 h-3.5 text-sky-400" />
             ) : (

@@ -72,7 +72,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [uploadQueue, setUploadQueue] = useState<UploadTask[]>([]);
   const [theme, setThemeState] = useState<ThemeType>(() => {
     const saved = localStorage.getItem('tg_theme');
-    if (saved === 'light' || saved === 'dark' || saved === 'cyber-emerald') return saved as ThemeType;
+    if (saved === 'light' || saved === 'dark' || saved === 'cyber-emerald' || saved === 'crimson-neon') return saved as ThemeType;
     return 'cyber-emerald';
   });
 
@@ -146,20 +146,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleTheme = useCallback(() => {
     const nextTheme: ThemeType =
-      theme === 'cyber-emerald' ? 'dark' : theme === 'dark' ? 'light' : 'cyber-emerald';
+      theme === 'cyber-emerald'
+        ? 'crimson-neon'
+        : theme === 'crimson-neon'
+        ? 'dark'
+        : theme === 'dark'
+        ? 'light'
+        : 'cyber-emerald';
     setTheme(nextTheme);
   }, [theme, setTheme]);
 
-  // Synchronize HTML dark and cyber-emerald classes
   useMemo(() => {
     const root = document.documentElement;
+    root.classList.remove('cyber-emerald', 'crimson-neon');
     if (theme === 'cyber-emerald') {
       root.classList.add('dark', 'cyber-emerald');
+    } else if (theme === 'crimson-neon') {
+      root.classList.add('dark', 'crimson-neon');
     } else if (theme === 'dark') {
       root.classList.add('dark');
-      root.classList.remove('cyber-emerald');
     } else {
-      root.classList.remove('dark', 'cyber-emerald');
+      root.classList.remove('dark');
     }
   }, [theme]);
 

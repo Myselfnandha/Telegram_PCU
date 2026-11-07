@@ -269,41 +269,44 @@ DEFAULT_VIDEO_PLACEHOLDER_SVG = (
 
 async def search_web_poster(raw_name: str) -> Optional[bytes]:
     try:
-        clean = re.sub(r"\.[a-zA-Z0-9]+$", "", raw_name)
-        clean = re.sub(
-            r"\b(1080p|720p|480p|4k|2160p|bluray|web-?dl|webrip|remux|x264|x265|hevc|ddp|atmos|5\.1|true|remastered|v1\.neil|telumkv|tpu|clean|predvd)\b",
-            " ",
-            clean,
-            flags=re.I
-        )
+        from app.services.sniffer_service import auto_rename
+        cleaned_fn = auto_rename(raw_name)
+        queries = []
+        clean = re.sub(r"\.[a-zA-Z0-9]+$", "", cleaned_fn)
+        clean = re.sub(r"^@\S+\s*", "", clean)
+        clean = re.sub(r"^(?:vip\s*linkzz|linkzz|tamizhan|org|com|net|tamilmv|tamilblasters|onlyhd4u|mspxmovies|sklink\s*files|cszmovies|team\s*hdt)\s+", "", clean, flags=re.I)
+        clean = re.sub(r"\b(1080p|720p|480p|4k|2160p|bluray|web-?dl|webrip|remux|x264|x265|hevc|ddp|atmos|5\.1|true|remastered|v1\.neil|telumkv|tpu|clean|predvd|combined|org\s*audio|tamil\s*audio|hindi\s*audio|telugu\s*audio|yts\s*bz|yts|proper|hdrip|dvdrip)\b", " ", clean, flags=re.I)
         clean = re.sub(r"\b[sS]\d{1,2}(?:[\s._\-]?[eE]\d{1,3})?\b", " ", clean)
         clean = re.sub(r"\b(?:ep|episode)\s*\d+(?:/\d+)?\b", " ", clean, flags=re.I)
         clean = re.sub(r"[\(\)\[\]\{\}\-_.]", " ", clean)
-        clean = re.sub(r"^(?:tamizhan|vip_linkz|linkzz|org|com|net|tamilmv|tamilblasters)\s+", " ", clean, flags=re.I)
         clean = re.sub(r"\s+", " ", clean).strip()
-        if not clean or len(clean) < 2:
-            return None
+        if clean and len(clean) >= 2:
+            queries.append(clean)
+            no_year = re.sub(r"\b(19\d{2}|20\d{2})\b", "", clean).strip()
+            if no_year and no_year != clean and len(no_year) >= 2:
+                queries.append(no_year)
 
         is_series = bool(re.search(r"\b(season|episode|s\d{1,2}|ep\d{1,2})\b", raw_name, re.I))
-        cat = "series" if is_series else "movie"
+        categories = ["series", "movie"] if is_series else ["movie", "series"]
+
         import urllib.parse
         import httpx
-        url = f"https://v3-cinemeta.strem.io/catalog/{cat}/top/search={urllib.parse.quote(clean)}.json"
-        async with httpx.AsyncClient(timeout=2.5, follow_redirects=True) as http_client:
-            resp = await http_client.get(url, headers={"User-Agent": "TGPowerSuite/1.0"})
-            if resp.status_code == 200:
-                data = resp.json()
-                metas = data.get("metas", [])
-                if not metas and cat == "movie":
-                    alt_url = f"https://v3-cinemeta.strem.io/catalog/series/top/search={urllib.parse.quote(clean)}.json"
-                    alt_resp = await http_client.get(alt_url, headers={"User-Agent": "TGPowerSuite/1.0"})
-                    if alt_resp.status_code == 200:
-                        metas = alt_resp.json().get("metas", [])
-                if metas and metas[0].get("poster"):
-                    poster_url = metas[0]["poster"]
-                    img_resp = await http_client.get(poster_url)
-                    if img_resp.status_code == 200 and len(img_resp.content) > 100:
-                        return img_resp.content
+        async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as http_client:
+            for q in queries:
+                for cat in categories:
+                    url = f"https://v3-cinemeta.strem.io/catalog/{cat}/top/search={urllib.parse.quote(q)}.json"
+                    try:
+                        resp = await http_client.get(url, headers={"User-Agent": "TGPowerSuite/1.0"})
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            metas = data.get("metas", [])
+                            if metas and metas[0].get("poster"):
+                                poster_url = metas[0]["poster"]
+                                img_resp = await http_client.get(poster_url)
+                                if img_resp.status_code == 200 and len(img_resp.content) > 100:
+                                    return img_resp.content
+                    except Exception:
+                        continue
     except Exception:
         pass
     return None
@@ -375,26 +378,27 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
         thumbs = getattr(doc, "thumbs", None) or getattr(message.media, "thumbs", None) or []
         from telethon.tl.types import Photo, PhotoStrippedSize, PhotoCachedSize
 
-        for t in thumbs:
-            if isinstance(t, PhotoStrippedSize) and getattr(t, "bytes", None):
-                try:
-                    thumb_bytes = utils.stripped_photo_to_jpg(t.bytes)
-                    if thumb_bytes:
-                        break
-                except Exception:
-                    pass
-            elif isinstance(t, PhotoCachedSize) and getattr(t, "bytes", None):
-                thumb_bytes = t.bytes
-                if thumb_bytes:
-                    break
-
-        if not thumb_bytes and (thumbs or isinstance(message.media, Photo)):
+        if thumbs or isinstance(message.media, Photo):
             async with _THUMB_SEMAPHORE:
                 try:
-                    thumb_bytes = await client.download_media(message, thumb=0, file=bytes)
+                    thumb_bytes = await client.download_media(message, thumb=-1, file=bytes)
                 except Exception:
                     try:
-                        thumb_bytes = await client.download_media(message, thumb=-1, file=bytes)
+                        thumb_bytes = await client.download_media(message, thumb=0, file=bytes)
+                    except Exception:
+                        pass
+
+        if not thumb_bytes and thumbs:
+            for t in thumbs:
+                if isinstance(t, PhotoCachedSize) and getattr(t, "bytes", None):
+                    thumb_bytes = t.bytes
+                    if thumb_bytes:
+                        break
+                elif isinstance(t, PhotoStrippedSize) and getattr(t, "bytes", None):
+                    try:
+                        thumb_bytes = utils.stripped_photo_to_jpg(t.bytes)
+                        if thumb_bytes:
+                            break
                     except Exception:
                         pass
 
@@ -419,6 +423,32 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
             if fn:
                 thumb_bytes = await search_web_poster(fn)
 
+        if not thumb_bytes:
+            try:
+                local_cached = stream_cache_service.get_cached_file(chat_id, message_id)
+                if local_cached and local_cached.exists():
+                    tmp_frame = os.path.join(_THUMB_CACHE_DIR, f"tmp_{message_id}.jpg")
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-ss", "10",
+                        "-i", str(local_cached),
+                        "-vframes", "1",
+                        "-q:v", "4",
+                        "-vf", "scale=480:-1",
+                        tmp_frame
+                    ]
+                    proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                    await asyncio.wait_for(proc.wait(), timeout=3.0)
+                    if os.path.exists(tmp_frame) and os.path.getsize(tmp_frame) > 0:
+                        with open(tmp_frame, "rb") as f:
+                            thumb_bytes = f.read()
+                        try:
+                            os.remove(tmp_frame)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
         if thumb_bytes:
             for fname in unique_candidates:
                 try:
@@ -436,14 +466,14 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
         return Response(
             content=DEFAULT_VIDEO_PLACEHOLDER_SVG,
             media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=3600"}
+            headers={"Cache-Control": "public, max-age=30"}
         )
     except Exception as e:
         logger.debug(f"Thumbnail notice for {chat_id}/{message_id}: {e}")
         return Response(
             content=DEFAULT_VIDEO_PLACEHOLDER_SVG,
             media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=300"}
+            headers={"Cache-Control": "public, max-age=30"}
         )
 
 
@@ -598,11 +628,21 @@ async def handle_proxy_download(
         discard_bytes = start - aligned_start
         aligned_limit = length + discard_bytes
 
-    # Only record progress on actual playback reads (not tiny probe requests or tail index probes)
-    if length > 2 * 1024 * 1024 and (file_size <= 0 or start < (file_size - 10 * 1024 * 1024)):
+    media_duration = 0.0
+    if hasattr(message, "media") and getattr(message.media, "document", None):
+        doc = getattr(message.media, "document", None)
+        if hasattr(doc, "attributes") and doc.attributes:
+            for attr in doc.attributes:
+                if hasattr(attr, "duration") and attr.duration:
+                    media_duration = float(attr.duration)
+                    break
+    if media_duration <= 0 and hasattr(message, "file") and getattr(message.file, "duration", None):
+        media_duration = float(message.file.duration)
+
+    if length > 2 * 1024 * 1024 and (file_size <= 0 or (start < (file_size - 64 * 1024 * 1024) and (start / file_size) < 0.88)):
         try:
             asyncio.create_task(playback_tracker.aupdate_byte_progress(
-                str(chat_id), message_id, clean_name, start, file_size
+                str(chat_id), message_id, clean_name, start, file_size, media_duration=media_duration
             ))
         except Exception as track_err:
             logger.debug(f"Playback tracking notice: {track_err}")
@@ -853,11 +893,24 @@ async def handle_proxy_download(
         if not is_probe_request:
             _ACTIVE_STREAM_ITERS[session_key] = handle
 
+        delivered_bytes = 0
+        last_progress_sync = 0
         try:
             async for chunk in gen:
                 if stop_event.is_set():
                     raise ClientDisconnect()
                 yield chunk
+                delivered_bytes += len(chunk)
+                if not is_probe_request and (delivered_bytes - last_progress_sync) >= 5 * 1024 * 1024:
+                    last_progress_sync = delivered_bytes
+                    current_offset = start + delivered_bytes
+                    if file_size <= 0 or (current_offset < (file_size - 64 * 1024 * 1024) and (current_offset / file_size) < 0.88):
+                        try:
+                            asyncio.create_task(playback_tracker.aupdate_byte_progress(
+                                str(chat_id), message_id, clean_name, current_offset, file_size, media_duration=media_duration
+                            ))
+                        except Exception:
+                            pass
         except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError, ClientDisconnect):
             raise ClientDisconnect()
         except Exception as e:
@@ -868,6 +921,15 @@ async def handle_proxy_download(
                 await gen.aclose()
             except Exception:
                 pass
+            if not is_probe_request and delivered_bytes > 2 * 1024 * 1024:
+                final_offset = start + delivered_bytes
+                if file_size <= 0 or (final_offset < (file_size - 64 * 1024 * 1024) and (final_offset / file_size) < 0.88):
+                    try:
+                        asyncio.create_task(playback_tracker.aupdate_byte_progress(
+                            str(chat_id), message_id, clean_name, final_offset, file_size, media_duration=media_duration
+                        ))
+                    except Exception:
+                        pass
             if not is_probe_request:
                 entry = _ACTIVE_STREAM_TASKS.get(session_key)
                 if entry and entry[0] is curr_task:
@@ -1724,7 +1786,7 @@ async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, fi
     start_sec = int(prog.get("last_position_seconds", 0)) if prog else 0
     duration_sec = int(prog.get("duration_seconds", 0)) if prog else 0
     is_finished = bool(prog.get("finished", False)) if prog else False
-    if is_finished or (duration_sec > 0 and start_sec >= duration_sec - 15):
+    if is_finished or (duration_sec > 15 and start_sec >= duration_sec - 15):
         start_sec = 0
 
     vlc_args = [
@@ -1899,14 +1961,19 @@ async def generate_single_vlc_playlist(chat_id: str, message_id: int, filename: 
     safe_name = urllib.parse.quote(clean_name)
     safe_cid = urllib.parse.quote(str(chat_id), safe="")
     ep_url = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{safe_cid}/{message_id}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
+    prog = await playback_tracker.aget_playback_progress(str(chat_id), message_id)
+    start_sec = int(prog.get("last_position_seconds", 0)) if prog else 0
+    duration_sec = int(prog.get("duration_seconds", 0)) if prog else 0
     lines = [
         "#EXTM3U",
         f"#EXTINF:-1,{clean_name}",
         "#EXTVLCOPT:network-caching=2000",
         "#EXTVLCOPT:file-caching=2000",
         "#EXTVLCOPT:http-reconnect",
-        ep_url
     ]
+    if start_sec > 5 and (duration_sec <= 15 or start_sec < duration_sec - 15):
+        lines.append(f"#EXTVLCOPT:start-time={start_sec}")
+    lines.append(ep_url)
     m3u_content = "\n".join(lines)
     return Response(
         content=m3u_content,

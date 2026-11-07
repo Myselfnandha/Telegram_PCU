@@ -215,4 +215,4 @@ export interface SystemNetworkInfo {
   online?: boolean;
 }
 
-export type ThemeType = 'cyber-emerald' | 'dark' | 'light';
+export type ThemeType = 'cyber-emerald' | 'crimson-neon' | 'dark' | 'light';

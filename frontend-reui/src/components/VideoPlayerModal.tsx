@@ -68,9 +68,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const initialSeekDone = useRef(false);
   const lastReportedTime = useRef(0);
 
-  const duration = (videoRef.current?.duration && isFinite(videoRef.current.duration) && videoRef.current.duration > 0)
-    ? videoRef.current.duration
-    : (video?.duration || 0);
+  const duration = (video?.duration && video.duration > 0)
+    ? video.duration
+    : (videoRef.current?.duration && isFinite(videoRef.current.duration) && videoRef.current.duration > 15)
+      ? videoRef.current.duration
+      : 0;
 
   const isMkvContainer = video ? (
     Boolean(video.is_mkv) ||
@@ -150,7 +152,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
   const syncProgress = useCallback((seconds: number) => {
     if (!video || seconds <= 0) return;
-    const dur = duration > 0 ? duration : 0;
+    const dur = duration > 15 ? duration : (video?.duration || 0);
     const ratio = dur > 0 ? seconds / dur : 0;
     const approxBytes = Math.floor(ratio * (video.size || video.file_size || 0));
     const chunkIdx = Math.floor(approxBytes / (512 * 1024));

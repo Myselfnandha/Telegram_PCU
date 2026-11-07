@@ -45,6 +45,8 @@ const MainLayout: React.FC = () => {
         className={`fixed inset-0 pointer-events-none transition-opacity duration-700 ${
           theme === 'cyber-emerald'
             ? 'cyber-grid opacity-100'
+            : theme === 'crimson-neon'
+            ? 'crimson-grid opacity-100'
             : 'bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(56,189,248,0.06),rgba(255,255,255,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(56,189,248,0.08),rgba(0,0,0,0))]'
         }`}
       />

@@ -211,7 +211,12 @@ export function draftMoviesByFranchiseAndYear(
       const years = fData.items.map((m) => m.year).filter((y): y is number => Boolean(y));
       const latestDate = dates.length > 0 ? Math.max(...dates) : 0;
       const earliestDate = dates.length > 0 ? Math.min(...dates) : 0;
-      const leadThumb = fData.items.find((m) => m.video.thumb_url)?.video.thumb_url;
+      const firstItem = fData.items[0];
+      const leadThumb =
+        fData.items.find((m) => m.video.thumb_url)?.video.thumb_url ||
+        (firstItem?.video
+          ? `/stream/${encodeURIComponent(String(firstItem.video.chat_id))}/${firstItem.video.message_id}/thumb`
+          : undefined);
 
       franchises.push({
         id: `franchise_${fKey}`,
@@ -258,7 +263,12 @@ export function draftMoviesByFranchiseAndYear(
     const dates = items.map((m) => m.releaseDate).filter((d) => d > 0);
     const latestDate = dates.length > 0 ? Math.max(...dates) : 0;
     const earliestDate = dates.length > 0 ? Math.min(...dates) : 0;
-    const leadThumb = items.find((m) => m.video.thumb_url)?.video.thumb_url;
+    const firstItem = items[0];
+    const leadThumb =
+      items.find((m) => m.video.thumb_url)?.video.thumb_url ||
+      (firstItem?.video
+        ? `/stream/${encodeURIComponent(String(firstItem.video.chat_id))}/${firstItem.video.message_id}/thumb`
+        : undefined);
 
     yearCollections.push({
       id: `year_${yKey.toLowerCase().replace(/\s+/g, '_')}`,
@@ -297,7 +307,12 @@ export function draftMoviesByFranchiseAndYear(
     const dates = items.map((m) => m.releaseDate).filter((d) => d > 0);
     const latestDate = dates.length > 0 ? Math.max(...dates) : 0;
     const earliestDate = dates.length > 0 ? Math.min(...dates) : 0;
-    const leadThumb = items.find((m) => m.video.thumb_url)?.video.thumb_url;
+    const firstItem = items[0];
+    const leadThumb =
+      items.find((m) => m.video.thumb_url)?.video.thumb_url ||
+      (firstItem?.video
+        ? `/stream/${encodeURIComponent(String(firstItem.video.chat_id))}/${firstItem.video.message_id}/thumb`
+        : undefined);
     const displayTitle = lead.year ? `${lead.franchiseTitle} (${lead.year})` : lead.franchiseTitle;
 
     movieTitleGroups.push({

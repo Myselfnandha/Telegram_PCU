@@ -178,6 +178,48 @@
     --sidebar-ring: oklch(0.75 0.20 160);
 }
 
+.crimson-neon {
+    --background: oklch(0.12 0.03 340);
+    --foreground: oklch(0.98 0.01 350);
+    --card: oklch(0.155 0.035 345 / 85%);
+    --card-foreground: oklch(0.98 0.01 350);
+    --popover: oklch(0.145 0.035 342);
+    --popover-foreground: oklch(0.98 0.01 350);
+    --primary: oklch(0.68 0.24 18);
+    --primary-foreground: oklch(0.98 0.01 350);
+    --secondary: oklch(0.22 0.05 320);
+    --secondary-foreground: oklch(0.94 0.04 350);
+    --muted: oklch(0.19 0.03 335);
+    --muted-foreground: oklch(0.70 0.04 320);
+    --accent: oklch(0.26 0.08 18 / 45%);
+    --accent-foreground: oklch(0.98 0.03 350);
+    --destructive: oklch(0.65 0.24 25);
+    --border: oklch(0.42 0.09 18 / 32%);
+    --input: oklch(0.32 0.06 20 / 35%);
+    --ring: oklch(0.68 0.24 18);
+    --chart-1: oklch(0.68 0.24 18);
+    --chart-2: oklch(0.72 0.20 330);
+    --chart-3: oklch(0.78 0.16 50);
+    --chart-4: oklch(0.62 0.22 300);
+    --chart-5: oklch(0.82 0.14 15);
+    --sidebar: oklch(0.14 0.03 340);
+    --sidebar-foreground: oklch(0.98 0.01 350);
+    --sidebar-primary: oklch(0.68 0.24 18);
+    --sidebar-primary-foreground: oklch(0.98 0.01 350);
+    --sidebar-accent: oklch(0.24 0.05 320);
+    --sidebar-accent-foreground: oklch(0.98 0.03 350);
+    --sidebar-border: oklch(0.42 0.09 18 / 32%);
+    --sidebar-ring: oklch(0.68 0.24 18);
+}
+
+.crimson-grid {
+    background-image:
+        radial-gradient(ellipse 80% 60% at 50% -15%, rgba(244, 63, 94, 0.12), rgba(168, 85, 247, 0.05), transparent 75%),
+        linear-gradient(to right, rgba(244, 63, 94, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(244, 63, 94, 0.02) 1px, transparent 1px);
+    background-size: 100% 100%, 48px 48px, 48px 48px;
+}
+
 .cyber-grid {
     background-image:
         radial-gradient(ellipse 80% 60% at 50% -15%, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.05), transparent 75%),

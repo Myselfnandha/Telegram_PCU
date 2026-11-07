@@ -108,7 +108,7 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
         />
       )}
 
-      <aside className="fixed inset-y-0 left-0 z-50 w-[310px] max-w-[85vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[310px] lg:min-w-[310px] lg:max-w-[310px] w-[310px] min-w-[310px] max-w-[310px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-left-3 duration-200">
+      <aside className="fixed inset-y-0 left-0 z-50 w-64 max-w-[80vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[18%] lg:min-w-[190px] lg:max-w-[260px] w-[18%] min-w-[190px] max-w-[260px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-left-3 duration-200">
         <div className="h-full flex flex-col min-h-0 p-2 rounded-xl border border-border/70 bg-card/85 backdrop-blur-xl shadow-xs space-y-1.5">
           {/* Header Bar */}
           <div className="flex items-center justify-between pb-1.5 border-b border-border/50 shrink-0 px-0.5">

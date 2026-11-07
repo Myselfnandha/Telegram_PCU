@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import {
+  Flame,
   FolderDown,
   HardDrive,
   Languages,
@@ -214,14 +215,22 @@ export const SettingsView: React.FC = () => {
               className={
                 theme === 'cyber-emerald'
                   ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10 text-[10px]'
+                  : theme === 'crimson-neon'
+                  ? 'border-rose-500/40 text-rose-400 bg-rose-500/10 text-[10px]'
                   : 'text-[10px]'
               }
             >
-              {theme === 'cyber-emerald' ? 'Cyber Core' : theme === 'dark' ? 'Onyx Dark' : 'Daylight'}
+              {theme === 'cyber-emerald'
+                ? 'Cyber Core'
+                : theme === 'crimson-neon'
+                ? 'Crimson Neon'
+                : theme === 'dark'
+                ? 'Onyx Dark'
+                : 'Daylight'}
             </Badge>
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
             <button
               onClick={() => setTheme('cyber-emerald')}
               className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-2 transition-all cursor-pointer ${
@@ -237,6 +246,24 @@ export const SettingsView: React.FC = () => {
               <div>
                 <div className="text-xs font-semibold text-foreground">Midnight Emerald</div>
                 <div className="text-[10px] text-muted-foreground">Cyber Core Glow</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setTheme('crimson-neon')}
+              className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-2 transition-all cursor-pointer ${
+                theme === 'crimson-neon'
+                  ? 'border-rose-500/50 bg-rose-500/10 ring-1 ring-rose-500/40 shadow-sm'
+                  : 'border-border/70 bg-card/40 hover:bg-card/70'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="w-3.5 h-3.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50" />
+                <Flame className="w-3.5 h-3.5 text-rose-400" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-foreground">Crimson Neon</div>
+                <div className="text-[10px] text-muted-foreground">Cyber Scarlet Glow</div>
               </div>
             </button>
 

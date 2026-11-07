@@ -105,6 +105,18 @@ export interface DraftEngineOptions {
 /**
  * Extracts season number, episode number, and canonical show title from a raw media filename.
  */
+function cleanSeriesTitle(raw: string): string {
+  return raw
+    .replace(/\.[a-zA-Z0-9]+$/, '')
+    .replace(/^(?:tamizhan|vip_linkz|vip\s*linkzz|onlyhd4u|team\s*tamillinkzz|mspxmovies|sklink\s*files|cszmovies|team\s*hdt|org|com|net|tamilmv|tamilblasters|flimshdofficial|cinemas\s*trend|trending\s*tamizhaas|praky\s*tv|movieemanhd)\s+/gi, '')
+    .replace(/\b(1080p|720p|480p|4k|2160p|bluray|web-?dl|webrip|remux|x264|x265|hevc|ddp|atmos|5\.1|true|remastered|clean|predvd|combined|org\s*audio|tamil|telugu|hindi|malayalam|kannada|english|audio|sub|esubs?|msubs?)\b/gi, ' ')
+    .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
+    .replace(/[\[\(][^\]\)]*[\]\)]/g, ' ')
+    .replace(/[\._\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function extractSeriesMetadata(filename: string, channelName?: string): {
   isSeries: boolean;
   canonicalTitle: string;
@@ -114,44 +126,44 @@ export function extractSeriesMetadata(filename: string, channelName?: string): {
   episodeLabel: string;
   cleanTitle: string;
 } {
-  const clean = cleanFileName(filename) || filename;
+  const baseName = filename.replace(/\.[a-zA-Z0-9]+$/, '');
 
-  // Regex pattern matching season and episode conventions:
-  // 1) S01E02, S1E1, S01-E02, S01.E02, S01 EP02
-  // 2) 1x02, 01x02
-  // 3) Season 1 Episode 2, Season 01 Ep 02
-  // 4) EP01, Episode 01, Part 1, Pt 1, Part 02 (defaults to Season 1)
-  // 5) Episode ranges: EP 01 - 04, S01E01-E04, EP 25 28
   const seriesRegex = /^(.*?)(?:[\s._\-\(\[]+)(?:(s\d{1,2}|season\s*\d{1,2})[\s._\-\]\)]*)?(?:(e\d{1,3}(?:[\s\-]+\d{1,3})?|ep\s*\d{1,3}(?:[\s\-]+\d{1,3})?|episode\s*\d{1,3}(?:[\s\-]+\d{1,3})?|part\s*\d{1,2}|pt\s*\d{1,2}))(.*)$/i;
-  const match = clean.match(seriesRegex);
+  let match = baseName.match(seriesRegex);
+
+  if (!match) {
+    const secRegex = /\b[sS](\d{1,2})[\s._\-]*(?:[eE][pP]?|\b)\s*(\d{1,3})\b/i;
+    const sec = baseName.match(secRegex);
+    if (sec) {
+      match = [baseName, baseName.substring(0, sec.index), 'S' + sec[1], 'EP' + sec[2], ''];
+    }
+  }
+
+  if (!match) {
+    const completeRegex = /\b(?:(s\d{1,2}|season\s*\d{1,2}))[\s._\-]*(?:complete|full|pack)?\b/i;
+    const cMatch = baseName.match(completeRegex);
+    if (cMatch) {
+      match = [baseName, baseName.substring(0, cMatch.index), cMatch[1], 'EP01', ''];
+    }
+  }
 
   if (match) {
-    let rawTitle = (match[1] || '').replace(/\.\w+$/, '').replace(/[._\-\(\)]+$/, '').trim();
-    if (!rawTitle) rawTitle = clean.replace(/\.\w+$/, '').trim();
-
-    // Canonical title: strip channel noise, domain signatures, watermarks, year, and empty brackets
-    let canonical = cleanFileName(rawTitle)
-      .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
-      .replace(/[\(\)\[\]\{\}]/g, ' ')
-      .replace(/^(?:org|com|net|tv|hd|link|linkzz|official|tamilmv|tamilblasters)\s+/i, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    let rawTitle = (match[1] || '').trim();
+    let canonical = cleanSeriesTitle(rawTitle);
 
     if (!canonical) {
-      canonical = channelName ? channelName.replace(/\b(channel|group|backup|official)\b/gi, '').trim() : 'Web Series';
+      canonical = channelName ? cleanSeriesTitle(channelName.replace(/\b(channel|group|backup|official|index)\b/gi, '')) : 'Web Series';
     }
+    if (!canonical) canonical = 'Web Series';
 
     const sSeason = (match[2] || 'S01').toUpperCase().replace(/\s+/g, ' ');
     const sEp = (match[3] || 'EP01').toUpperCase().replace(/\s+/g, ' ');
     const seasonNumber = parseInt(sSeason.replace(/\D/g, ''), 10) || 1;
     const seasonLabel = `Season ${seasonNumber}`;
 
-    // Extract first numeric episode value
     const episodeDigits = sEp.match(/\d{1,3}/);
     const episodeNumber = episodeDigits ? parseInt(episodeDigits[0], 10) : 1;
     const episodeLabel = `S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`;
-
-    const cleanedTitle = clean.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '').replace(/\s+/g, ' ').trim();
 
     return {
       isSeries: true,
@@ -160,42 +172,33 @@ export function extractSeriesMetadata(filename: string, channelName?: string): {
       seasonLabel,
       episodeNumber,
       episodeLabel,
-      cleanTitle: cleanedTitle,
+      cleanTitle: baseName,
     };
   }
 
-  // Fallback: Check for SxxExx or 1x02 without strict leading delimiter
-  const secondaryRegex = /\b[sS](\d{1,2})[eE](\d{1,3})\b/;
-  const secMatch = clean.match(secondaryRegex);
-  if (secMatch) {
-    const sNum = parseInt(secMatch[1], 10) || 1;
-    const eNum = parseInt(secMatch[2], 10) || 1;
-    const beforePart = clean.substring(0, secMatch.index).trim();
-    const canonical = cleanFileName(beforePart)
-      .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
-      .replace(/[\(\)\[\]\{\}]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim() || 'Web Series';
-
+  if (channelName && /\b(series|episodes?|season|shows?)\b/i.test(channelName)) {
+    const epDigits = baseName.match(/\b\d{1,4}\b/);
+    const epNum = epDigits ? parseInt(epDigits[0], 10) : 1;
+    const chTitle = cleanSeriesTitle(channelName.replace(/\b(channel|group|backup|official|index)\b/gi, '')) || 'Web Series';
     return {
       isSeries: true,
-      canonicalTitle: canonical,
-      seasonNumber: sNum,
-      seasonLabel: `Season ${sNum}`,
-      episodeNumber: eNum,
-      episodeLabel: `S${String(sNum).padStart(2, '0')}E${String(eNum).padStart(2, '0')}`,
-      cleanTitle: clean,
+      canonicalTitle: chTitle,
+      seasonNumber: 1,
+      seasonLabel: 'Season 1',
+      episodeNumber: epNum,
+      episodeLabel: `S01E${String(epNum).padStart(2, '0')}`,
+      cleanTitle: baseName,
     };
   }
 
   return {
     isSeries: false,
-    canonicalTitle: clean,
+    canonicalTitle: cleanFileName(filename) || baseName,
     seasonNumber: 1,
     seasonLabel: 'Season 1',
     episodeNumber: 1,
     episodeLabel: 'EP01',
-    cleanTitle: clean,
+    cleanTitle: cleanFileName(filename) || baseName,
   };
 }
 
@@ -220,29 +223,34 @@ export function draftWebSeriesBySeason(
   videos.forEach((video) => {
     const meta = extractSeriesMetadata(video.filename);
     const dateSec = normalizeDateToSeconds(video.date);
+    const isSeries = meta.isSeries || Boolean(video.is_series || video.series_name || video.season || video.episode);
 
-    if (meta.isSeries) {
-      const key = meta.canonicalTitle.toLowerCase();
+    if (isSeries) {
+      const canonicalTitle = meta.isSeries ? meta.canonicalTitle : (video.series_name || 'Web Series');
+      const key = canonicalTitle.toLowerCase();
       if (!rawShowsMap.has(key)) {
         rawShowsMap.set(key, {
-          canonicalTitle: meta.canonicalTitle,
+          canonicalTitle,
           episodes: [],
         });
       }
 
+      const seasonNum = meta.seasonNumber || video.season || 1;
+      const epNum = meta.episodeNumber || video.episode || 1;
+
       const ep: WebSeriesEpisode = {
         video: {
           ...video,
-          series_name: meta.canonicalTitle,
-          season: meta.seasonNumber,
-          episode: meta.episodeNumber,
+          series_name: canonicalTitle,
+          season: seasonNum,
+          episode: epNum,
         },
-        canonicalTitle: meta.canonicalTitle,
-        seasonNumber: meta.seasonNumber,
-        seasonLabel: meta.seasonLabel,
-        episodeNumber: meta.episodeNumber,
-        episodeLabel: meta.episodeLabel,
-        displayTitle: meta.cleanTitle,
+        canonicalTitle,
+        seasonNumber: seasonNum,
+        seasonLabel: `Season ${seasonNum}`,
+        episodeNumber: epNum,
+        episodeLabel: `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`,
+        displayTitle: meta.cleanTitle || video.filename,
         releaseDate: dateSec,
         formattedDate: formatMediaDate(dateSec),
         durationFormatted: formatDuration(video.duration),
@@ -338,8 +346,12 @@ export function draftWebSeriesBySeason(
 
       if (seriesEarliestDate === Number.MAX_SAFE_INTEGER) seriesEarliestDate = 0;
 
-      // Find first episode with a thumbnail to serve as series poster
-      const leadThumb = show.episodes.find((e) => e.video.has_thumb || e.video.thumb_url)?.video.thumb_url;
+      const firstEp = show.episodes[0];
+      const leadThumb =
+        show.episodes.find((e) => e.video.thumb_url)?.video.thumb_url ||
+        (firstEp?.video
+          ? `/stream/${encodeURIComponent(String(firstEp.video.chat_id))}/${firstEp.video.message_id}/thumb`
+          : undefined);
 
       drafts.push({
         id: showKey,
