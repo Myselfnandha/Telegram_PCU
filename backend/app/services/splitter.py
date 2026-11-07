@@ -3,8 +3,7 @@ import logging
 import shutil
 from pathlib import Path
 from typing import List, Callable, Optional
-import aiofiles
-from app.config import SPLIT_THRESHOLD, CHUNK_READ_SIZE
+from app.config import SPLIT_THRESHOLD
 
 logger = logging.getLogger("splitter")
 

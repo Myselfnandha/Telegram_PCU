@@ -42,8 +42,13 @@ async def remove_watched_channel(req: ChannelRequest):
 
 @router.get("/feed")
 async def get_sniffer_feed():
-    """Returns recent captured & auto-dispatched files feed."""
     return sniffer_service.recent_feed
+
+@router.post("/feed/clear")
+@router.delete("/feed")
+async def clear_sniffer_feed():
+    await sniffer_service.aclear_feed()
+    return {"success": True, "count": 0}
 
 @router.post("/process_chat")
 async def process_chat_media(req: ChannelRequest):

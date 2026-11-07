@@ -14,8 +14,6 @@ import {
   BellOff,
   CheckCircle2,
   FileArchive,
-  FileCode,
-  FileSpreadsheet,
   FileText,
   FileVideo,
   FolderUp,
@@ -26,14 +24,13 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Sparkles,
   Trash2,
   Upload,
   UploadCloud,
   X,
 } from 'lucide-react';
 
-export const UploaderView: React.FC = () => {
+export const UploaderView: React.FC<{ isDocked?: boolean }> = ({ isDocked = false }) => {
   const { selectedChat, setSelectedChat, uploadQueue, setUploadQueue, addToast } = useApp();
   const [isChatPickerOpen, setChatPickerOpen] = useState(false);
   const [silentSend, setSilentSend] = useState(false);
@@ -419,7 +416,7 @@ export const UploaderView: React.FC = () => {
   };
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6 animate-in fade-in duration-300">
+    <div className={`w-full space-y-4 animate-in fade-in duration-300 ${isDocked ? 'p-1 sm:p-2' : 'px-4 sm:px-6 lg:px-8 xl:px-10 py-6'}`}>
       {/* Top Destination & Controls Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl border border-border/60 bg-card/60 backdrop-blur-md shadow-sm">
         <div className="flex items-center gap-3">

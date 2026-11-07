@@ -69,3 +69,28 @@ async def get_installed_managers():
         "detected": result,
         "count": len(result)
     }
+
+
+class OfflineSaverPayload(BaseModel):
+    enabled: bool
+
+
+@router.get("/offline_saver")
+async def get_offline_saver_settings():
+    from app.services.stream_saver import stream_saver_service
+    return {
+        "enabled": stream_saver_service.is_enabled,
+        "library_dir": str(stream_saver_service._library_dir)
+    }
+
+
+@router.post("/offline_saver", dependencies=[Depends(verify_auth)])
+async def set_offline_saver_settings(payload: OfflineSaverPayload):
+    from app.services.stream_saver import stream_saver_service
+    stream_saver_service.set_enabled(payload.enabled)
+    return {
+        "status": "ok",
+        "enabled": stream_saver_service.is_enabled,
+        "library_dir": str(stream_saver_service._library_dir)
+    }
+

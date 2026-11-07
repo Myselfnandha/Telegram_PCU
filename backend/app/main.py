@@ -1,3 +1,4 @@
+import os
 import logging
 import asyncio
 import time
@@ -21,6 +22,7 @@ from app.services.queue_manager import queue_manager
 from app.services.download_manager import download_manager
 from app.services.sniffer_service import sniffer_service
 from app.routes.history import init_db, record_task_history, router as history_router
+from app.routes.auth import router as auth_router
 from app.routes.chats import router as chats_router, preload_chats
 from app.routes.upload import router as upload_router
 from app.routes.download import router as download_router
@@ -35,6 +37,7 @@ from app.telegram_client import TelegramClientManager
 from logging.handlers import RotatingFileHandler
 from app.config import DATA_DIR
 
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 log_file_path = DATA_DIR / "tg_power_suite.log"
 file_handler = RotatingFileHandler(
     str(log_file_path),
@@ -96,11 +99,25 @@ sensitive_filter = SensitiveDataFilter()
 file_handler.addFilter(sensitive_filter)
 stream_handler.addFilter(sensitive_filter)
 
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[file_handler, stream_handler],
-    force=True
-)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+has_file_handler = any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers)
+has_stream_handler = any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in root_logger.handlers)
+
+if not has_file_handler:
+    root_logger.addHandler(file_handler)
+else:
+    for h in root_logger.handlers:
+        if isinstance(h, RotatingFileHandler):
+            h.addFilter(sensitive_filter)
+
+if not has_stream_handler:
+    root_logger.addHandler(stream_handler)
+else:
+    for h in root_logger.handlers:
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler):
+            h.addFilter(sensitive_filter)
+
 uvicorn_access = logging.getLogger("uvicorn.access")
 uvicorn_access.addFilter(EndpointFilter())
 uvicorn_access.addFilter(sensitive_filter)
@@ -180,40 +197,47 @@ async def lifespan(app: FastAPI):
     telemetry_task = asyncio.create_task(_telemetry_broadcast_loop())
     maintenance_task = asyncio.create_task(_periodic_maintenance_loop())
 
-    # 6. Attempt to initialize Telethon MTProto Client if session/credentials exist
     try:
-        if await TelegramClientManager.is_authorized():
-            client = await TelegramClientManager.get_client()
-            me_info = await TelegramClientManager.get_me_info()
-            if me_info:
-                logger.info(f"Telegram client ready: {me_info.get('first_name')} (@{me_info.get('username')})")
-            
-            sniffer_service.attach_to_client(client)
-            from app.services.telegram_sync import telegram_sync_service
-            telegram_sync_service.attach_to_client(client)
+        from app.services.folder_watcher import folder_watcher
+        if folder_watcher.is_enabled:
+            folder_watcher.start()
+    except Exception as fwe:
+        logger.debug(f"Folder watcher startup notice: {fwe}")
 
-            if await TelegramClientManager.is_secondary_authorized():
-                sec_client = await TelegramClientManager.get_secondary_client()
-                if sec_client:
-                    sec_info = await TelegramClientManager.get_secondary_me_info()
-                    if sec_info:
-                        logger.info(f"Secondary Telegram client ready: {sec_info.get('first_name')} (@{sec_info.get('username')})")
-        else:
-            logger.info("Telegram client is not authorized yet. Log in via setup_auth.py or Web Settings.")
-    except Exception as e:
-        logger.warning(f"Could not auto-start Telegram client: {e}")
+    if os.environ.get("TG_TEST_MODE") != "1":
+        try:
+            if await TelegramClientManager.is_authorized():
+                client = await TelegramClientManager.get_client()
+                me_info = await TelegramClientManager.get_me_info()
+                if me_info:
+                    logger.info(f"Telegram client ready: {me_info.get('first_name')} (@{me_info.get('username')})")
+                
+                sniffer_service.attach_to_client(client)
+                from app.services.telegram_sync import telegram_sync_service
+                telegram_sync_service.attach_to_client(client)
 
-    try:
-        from app.services.network_monitor import network_monitor
-        network_monitor.start()
-    except Exception as nme:
-        logger.warning(f"Could not start network monitor: {nme}")
+                if await TelegramClientManager.is_secondary_authorized():
+                    sec_client = await TelegramClientManager.get_secondary_client()
+                    if sec_client:
+                        sec_info = await TelegramClientManager.get_secondary_me_info()
+                        if sec_info:
+                            logger.info(f"Secondary Telegram client ready: {sec_info.get('first_name')} (@{sec_info.get('username')})")
+            else:
+                logger.info("Telegram client is not authorized yet. Log in via setup_auth.py or Web Settings.")
+        except Exception as e:
+            logger.warning(f"Could not auto-start Telegram client: {e}")
 
-    try:
-        from app.services.rust_bridge import rust_bridge
-        await rust_bridge.start_daemon()
-    except Exception as rbe:
-        logger.warning(f"Could not start rust bridge: {rbe}")
+        try:
+            from app.services.network_monitor import network_monitor
+            network_monitor.start()
+        except Exception as nme:
+            logger.warning(f"Could not start network monitor: {nme}")
+
+        try:
+            from app.services.rust_bridge import rust_bridge
+            await rust_bridge.start_daemon()
+        except Exception as rbe:
+            logger.warning(f"Could not start rust bridge: {rbe}")
 
     yield
 
@@ -242,6 +266,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.debug(f"Network service tunnel shutdown error: {e}")
 
+    try:
+        await download_manager.stop()
+    except Exception as e:
+        logger.debug(f"Download manager stop error: {e}")
+
+    try:
+        from app.services.folder_watcher import folder_watcher
+        await folder_watcher.stop()
+    except Exception as e:
+        logger.debug(f"Folder watcher stop error: {e}")
+
     await queue_manager.stop_workers()
     await TelegramClientManager.disconnect()
     try:
@@ -255,6 +290,14 @@ async def lifespan(app: FastAPI):
         await rust_bridge.stop_daemon()
     except Exception:
         pass
+    try:
+        import aiosqlite
+        from app.config import DB_PATH
+        if DB_PATH.exists():
+            async with aiosqlite.connect(str(DB_PATH), timeout=10.0) as db:
+                await db.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+    except Exception as e:
+        logger.debug(f"History DB WAL checkpoint error: {e}")
     logger.info("Shutdown complete.")
 
 
@@ -444,6 +487,7 @@ app.add_middleware(
 )
 
 # Include API Routers
+app.include_router(auth_router)
 app.include_router(upload_router)
 app.include_router(download_router)
 app.include_router(proxy_router)

@@ -268,6 +268,10 @@ class ApiService {
     return this.request<SnifferFeedItem[]>('/api/sniffer/feed');
   }
 
+  async clearSnifferFeed(): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>('/api/sniffer/feed/clear', { method: 'POST' });
+  }
+
   async addWatchedChannel(channel: string): Promise<{ success: boolean }> {
     return this.request('/api/sniffer/channels/add', {
       method: 'POST',

@@ -3,9 +3,9 @@ import time
 import uuid
 import logging
 from pathlib import Path
-from typing import Optional, Union, Any
+from typing import Optional, Union
 import aiofiles
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from app.config import TEMP_UPLOAD_DIR, CHUNK_READ_SIZE
 from app.models import UploadStatus
 from app.services.queue_manager import queue_manager, UploadItem
@@ -20,13 +20,15 @@ router = APIRouter(prefix="/api", tags=["upload"])
 
 class ChunkCompleteRequest(BaseModel):
     upload_id: str
-    chat_id: str
+    chat_id: Union[int, str]
     chat_name: Optional[str] = ""
     caption: Optional[str] = ""
     filename: Optional[str] = ""
     send_as: Optional[str] = "auto"
     total_size: Optional[int] = None
     scheduled_at: Optional[float] = None
+    silent: Optional[bool] = False
+    auto_split: Optional[bool] = True
 
 
 
@@ -147,7 +149,7 @@ async def handle_chunk_upload_complete(payload: ChunkCompleteRequest):
         temp_file_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Uploaded file is empty (0 bytes).")
 
-    clean_chat_id: Union[int, str] = payload.chat_id.strip()
+    clean_chat_id: Union[int, str] = str(payload.chat_id).strip()
     if clean_chat_id != "me":
         try:
             clean_chat_id = int(clean_chat_id)

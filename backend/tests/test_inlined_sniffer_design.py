@@ -158,3 +158,50 @@ async def test_saved_messages_and_forward_peer_resolution(tmp_path):
         assert 777888 in service._resolved_peer_ids
         assert 999111 in service._resolved_peer_ids
 
+
+@pytest.mark.asyncio
+async def test_aiosqlite_deduplication_persistence(tmp_path):
+    test_db = tmp_path / "test_suite_async.db"
+    with patch("app.services.sniffer_service.SUITE_DB_PATH", test_db):
+        service = SnifferService()
+        await service.ainit_db()
+        assert not await service.ais_dispatched(-100123456, 888)
+        await service.arecord_dispatch(-100123456, 888, "Oppenheimer.2023.1080p.mkv", 3221225472, "http://localhost:8088/dl/-100123456/888")
+        assert await service.ais_dispatched(-100123456, 888)
+        service._processed_messages.clear()
+        assert len(service._processed_messages) == 0
+        assert await service.ais_dispatched(-100123456, 888)
+        assert ("-100123456", 888) in service._processed_messages
+        recent = await service.aget_recent_dispatches(5)
+        assert len(recent) == 1
+        assert recent[0]["name"] == "Oppenheimer.2023.1080p.mkv"
+        assert recent[0]["chat_id"] == "-100123456"
+        assert recent[0]["message_id"] == 888
+        assert "3072.00 MB" in recent[0]["size"]
+
+
+@pytest.mark.asyncio
+async def test_aclear_feed_preserves_processed_messages(tmp_path):
+    test_db = tmp_path / "test_suite_clear.db"
+    with patch("app.services.sniffer_service.SUITE_DB_PATH", test_db):
+        service = SnifferService()
+        await service.ainit_db()
+        await service.arecord_dispatch(-100123456, 123, "test.mkv", 1048576, "http://localhost/dl/1/1")
+        service.recent_feed.append({"id": "1", "filename": "test.mkv"})
+        assert len(service.recent_feed) == 1
+        assert len(service._processed_messages) == 1
+
+        emitted_events = []
+        def mock_emitter(event_name, data):
+            emitted_events.append((event_name, data))
+
+        service.set_socket_emitter(mock_emitter)
+        await service.aclear_feed()
+
+        assert len(service.recent_feed) == 0
+        assert len(service._processed_messages) == 1
+        assert ("-100123456", 123) in service._processed_messages
+        assert ("feed_snapshot", []) in emitted_events
+
+
+

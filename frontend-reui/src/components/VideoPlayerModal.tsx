@@ -49,6 +49,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const prevVolumeRef = useRef<number>(1);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
 
   // Time & Buffer tracking
   const [currentTimeSec, setCurrentTimeSec] = useState<number>(0);
@@ -292,6 +293,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }
   };
 
+  const toggleFitMode = () => {
+    setFitMode((prev) => {
+      const next = prev === 'contain' ? 'cover' : 'contain';
+      showOsd(next === 'cover' ? 'Fit: Zoom to Fill' : 'Fit: Original 16:9');
+      return next;
+    });
+  };
+
   const handleToggleSubtitles = () => {
     const v = videoRef.current;
     if (!v) return;
@@ -396,12 +405,15 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       } else if (e.key.toLowerCase() === 'c') {
         e.preventDefault();
         handleToggleSubtitles();
+      } else if (e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        toggleFitMode();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, currentTimeSec, duration, volume, isMuted, subtitlesEnabled]);
+  }, [open, currentTimeSec, duration, volume, isMuted, subtitlesEnabled, fitMode]);
 
   const [isLaunchingVlc, setIsLaunchingVlc] = useState(false);
 
@@ -411,7 +423,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         videoRef.current.pause();
         videoRef.current.removeAttribute('src');
         videoRef.current.load();
-      } catch (e) {}
+      } catch {}
     }
   }, [open]);
 
@@ -427,7 +439,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           videoRef.current.pause();
           videoRef.current.removeAttribute('src');
           videoRef.current.load();
-        } catch (e) {}
+        } catch {}
       }
       await api.launchVlc(video.chat_id, video.message_id, video.filename);
       onOpenChange(false);
@@ -468,7 +480,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           videoRef.current.pause();
           videoRef.current.removeAttribute('src');
           videoRef.current.load();
-        } catch (e) {}
+        } catch {}
       }
     }
     onOpenChange(isOpen);
@@ -579,7 +591,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             autoPlay
             playsInline
             onClick={togglePlayPause}
-            className="w-full h-full object-contain cinema-video-player cursor-pointer"
+            className={`w-full h-full ${fitMode === 'cover' ? 'object-cover' : 'object-contain'} cinema-video-player cursor-pointer`}
             preload="metadata"
             onLoadedMetadata={handleLoadedMetadata}
             onCanPlay={handleCanPlay}
@@ -770,6 +782,20 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             >
               <Subtitles className="w-3.5 h-3.5" />
               <span>CC</span>
+            </button>
+
+            {/* Fit / Fill Mode Toggle */}
+            <button
+              onClick={toggleFitMode}
+              aria-label={`Video fit mode: ${fitMode === 'contain' ? 'Fit Window' : 'Fill Screen'}`}
+              className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1 ${
+                fitMode === 'cover'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white'
+              }`}
+              title="Toggle Fill Screen / Fit (Z)"
+            >
+              <span>{fitMode === 'cover' ? 'Fill' : 'Fit'}</span>
             </button>
 
             {/* Fullscreen Button */}

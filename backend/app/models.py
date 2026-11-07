@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Union
 from enum import Enum
-from datetime import datetime
 
 class SendMode(str, Enum):
     AUTO = "auto"
@@ -18,8 +17,6 @@ class UploadStatus(str, Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     FAILED = "failed"
-
-from typing import Optional, List, Union
 
 class ChatItem(BaseModel):
     id: Union[int, str]

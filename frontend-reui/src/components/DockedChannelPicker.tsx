@@ -102,13 +102,13 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
       {/* Mobile/Tablet Backdrop */}
       {onClose && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
-      <aside className="fixed inset-y-0 left-0 z-50 w-64 max-w-[80vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-56 xl:w-60 lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-left-3 duration-200">
+      <aside className="fixed inset-y-0 left-0 z-50 w-[310px] max-w-[85vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[310px] lg:min-w-[310px] lg:max-w-[310px] w-[310px] min-w-[310px] max-w-[310px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-left-3 duration-200">
         <div className="h-full flex flex-col min-h-0 p-2 rounded-xl border border-border/70 bg-card/85 backdrop-blur-xl shadow-xs space-y-1.5">
           {/* Header Bar */}
           <div className="flex items-center justify-between pb-1.5 border-b border-border/50 shrink-0 px-0.5">

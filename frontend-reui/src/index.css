@@ -202,3 +202,15 @@
     @apply font-sans;
   }
 }
+
+.contain-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 280px 240px;
+  contain: layout style paint;
+}
+
+.contain-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 100% 48px;
+  contain: layout style paint;
+}

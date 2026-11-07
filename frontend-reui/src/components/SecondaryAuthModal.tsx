@@ -20,7 +20,6 @@ import {
   Phone,
   QrCode,
   RefreshCw,
-  ShieldCheck,
   Smartphone,
   Sparkles,
   Zap,

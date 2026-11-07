@@ -32,7 +32,7 @@ class SocketService {
     this.socket.on('connect', () => {
       this.isConnected = true;
       this.connectionListeners.forEach((fn) => fn(true));
-      this.socket?.emit('queue:get');
+      this.socket?.emit('queue_get');
     });
 
     this.socket.on('disconnect', () => {
@@ -128,7 +128,7 @@ class SocketService {
   }
 
   requestQueueSnapshot() {
-    this.socket?.emit('queue:get');
+    this.socket?.emit('queue_get');
   }
 }
 

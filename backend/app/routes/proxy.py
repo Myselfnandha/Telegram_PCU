@@ -20,7 +20,6 @@ logger = logging.getLogger("proxy_route")
 
 router = APIRouter(tags=["proxy"])
 
-_MESSAGE_CACHE = {}
 from telethon import errors, utils
 from telethon.tl.functions.upload import GetFileRequest
 
@@ -44,8 +43,6 @@ from app.routes.history import get_cinema_cached_videos_db, save_cinema_cached_v
 
 from app.services.stream_buffer import stream_buffer, _SLIDING_STREAM_BUFFER, StreamSlidingBuffer
 from app.services.stream_engine import stream_engine
-_ACTIVE_STREAM_CLIENTS = 0
-_ACTIVE_STREAM_PRODUCERS: Dict[Tuple[str, int], asyncio.Task] = {}
 _ACTIVE_STREAM_TASKS: Dict[Any, Tuple[asyncio.Task, int]] = {}
 _ACTIVE_MEDIA_CONNS: DefaultDict[Tuple[str, int], Set[asyncio.Task]] = defaultdict(set)
 _ACTIVE_STREAM_ITERS: Dict[Any, Any] = {}
@@ -270,6 +267,48 @@ DEFAULT_VIDEO_PLACEHOLDER_SVG = (
 )
 
 
+async def search_web_poster(raw_name: str) -> Optional[bytes]:
+    try:
+        clean = re.sub(r"\.[a-zA-Z0-9]+$", "", raw_name)
+        clean = re.sub(
+            r"\b(1080p|720p|480p|4k|2160p|bluray|web-?dl|webrip|remux|x264|x265|hevc|ddp|atmos|5\.1|true|remastered|v1\.neil|telumkv|tpu|clean|predvd)\b",
+            " ",
+            clean,
+            flags=re.I
+        )
+        clean = re.sub(r"\b[sS]\d{1,2}(?:[\s._\-]?[eE]\d{1,3})?\b", " ", clean)
+        clean = re.sub(r"\b(?:ep|episode)\s*\d+(?:/\d+)?\b", " ", clean, flags=re.I)
+        clean = re.sub(r"[\(\)\[\]\{\}\-_.]", " ", clean)
+        clean = re.sub(r"^(?:tamizhan|vip_linkz|linkzz|org|com|net|tamilmv|tamilblasters)\s+", " ", clean, flags=re.I)
+        clean = re.sub(r"\s+", " ", clean).strip()
+        if not clean or len(clean) < 2:
+            return None
+
+        is_series = bool(re.search(r"\b(season|episode|s\d{1,2}|ep\d{1,2})\b", raw_name, re.I))
+        cat = "series" if is_series else "movie"
+        import urllib.parse
+        import httpx
+        url = f"https://v3-cinemeta.strem.io/catalog/{cat}/top/search={urllib.parse.quote(clean)}.json"
+        async with httpx.AsyncClient(timeout=2.5, follow_redirects=True) as http_client:
+            resp = await http_client.get(url, headers={"User-Agent": "TGPowerSuite/1.0"})
+            if resp.status_code == 200:
+                data = resp.json()
+                metas = data.get("metas", [])
+                if not metas and cat == "movie":
+                    alt_url = f"https://v3-cinemeta.strem.io/catalog/series/top/search={urllib.parse.quote(clean)}.json"
+                    alt_resp = await http_client.get(alt_url, headers={"User-Agent": "TGPowerSuite/1.0"})
+                    if alt_resp.status_code == 200:
+                        metas = alt_resp.json().get("metas", [])
+                if metas and metas[0].get("poster"):
+                    poster_url = metas[0]["poster"]
+                    img_resp = await http_client.get(poster_url)
+                    if img_resp.status_code == 200 and len(img_resp.content) > 100:
+                        return img_resp.content
+    except Exception:
+        pass
+    return None
+
+
 @router.get("/dl/{chat_id}/{message_id}/thumb")
 @router.get("/stream/{chat_id}/{message_id}/thumb")
 async def get_media_thumbnail(chat_id: str, message_id: int):
@@ -334,9 +373,8 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
         thumb_bytes = None
         doc = getattr(message.media, "document", None) or (message.media if hasattr(message.media, "thumbs") else None)
         thumbs = getattr(doc, "thumbs", None) or getattr(message.media, "thumbs", None) or []
+        from telethon.tl.types import Photo, PhotoStrippedSize, PhotoCachedSize
 
-        # Fast Path 1: Check inlined PhotoStrippedSize / PhotoCachedSize (0ms instant JPEG decode)
-        from telethon.tl.types import PhotoStrippedSize, PhotoCachedSize
         for t in thumbs:
             if isinstance(t, PhotoStrippedSize) and getattr(t, "bytes", None):
                 try:
@@ -350,8 +388,7 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
                 if thumb_bytes:
                     break
 
-        # Fast Path 2: Download medium PhotoSize through client.download_media throttled by semaphore
-        if not thumb_bytes:
+        if not thumb_bytes and (thumbs or isinstance(message.media, Photo)):
             async with _THUMB_SEMAPHORE:
                 try:
                     thumb_bytes = await client.download_media(message, thumb=0, file=bytes)
@@ -361,8 +398,28 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
                     except Exception:
                         pass
 
+        if not thumb_bytes:
+            try:
+                prev_msgs = await client.get_messages(clean_chat_id, ids=[message_id - 1, message_id + 1])
+                for pm in (prev_msgs or []):
+                    if pm and getattr(pm, "photo", None):
+                        tb = await client.download_media(pm, thumb=0, file=bytes)
+                        if tb:
+                            thumb_bytes = tb
+                            break
+            except Exception:
+                pass
+
+        if not thumb_bytes:
+            fn = ""
+            if hasattr(message, "file") and getattr(message.file, "name", None):
+                fn = message.file.name
+            elif getattr(message, "message", None):
+                fn = message.message
+            if fn:
+                thumb_bytes = await search_web_poster(fn)
+
         if thumb_bytes:
-            # Save to disk cache under all alias keys so subsequent lookups hit in 0ms
             for fname in unique_candidates:
                 try:
                     with open(os.path.join(_THUMB_CACHE_DIR, fname), "wb") as f:
@@ -376,7 +433,6 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
                 headers={"Cache-Control": "public, max-age=86400, immutable"}
             )
 
-        # Fallback to sleek SVG video placeholder
         return Response(
             content=DEFAULT_VIDEO_PLACEHOLDER_SVG,
             media_type="image/svg+xml",
@@ -545,8 +601,7 @@ async def handle_proxy_download(
     # Only record progress on actual playback reads (not tiny probe requests or tail index probes)
     if length > 2 * 1024 * 1024 and (file_size <= 0 or start < (file_size - 10 * 1024 * 1024)):
         try:
-            asyncio.create_task(asyncio.to_thread(
-                playback_tracker.update_byte_progress,
+            asyncio.create_task(playback_tracker.aupdate_byte_progress(
                 str(chat_id), message_id, clean_name, start, file_size
             ))
         except Exception as track_err:
@@ -760,28 +815,17 @@ async def handle_proxy_download(
                 if pref_t and not pref_t.done():
                     pref_t.cancel()
 
-            old_handle = _ACTIVE_STREAM_ITERS.get(session_key)
-            if old_handle:
-                old_task_entry = _ACTIVE_STREAM_TASKS.get(session_key)
-                old_start = old_task_entry[1] if old_task_entry else 0
-                is_real_seek = (abs(start - old_start) > 256 * 1024)
-                if is_real_seek:
-                    logger.info(
-                        f"STREAM [{clean_name}] Fast seek detected ({start:,} vs {old_start:,}) for {client_tag}@{req_client_host}: "
-                        f"Instantly cancelling previous stream iterator and wire tasks to free MTProto senders."
-                    )
-                else:
-                    logger.debug(
-                        f"STREAM [{clean_name}] Superseded initial container stream at offset {start:,} for {client_tag}@{req_client_host}."
-                    )
-                old_handle.stop_event.set()
-                asyncio.create_task(old_handle.close())
+            matching_keys = [k for k in list(_ACTIVE_STREAM_ITERS.keys()) if k[0] == norm_chat_id and k[1] == message_id]
+            for sk in matching_keys:
+                old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
+                if old_h:
+                    old_h.stop_event.set()
+                    asyncio.create_task(old_h.close())
+                old_t = _ACTIVE_STREAM_TASKS.pop(sk, None)
+                if old_t and old_t[0] and not old_t[0].done() and old_t[0] is not curr_task:
+                    old_t[0].cancel()
 
-            old_task_entry = _ACTIVE_STREAM_TASKS.get(session_key)
-            if old_task_entry:
-                old_task, old_start = old_task_entry
-                if old_task is not curr_task and not old_task.done():
-                    old_task.cancel()
+            stream_engine.abort_message_stream(norm_chat_id, message_id)
         _ACTIVE_STREAM_TASKS[session_key] = (curr_task, start)
         _ACTIVE_MEDIA_CONNS[media_key].add(curr_task)
         _ACTIVE_STREAM_ITERS[session_key] = handle
@@ -1596,6 +1640,34 @@ async def get_mobile_playback_info(chat_id: str, message_id: int, request: Reque
     }
 
 
+class VlcPlayPayload(BaseModel):
+    chat_id: Union[int, str]
+    message_id: int
+    filename: Optional[str] = None
+
+
+@router.get("/api/media/prewarm/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
+@router.post("/api/media/prewarm/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
+async def prewarm_media_endpoint(chat_id: str, message_id: int):
+    client = await TelegramClientManager.get_client()
+    clean_chat_id: Union[int, str] = chat_id
+    if clean_chat_id != "me":
+        try:
+            clean_chat_id = int(chat_id)
+        except ValueError:
+            pass
+    msg = await get_streamable_message(client, clean_chat_id, message_id)
+    if msg:
+        asyncio.create_task(prewarm_media_stream(client, clean_chat_id, message_id, msg))
+        return {"status": "ok", "prewarming": True, "chat_id": str(clean_chat_id), "message_id": message_id}
+    return {"status": "not_found", "prewarming": False, "chat_id": str(clean_chat_id), "message_id": message_id}
+
+
+@router.post("/api/media/vlc/play", dependencies=[Depends(verify_auth)])
+async def play_desktop_vlc(payload: VlcPlayPayload, request: Request):
+    return await launch_desktop_vlc(str(payload.chat_id), payload.message_id, request, payload.filename)
+
+
 @router.post("/api/media/vlc/launch/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
 async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, filename: Optional[str] = None):
     """Launch VLC on the TG Power Suite host; deliberately restricted to direct loopback clients."""
@@ -1648,7 +1720,7 @@ async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, fi
     safe_name = urllib.parse.quote(filename or f"video_{message_id}.mp4")
     grant = playback_grants.issue(chat_id, message_id)
     url = f"http://127.0.0.1:{PROXY_PORT}/dl/{urllib.parse.quote(str(chat_id), safe='')}/{message_id}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
-    prog = playback_tracker.get_playback_progress(str(clean_chat_id), message_id)
+    prog = await playback_tracker.aget_playback_progress(str(clean_chat_id), message_id)
     start_sec = int(prog.get("last_position_seconds", 0)) if prog else 0
     duration_sec = int(prog.get("duration_seconds", 0)) if prog else 0
     is_finished = bool(prog.get("finished", False)) if prog else False
@@ -1664,7 +1736,7 @@ async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, fi
         "--no-spdif",
         "--avcodec-hw=any",
     ]
-    if start_sec > 10:
+    if start_sec > 2:
         vlc_args.append(f"--start-time={start_sec}")
         logger.info(f"VLC [{safe_name}] Resuming at {start_sec}s")
 
@@ -1693,6 +1765,7 @@ async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, fi
     return {"success": True, "pid": proc.pid, "player": "vlc", "resumed_seconds": start_sec, "message": msg}
 
 
+@router.post("/api/media/vlc/play_batch", dependencies=[Depends(verify_auth)])
 @router.post("/api/media/vlc/launch_batch", dependencies=[Depends(verify_auth)])
 async def launch_vlc_batch(payload: Dict[str, Any], request: Request):
     """
@@ -1814,18 +1887,49 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
     )
 
 
+@router.get("/api/media/vlc/playlist/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
+@router.get("/api/media/vlc/playlist/{chat_id}/{message_id}/{filename:path}", dependencies=[Depends(verify_auth)])
+async def generate_single_vlc_playlist(chat_id: str, message_id: int, filename: Optional[str] = None):
+    import urllib.parse
+    from app.config import PROXY_HOST, PROXY_PORT
+    clean_name = filename or f"video_{message_id}.mp4"
+    if clean_name.endswith(".m3u"):
+        clean_name = clean_name[:-4]
+    grant = playback_grants.issue(str(chat_id), int(message_id))
+    safe_name = urllib.parse.quote(clean_name)
+    safe_cid = urllib.parse.quote(str(chat_id), safe="")
+    ep_url = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{safe_cid}/{message_id}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
+    lines = [
+        "#EXTM3U",
+        f"#EXTINF:-1,{clean_name}",
+        "#EXTVLCOPT:network-caching=2000",
+        "#EXTVLCOPT:file-caching=2000",
+        "#EXTVLCOPT:http-reconnect",
+        ep_url
+    ]
+    m3u_content = "\n".join(lines)
+    return Response(
+        content=m3u_content,
+        media_type="audio/x-mpegurl",
+        headers={
+            "Content-Disposition": f'attachment; filename="{clean_name}.m3u"',
+            "Content-Type": "audio/x-mpegurl; charset=utf-8",
+        },
+    )
+
+
 
 
 @router.get("/api/media/continue_watching", dependencies=[Depends(verify_auth)])
 async def get_continue_watching():
     """Returns list of recently watched media ready for 1-click resume."""
-    return playback_tracker.get_continue_watching(limit=12)
+    return await playback_tracker.aget_continue_watching(limit=12)
 
 
 @router.delete("/api/media/continue_watching/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
 async def dismiss_continue_watching(chat_id: str, message_id: int):
     """Dismisses an item from continue watching."""
-    playback_tracker.remove_progress(chat_id, message_id)
+    await playback_tracker.aremove_progress(chat_id, message_id)
     return {"success": True, "dismissed": f"{chat_id}_{message_id}"}
 
 
@@ -1843,7 +1947,7 @@ class PlaybackProgressPayload(BaseModel):
 @router.post("/api/media/playback_progress", dependencies=[Depends(verify_auth)])
 async def update_playback_progress_api(payload: PlaybackProgressPayload):
     """Updates watch progress for a video with chunk coordinates."""
-    playback_tracker.update_progress(
+    await playback_tracker.aupdate_progress(
         chat_id=payload.chat_id,
         message_id=payload.message_id,
         filename=payload.filename,
@@ -1856,24 +1960,10 @@ async def update_playback_progress_api(payload: PlaybackProgressPayload):
     return {"status": "ok"}
 
 
-class OfflineSaverPayload(BaseModel):
-    enabled: bool
+from app.routes.settings import (
+    OfflineSaverPayload,
+    get_offline_saver_settings,
+    set_offline_saver_settings
+)
 
-
-@router.get("/api/settings/offline_saver")
-async def get_offline_saver_settings():
-    return {
-        "enabled": stream_saver_service.is_enabled,
-        "library_dir": str(stream_saver_service._library_dir)
-    }
-
-
-@router.post("/api/settings/offline_saver", dependencies=[Depends(verify_auth)])
-async def set_offline_saver_settings(payload: OfflineSaverPayload):
-    stream_saver_service.set_enabled(payload.enabled)
-    return {
-        "status": "ok",
-        "enabled": stream_saver_service.is_enabled,
-        "library_dir": str(stream_saver_service._library_dir)
-    }
 

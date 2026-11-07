@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Clapperboard,
-  Clock,
   Download,
   Moon,
   Radio,
@@ -14,7 +13,6 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
-  Upload,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -52,12 +50,23 @@ export const Header: React.FC = () => {
     (t) => t.status === 'uploading' || t.status === 'streaming' || t.status === 'queued'
   ).length;
 
+  const normalizedTab: TabType =
+    activeTab === 'uploader' || activeTab === 'sniffer' || activeTab === 'history'
+      ? 'dashboard'
+      : activeTab;
+
   const tabs: { id: TabType; label: string; icon: React.ReactNode; shortcut: string; badge?: React.ReactNode }[] = [
     {
-      id: 'uploader',
-      label: 'Uploader',
-      icon: <Upload className="w-4 h-4" />,
+      id: 'cinema',
+      label: 'Cinema',
+      icon: <Clapperboard className="w-4 h-4" />,
       shortcut: '1',
+    },
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: <Radio className="w-4 h-4" />,
+      shortcut: '2',
       badge:
         activeUploadsCount > 0 ? (
           <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center animate-in zoom-in">
@@ -66,34 +75,10 @@ export const Header: React.FC = () => {
         ) : null,
     },
     {
-      id: 'sniffer',
-      label: 'Sniffer & FDM',
-      icon: <Radio className="w-4 h-4" />,
-      shortcut: '2',
-      badge: (
-        <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-        </span>
-      ),
-    },
-    {
-      id: 'cinema',
-      label: 'Cinema',
-      icon: <Clapperboard className="w-4 h-4" />,
-      shortcut: '3',
-    },
-    {
-      id: 'history',
-      label: 'History',
-      icon: <Clock className="w-4 h-4" />,
-      shortcut: '4',
-    },
-    {
       id: 'settings',
       label: 'Settings',
       icon: <Settings className="w-4 h-4" />,
-      shortcut: '5',
+      shortcut: '3',
     },
   ];
 
@@ -106,7 +91,7 @@ export const Header: React.FC = () => {
   });
 
   const updateIndicator = () => {
-    const activeEl = tabRefs.current[activeTab];
+    const activeEl = tabRefs.current[normalizedTab];
     if (activeEl && navRef.current) {
       setIndicator({
         left: activeEl.offsetLeft,
@@ -125,9 +110,8 @@ export const Header: React.FC = () => {
       clearTimeout(timer);
       window.removeEventListener('resize', updateIndicator);
     };
-  }, [activeTab]);
+  }, [normalizedTab]);
 
-  // Quick Access keyboard listener (1-5, Alt+ArrowLeft/Right)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -151,12 +135,12 @@ export const Header: React.FC = () => {
 
       if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault();
-        const currentIdx = tabs.findIndex((t) => t.id === activeTab);
+        const currentIdx = tabs.findIndex((t) => t.id === normalizedTab);
         const prevIdx = (currentIdx - 1 + tabs.length) % tabs.length;
         setActiveTab(tabs[prevIdx].id);
       } else if (e.altKey && e.key === 'ArrowRight') {
         e.preventDefault();
-        const currentIdx = tabs.findIndex((t) => t.id === activeTab);
+        const currentIdx = tabs.findIndex((t) => t.id === normalizedTab);
         const nextIdx = (currentIdx + 1) % tabs.length;
         setActiveTab(tabs[nextIdx].id);
       }
@@ -164,7 +148,7 @@ export const Header: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab]);
+  }, [normalizedTab, setActiveTab]);
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-card/85 backdrop-blur-xl transition-all shrink-0">
@@ -203,7 +187,7 @@ export const Header: React.FC = () => {
             />
 
             {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
+              const isActive = normalizedTab === tab.id;
               return (
                 <button
                   key={tab.id}
@@ -320,7 +304,7 @@ export const Header: React.FC = () => {
         className="md:hidden flex items-center justify-around border-t border-border/40 px-2 py-1.5 bg-card/85 backdrop-blur-md"
       >
         {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
+          const isActive = normalizedTab === tab.id;
           return (
             <button
               key={tab.id}

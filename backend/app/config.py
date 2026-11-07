@@ -62,80 +62,87 @@ SESSION_FILE_PATH_2 = SESSION_DIR / SESSION_NAME_2
 SESSION_STRING_2 = os.getenv("TG_SESSION_STRING_2", "").strip()
 ENABLE_MULTI_ACCOUNT_TURBO = os.getenv("ENABLE_MULTI_ACCOUNT_TURBO", "true").lower() in ("1", "true", "yes")
 
+def get_env_dict() -> Dict[str, str]:
+    """Reads .env file into key-value dictionary."""
+    config: Dict[str, str] = {}
+    target = ROOT_DIR / ".env"
+    if not target.exists():
+        target = BACKEND_DIR / ".env"
+    if not target.exists():
+        return config
+    
+    with open(target, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if "=" in stripped:
+                k, v = stripped.split("=", 1)
+                config[k.strip()] = v.split(" #")[0].strip()
+    return config
+
+
+def save_env_dict(updates: Dict[str, Any]) -> None:
+    """Updates key-value pairs in the .env file."""
+    target = ROOT_DIR / ".env"
+    if not target.exists():
+        target = BACKEND_DIR / ".env"
+    
+    existing_lines: List[str] = []
+    if target.exists():
+        with open(target, "r", encoding="utf-8", errors="replace") as f:
+            existing_lines = f.readlines()
+
+    keys_written = set()
+    new_lines = []
+
+    for line in existing_lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in updates:
+                new_lines.append(f"{key}={updates[key]}\n")
+                keys_written.add(key)
+                continue
+        new_lines.append(line)
+
+    for k, v in updates.items():
+        if k not in keys_written:
+            new_lines.append(f"{k}={v}\n")
+
+    with open(target, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+    
+    load_dotenv(target, override=True)
+
+
 def set_multi_account_turbo(enabled: bool) -> None:
     """Updates ENABLE_MULTI_ACCOUNT_TURBO in runtime environment and .env file."""
     global ENABLE_MULTI_ACCOUNT_TURBO
     ENABLE_MULTI_ACCOUNT_TURBO = enabled
     os.environ["ENABLE_MULTI_ACCOUNT_TURBO"] = "true" if enabled else "false"
-    target_env = ENV_FILE if ENV_FILE.exists() else (BACKEND_DIR / ".env")
-    try:
-        lines = []
-        found = False
-        if target_env.exists():
-            with open(target_env, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("ENABLE_MULTI_ACCOUNT_TURBO="):
-                        lines.append(f"ENABLE_MULTI_ACCOUNT_TURBO={'true' if enabled else 'false'}\n")
-                        found = True
-                    else:
-                        lines.append(line)
-        if not found:
-            lines.append(f"ENABLE_MULTI_ACCOUNT_TURBO={'true' if enabled else 'false'}\n")
-        with open(target_env, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-    except Exception as e:
-        import logging
-        logging.getLogger("config").warning(f"Could not persist ENABLE_MULTI_ACCOUNT_TURBO to {target_env}: {e}")
+    save_env_dict({"ENABLE_MULTI_ACCOUNT_TURBO": "true" if enabled else "false"})
+
 
 AUTO_SAVE_STREAM = os.getenv("TG_AUTO_SAVE_STREAM", "false").lower() in ("1", "true", "yes")
 DEFAULT_SUBTITLE_LANG = os.getenv("DEFAULT_SUBTITLE_LANG", "eng,tam,hin").strip()
 
+
 def update_session_string_in_env(session_string: str) -> None:
     """Updates TG_SESSION_STRING in backend/.env file and in runtime environment."""
+    global SESSION_STRING
+    SESSION_STRING = session_string
     os.environ["TG_SESSION_STRING"] = session_string
-    target_env = ENV_FILE if ENV_FILE.exists() else (BACKEND_DIR / ".env")
-    try:
-        lines = []
-        found = False
-        if target_env.exists():
-            with open(target_env, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("TG_SESSION_STRING="):
-                        lines.append(f"TG_SESSION_STRING={session_string}\n")
-                        found = True
-                    else:
-                        lines.append(line)
-        if not found:
-            lines.append(f"TG_SESSION_STRING={session_string}\n")
-        with open(target_env, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-    except Exception as e:
-        import logging
-        logging.getLogger("config").warning(f"Could not persist TG_SESSION_STRING to {target_env}: {e}")
+    save_env_dict({"TG_SESSION_STRING": session_string})
 
 
 def update_secondary_session_string_in_env(session_string: str) -> None:
     """Updates TG_SESSION_STRING_2 in backend/.env file and in runtime environment."""
+    global SESSION_STRING_2
+    SESSION_STRING_2 = session_string
     os.environ["TG_SESSION_STRING_2"] = session_string
-    target_env = ENV_FILE if ENV_FILE.exists() else (BACKEND_DIR / ".env")
-    try:
-        lines = []
-        found = False
-        if target_env.exists():
-            with open(target_env, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("TG_SESSION_STRING_2="):
-                        lines.append(f"TG_SESSION_STRING_2={session_string}\n")
-                        found = True
-                    else:
-                        lines.append(line)
-        if not found:
-            lines.append(f"TG_SESSION_STRING_2={session_string}\n")
-        with open(target_env, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-    except Exception as e:
-        import logging
-        logging.getLogger("config").warning(f"Could not persist TG_SESSION_STRING_2 to {target_env}: {e}")
+    save_env_dict({"TG_SESSION_STRING_2": session_string})
+
 
 
 
@@ -172,58 +179,8 @@ CORS_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
     "http://localhost:3000",
-    "*"
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
 ]
 
-def get_env_dict() -> Dict[str, str]:
-    """Reads .env file into key-value dictionary."""
-    config: Dict[str, str] = {}
-    target = ROOT_DIR / ".env"
-    if not target.exists():
-        target = BACKEND_DIR / ".env"
-    if not target.exists():
-        return config
-    
-    with open(target, "r", encoding="utf-8", errors="replace") as f:
-        for line in f:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            if "=" in stripped:
-                k, v = stripped.split("=", 1)
-                config[k.strip()] = v.split(" #")[0].strip()
-    return config
-
-def save_env_dict(updates: Dict[str, Any]) -> None:
-    """Updates key-value pairs in the .env file."""
-    target = ROOT_DIR / ".env"
-    if not target.exists():
-        target = BACKEND_DIR / ".env"
-    
-    existing_lines: List[str] = []
-    if target.exists():
-        with open(target, "r", encoding="utf-8", errors="replace") as f:
-            existing_lines = f.readlines()
-
-    keys_written = set()
-    new_lines = []
-
-    for line in existing_lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            key = stripped.split("=", 1)[0].strip()
-            if key in updates:
-                new_lines.append(f"{key}={updates[key]}\n")
-                keys_written.add(key)
-                continue
-        new_lines.append(line)
-
-    for k, v in updates.items():
-        if k not in keys_written:
-            new_lines.append(f"{k}={v}\n")
-
-    with open(target, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
-    
-    # Reload environment
-    load_dotenv(target, override=True)

@@ -8,6 +8,7 @@ from app.services.queue_manager import queue_manager, UploadItem
 logger = logging.getLogger("download_route")
 
 router = APIRouter(prefix="/api/download", tags=["downloads"])
+downloads_router = router
 
 
 class DownloadUrlRequest(BaseModel):
@@ -15,6 +16,8 @@ class DownloadUrlRequest(BaseModel):
     custom_filename: Optional[str] = None
 
 
+@router.get("")
+@router.get("/active")
 @router.get("/list")
 async def list_downloads():
     """Lists all background downloads and their real-time progress."""

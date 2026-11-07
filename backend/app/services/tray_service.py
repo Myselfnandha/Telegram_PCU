@@ -1,5 +1,6 @@
 import os
 import sys
+import signal
 import logging
 import threading
 import webbrowser
@@ -54,7 +55,7 @@ def start_tray_service(port: int = PORT) -> bool:
         def on_quit(icon, item):
             logger.info("Tray exit triggered.")
             icon.stop()
-            os._exit(0)
+            os.kill(os.getpid(), signal.SIGTERM if sys.platform != "win32" else signal.SIGINT)
 
         menu = pystray.Menu(
             pystray.MenuItem("🚀 TG Power Suite", on_open_dashboard, default=True),

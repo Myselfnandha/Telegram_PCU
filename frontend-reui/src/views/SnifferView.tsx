@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useDeferredValue, useEffect, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import type { CinemaVideo, SnifferFeedItem } from '@/types';
 import { api } from '@/services/api';
@@ -10,16 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Activity,
-  Check,
-  Clapperboard,
   Copy,
   Download,
-  ExternalLink,
   FileArchive,
   FileText,
   FileVideo,
-  Filter,
   Music,
   Play,
   Plus,
@@ -28,11 +23,10 @@ import {
   Search,
   Sparkles,
   Trash2,
-  Tv,
   X,
 } from 'lucide-react';
 
-export const SnifferView: React.FC = () => {
+export const SnifferView: React.FC<{ isDocked?: boolean }> = ({ isDocked = false }) => {
   const { addToast } = useApp();
   const [activeChannels, setActiveChannels] = useState<string[]>([]);
   const [feed, setFeed] = useState<SnifferFeedItem[]>([]);
@@ -41,9 +35,30 @@ export const SnifferView: React.FC = () => {
   const [isChatPickerOpen, setChatPickerOpen] = useState(false);
   const [manualChannelInput, setManualChannelInput] = useState('');
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
   const [selectedChannelFilter, setSelectedChannelFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'video' | 'audio' | 'document'>('all');
   const [previewVideo, setPreviewVideo] = useState<CinemaVideo | null>(null);
+
+  const isItemCleared = (item: SnifferFeedItem) => {
+    try {
+      const clearedAtStr = localStorage.getItem('tg_sniffer_cleared_at');
+      if (!clearedAtStr) return false;
+      const clearedTime = new Date(clearedAtStr).getTime();
+      if (!clearedTime || isNaN(clearedTime)) return false;
+      const rawTime = (item as any).timestamp ?? (item as any).dispatched_at ?? item.date;
+      if (!rawTime) return true;
+      const timeMs =
+        typeof rawTime === 'number'
+          ? rawTime > 1e11
+            ? rawTime
+            : rawTime * 1000
+          : new Date(rawTime).getTime();
+      return !isNaN(timeMs) && timeMs <= (clearedTime + 1000);
+    } catch {
+      return false;
+    }
+  };
 
   const loadStatus = async () => {
     try {
@@ -59,7 +74,8 @@ export const SnifferView: React.FC = () => {
     setLoading(true);
     try {
       const items = await api.getSnifferFeed();
-      setFeed(items || []);
+      const filtered = (items || []).filter((item: SnifferFeedItem) => !isItemCleared(item));
+      setFeed(filtered);
     } catch (e) {
       console.debug('Failed to load sniffer feed:', e);
     } finally {
@@ -71,13 +87,26 @@ export const SnifferView: React.FC = () => {
     loadStatus();
     loadFeed();
 
+    let lastToast = 0;
     const unsubFeed = socketService.onSnifferFeed((item) => {
-      setFeed((prev) => [item, ...prev]);
-      addToast({
-        type: 'info',
-        title: 'New Media Sniffed',
-        message: `${item.filename} received from watched channel.`,
+      if (isItemCleared(item)) {
+        return;
+      }
+      setFeed((prev) => {
+        if (prev.some((p) => p.id === item.id || (p.chat_id === item.chat_id && p.message_id === item.message_id))) {
+          return prev;
+        }
+        return [item, ...prev];
       });
+      const now = Date.now();
+      if (now - lastToast > 4000) {
+        lastToast = now;
+        addToast({
+          type: 'info',
+          title: 'New Media Sniffed',
+          message: `${item.filename} received from watched channel.`,
+        });
+      }
     });
 
     return () => {
@@ -125,7 +154,7 @@ export const SnifferView: React.FC = () => {
         title: 'Dispatched to FDM',
         message: `Sent "${item.filename}" to Free Download Manager!`,
       });
-    } catch (err: any) {
+    } catch {
       addToast({
         type: 'warning',
         title: 'Trigger Failed',
@@ -148,13 +177,17 @@ export const SnifferView: React.FC = () => {
     });
   };
 
-  const handleClearFeed = () => {
+  const handleClearFeed = async () => {
+    try {
+      localStorage.setItem('tg_sniffer_cleared_at', new Date().toISOString());
+      await api.clearSnifferFeed();
+    } catch {}
     setFeed([]);
     addToast({ type: 'info', title: 'Feed Cleared', message: 'Cleared active media feed view.' });
   };
 
   const filteredFeed = feed.filter((item) => {
-    const matchesSearch = item.filename.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = item.filename.toLowerCase().includes(deferredSearch.toLowerCase());
     if (!matchesSearch) return false;
 
     if (selectedChannelFilter && String(item.chat_id) !== selectedChannelFilter && item.chat_title !== selectedChannelFilter) {
@@ -184,6 +217,135 @@ export const SnifferView: React.FC = () => {
         return <FileText className="w-4 h-4 text-muted-foreground" />;
     }
   };
+
+  if (isDocked) {
+    return (
+      <div className="w-full h-full flex flex-col gap-2 p-1 overflow-hidden">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="relative flex-1">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search feed..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-7.5 h-7 text-xs bg-muted/30"
+            />
+          </div>
+          <Button variant="ghost" size="icon" onClick={loadFeed} className="h-7 w-7 shrink-0 cursor-pointer" title="Refresh Feed">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={handleClearFeed} className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 cursor-pointer" title="Clear Feed">
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setChatPickerOpen(true)}
+            className="h-6 text-[10px] px-2 gap-1 rounded-full shrink-0 cursor-pointer"
+          >
+            <Plus className="w-3 h-3 text-emerald-400" />
+            <span>Watch Channel</span>
+          </Button>
+          {activeChannels.map((ch) => (
+            <span
+              key={ch}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-muted/50 border border-border/60 font-mono shrink-0"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>{ch}</span>
+              <button
+                onClick={() => handleRemoveChannel(ch)}
+                className="hover:text-destructive text-muted-foreground ml-0.5 cursor-pointer"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-0.5 scrollbar-thin">
+          {filteredFeed.length === 0 ? (
+            <div className="p-8 text-center text-xs text-muted-foreground">
+              {feed.length === 0 ? 'No media sniffed yet. Watching for new uploads.' : 'No items match filter.'}
+            </div>
+          ) : (
+            filteredFeed.map((item) => (
+              <div
+                key={item.id}
+                className="p-2.5 rounded-xl border border-border/60 bg-card/75 hover:bg-card hover:border-border transition-all space-y-2 shadow-2xs"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                    {getCategoryIcon(item.filename)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold text-foreground truncate" title={item.filename}>
+                      {cleanFileName(item.filename)}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                      <span className="font-mono">{item.size_formatted || (item.size ? formatBytes(item.size) : 'File')}</span>
+                      <span className="truncate max-w-[100px]">{item.chat_title || item.chat_id}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 pt-1 border-t border-border/30">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() =>
+                      setPreviewVideo({
+                        chat_id: item.chat_id,
+                        message_id: item.message_id,
+                        filename: item.filename,
+                        size: item.size || 0,
+                      })
+                    }
+                    className="flex-1 h-6.5 text-[11px] gap-1 cursor-pointer bg-primary hover:bg-primary/90"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Play</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleTriggerFdm(item)}
+                    className="flex-1 h-6.5 text-[11px] gap-1 cursor-pointer border border-border/60"
+                  >
+                    <Download className="w-3 h-3 text-sky-400" />
+                    <span>FDM</span>
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => handleCopyLink(item)}
+                    className="h-6.5 w-6.5 shrink-0 cursor-pointer"
+                    title="Copy URL"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <ChatPickerModal
+          open={isChatPickerOpen}
+          onOpenChange={setChatPickerOpen}
+          onSelect={(chat) => handleAddChannel(chat.username ? `@${chat.username}` : String(chat.id))}
+        />
+        <VideoPlayerModal
+          video={previewVideo}
+          open={Boolean(previewVideo)}
+          onOpenChange={(open) => !open && setPreviewVideo(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6 animate-in fade-in duration-300">
@@ -395,7 +557,7 @@ export const SnifferView: React.FC = () => {
               return (
                 <div
                   key={`${item.chat_id}_${item.message_id}_${item.id}`}
-                  className="p-4 rounded-xl border border-border/70 bg-card/85 backdrop-blur-md shadow-sm space-y-3 flex flex-col justify-between hover:border-primary/40 transition-all"
+                  className="contain-card p-4 rounded-xl border border-border/70 bg-card/85 backdrop-blur-md shadow-sm space-y-3 flex flex-col justify-between hover:border-primary/40 transition-all"
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-lg bg-accent/60 flex items-center justify-center shrink-0 border border-border/40">

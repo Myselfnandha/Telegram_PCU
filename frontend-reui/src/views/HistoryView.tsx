@@ -34,7 +34,7 @@ import {
 
 const columnHelper = createColumnHelper<DataGridFeatures, UploadHistoryItem>();
 
-export const HistoryView: React.FC = () => {
+export const HistoryView: React.FC<{ isDocked?: boolean }> = ({ isDocked = false }) => {
   const { addToast, setUploadQueue } = useApp();
   const [history, setHistory] = useState<UploadHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -249,6 +249,106 @@ export const HistoryView: React.FC = () => {
     data: filteredData,
     columns,
   });
+
+  if (isDocked) {
+    return (
+      <div className="w-full h-full flex flex-col gap-2 p-1 overflow-hidden">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="relative flex-1">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search history..."
+              value={globalFilter}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              className="pl-7.5 h-7 text-xs bg-muted/30"
+            />
+          </div>
+          <Button variant="ghost" size="icon" onClick={loadHistory} className="h-7 w-7 shrink-0 cursor-pointer">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          {history.length > 0 && (
+            <Button variant="ghost" size="icon" onClick={handleClearHistory} className="h-7 w-7 text-destructive shrink-0 cursor-pointer" title="Clear All History">
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
+          {(
+            [
+              { id: 'all', label: 'All' },
+              { id: 'completed', label: 'Done' },
+              { id: 'failed', label: 'Failed' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setStatusFilter(tab.id)}
+              className={`text-[11px] px-2 py-0.5 rounded-full transition-colors cursor-pointer shrink-0 ${
+                statusFilter === tab.id
+                  ? 'bg-primary text-primary-foreground font-semibold shadow-2xs'
+                  : 'bg-muted/40 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+          <Badge variant="secondary" className="ml-auto text-[9px] px-1.5 py-0 h-4 font-mono shrink-0">
+            {filteredData.length}
+          </Badge>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-0.5 scrollbar-thin">
+          {loading && history.length === 0 ? (
+            <div className="space-y-2 p-2">
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          ) : filteredData.length === 0 ? (
+            <div className="p-8 text-center text-xs text-muted-foreground">
+              No transfer records.
+            </div>
+          ) : (
+            filteredData.map((item) => {
+              const displayName = cleanFileName(item.filename);
+              const isDone = item.status?.toLowerCase() === 'completed';
+              const isFailed = item.status?.toLowerCase() === 'failed';
+              return (
+                <div
+                  key={item.id}
+                  className="p-2 rounded-xl border border-border/60 bg-card/75 hover:bg-card hover:border-border transition-all space-y-1 shadow-2xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <FileText className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold text-foreground truncate" title={item.filename}>
+                        {displayName}
+                      </div>
+                    </div>
+                    <Badge
+                      variant={isDone ? 'outline' : isFailed ? 'destructive' : 'secondary'}
+                      className={`text-[9px] px-1.5 py-0 shrink-0 ${
+                        isDone ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : ''
+                      }`}
+                    >
+                      {item.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5 border-t border-border/30">
+                    <span className="truncate max-w-[130px]">{item.chat_name || item.chat_id}</span>
+                    <span className="font-mono">{formatBytes(item.file_size)}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6 animate-in fade-in duration-300">

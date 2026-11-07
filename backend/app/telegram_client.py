@@ -343,7 +343,6 @@ td.DownloadMethods._iter_download = _patched_iter_download
 class TelegramClientManager:
     _instance: Optional["TelegramClientManager"] = None
     _client: Optional[TelegramClient] = None
-    _bot_client: Optional[TelegramClient] = None
     _secondary_client: Optional[TelegramClient] = None
     _secondary_auth_client: Optional[TelegramClient] = None
     _lock = asyncio.Lock()
@@ -530,31 +529,6 @@ class TelegramClientManager:
             except Exception:
                 pass
         return await cls.reconnect_primary(timeout=timeout)
-
-    @classmethod
-    async def get_bot_client(cls) -> Optional[TelegramClient]:
-        """Returns dedicated bot client if BOT_TOKEN is set."""
-        if not BOT_TOKEN or not API_ID or not API_HASH:
-            return None
-
-        if cls._bot_client is None or not cls._bot_client.is_connected():
-            async with cls._lock:
-                if cls._bot_client is None:
-                    bot_session = SESSION_DIR / "bot_session"
-                    cls._bot_client = TelegramClient(
-                        str(bot_session),
-                        API_ID,
-                        API_HASH,
-                        connection_retries=10,
-                        retry_delay=2,
-                        auto_reconnect=True
-                    )
-                if not cls._bot_client.is_connected():
-                    await cls._bot_client.start(bot_token=BOT_TOKEN)
-                    me = await cls._bot_client.get_me()
-                    logger.info(f"Dedicated Bot client connected as @{getattr(me, 'username', '')}")
-
-        return cls._bot_client
 
     @classmethod
     async def is_authorized(cls) -> bool:
@@ -783,11 +757,7 @@ class TelegramClientManager:
 
     @classmethod
     async def get_secondary_client(cls) -> Optional[TelegramClient]:
-        """
-        Retrieves the secondary Telethon client instance for multi-account turbo pooling.
-        Returns None if multi-account turbo is disabled or secondary session is not configured.
-        """
-        if not ENABLE_MULTI_ACCOUNT_TURBO or not API_ID or not API_HASH:
+        if not API_ID or not API_HASH:
             return None
 
         has_session_string = bool(SESSION_STRING_2)
@@ -860,10 +830,7 @@ class TelegramClientManager:
 
     @classmethod
     async def is_secondary_authorized(cls) -> bool:
-        """Check if secondary client is authorized."""
         try:
-            if not ENABLE_MULTI_ACCOUNT_TURBO:
-                return False
             if cls._is_secondary_ready and cls._secondary_client and cls._secondary_client.is_connected():
                 return True
             client = await cls.get_secondary_client()
@@ -874,9 +841,6 @@ class TelegramClientManager:
 
     @classmethod
     async def get_secondary_me_info(cls) -> Optional[dict]:
-        """Fetch secondary authenticated user profile."""
-        if not ENABLE_MULTI_ACCOUNT_TURBO:
-            return None
         if cls._cached_secondary_me:
             return cls._cached_secondary_me
         try:
@@ -907,7 +871,7 @@ class TelegramClientManager:
 
     @classmethod
     async def get_active_streaming_clients(cls) -> list:
-        """Returns list of active, authorized Telethon clients for streaming pooling."""
+        from app.config import ENABLE_MULTI_ACCOUNT_TURBO
         clients = []
         try:
             primary = await cls.get_client()
@@ -1148,16 +1112,6 @@ class TelegramClientManager:
                 finally:
                     cls._client = None
                     cls._is_ready = False
-
-            if cls._bot_client is not None:
-                logger.info("Disconnecting Telethon bot client...")
-                try:
-                    if cls._bot_client.is_connected():
-                        await cls._bot_client.disconnect()
-                except Exception as e:
-                    logger.error(f"Error during bot client disconnect: {e}")
-                finally:
-                    cls._bot_client = None
 
         async with cls._secondary_lock:
             if cls._secondary_client is not None:

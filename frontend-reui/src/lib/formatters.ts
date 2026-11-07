@@ -78,7 +78,7 @@ export function parseMediaInfo(filename?: string): ParsedMediaInfo {
 
   // Extract Year (19xx or 20xx) - strip enclosing brackets/parentheses
   let year = '';
-  const yearMatch = working.match(/(?:[\(\[\{])?\b(19\d{2}|20\d{2})\b(?:[\)\]\}])?/);
+  const yearMatch = working.match(/(?:[([{])?\b(19\d{2}|20\d{2})\b(?:[)\]}])?/);
   if (yearMatch) {
     year = yearMatch[1] || yearMatch[0].replace(/[^\d]/g, '');
     working = working.replace(yearMatch[0], ' ');
@@ -86,7 +86,7 @@ export function parseMediaInfo(filename?: string): ParsedMediaInfo {
 
   // Extract Season / Episode patterns (e.g. S01E09, S03 EP 45 46, S01 EP 01, S02-E04)
   let seasonEpisode = '';
-  const seMatch = working.match(/\b(s\d{1,2}\s*(?:ep?|\-)?\s*\d{1,2}(?:\s*[\-\–\s]\s*(?:ep)?\s*\d{1,2})?)\b/i);
+  const seMatch = working.match(/\b(s\d{1,2}\s*(?:ep?|-)?\s*\d{1,2}(?:\s*[-–\s]\s*(?:ep)?\s*\d{1,2})?)\b/i);
   if (seMatch) {
     seasonEpisode = seMatch[0].toUpperCase().replace(/\s+/g, ' ');
     working = working.replace(seMatch[0], ' ');
@@ -140,7 +140,7 @@ export function parseMediaInfo(filename?: string): ParsedMediaInfo {
 
   // Clean trailing single stray characters, brackets, dots, underscores, and extra whitespace
   working = working
-    .replace(/[_\.\(\)\[\]\-]+/g, ' ')
+    .replace(/[_.()[\]-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -148,7 +148,7 @@ export function parseMediaInfo(filename?: string): ParsedMediaInfo {
   working = working.replace(/^\b[a-z0-9]\b\s*/i, '').replace(/\s*\b[a-z0-9]\b$/i, '').trim();
 
   return {
-    cleanTitle: working || filename.replace(/[_\.]+/g, ' ').trim(),
+    cleanTitle: working || filename.replace(/[_.]+/g, ' ').trim(),
     year,
     seasonEpisode,
     resolution,

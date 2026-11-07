@@ -3,6 +3,7 @@ import re
 import sys
 import time
 import sqlite3
+import aiosqlite
 import logging
 import asyncio
 from typing import Dict, List, Set, Optional, Tuple, Any, Union
@@ -162,6 +163,7 @@ class SnifferService:
         self._quality_buffer: Dict[Tuple[int, str], List[dict]] = {}
         self._quality_timers: Dict[Tuple[int, str], asyncio.TimerHandle] = {}
         self.recent_feed: List[dict] = []
+        self._feed = self.recent_feed
         self.batch_active = False
         self.batch_links: List[dict] = []
         self.socket_emitter = None
@@ -205,6 +207,32 @@ class SnifferService:
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_dispatched_at ON dispatched_downloads(dispatched_at DESC);")
                 conn.commit()
+                conn.row_factory = sqlite3.Row
+                cur = conn.execute("""
+                    SELECT chat_id, message_id, file_name, size_bytes, url, dispatched_at
+                    FROM dispatched_downloads
+                    ORDER BY dispatched_at DESC
+                    LIMIT 50;
+                """)
+                for r in cur.fetchall():
+                    cid = r["chat_id"]
+                    mid = r["message_id"]
+                    fname = r["file_name"] or "Unknown"
+                    sz = r["size_bytes"] or 0
+                    sz_mb = sz / (1024 * 1024)
+                    self.recent_feed.append({
+                        "id": f"sniff_{cid}_{mid}",
+                        "chat_id": cid,
+                        "message_id": mid,
+                        "filename": fname,
+                        "size": sz,
+                        "size_bytes": sz,
+                        "size_formatted": f"{sz_mb:.1f} MB",
+                        "download_url": r["url"],
+                        "manager": "Auto-Dispatched",
+                        "status": "dispatched",
+                        "timestamp": r["dispatched_at"] or time.time()
+                    })
         except Exception as e:
             logger.warning(f"Could not initialize dispatched_downloads SQLite table: {e}")
 
@@ -275,6 +303,155 @@ class SnifferService:
         except Exception as e:
             logger.debug(f"Error querying recent dispatches: {e}")
             return []
+
+    async def ainit_db(self):
+        try:
+            SUITE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+            async with aiosqlite.connect(str(SUITE_DB_PATH), timeout=10.0) as db:
+                await db.execute("PRAGMA journal_mode=WAL;")
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS dispatched_downloads (
+                        chat_id TEXT NOT NULL,
+                        message_id INTEGER NOT NULL,
+                        file_name TEXT,
+                        size_bytes INTEGER,
+                        url TEXT,
+                        dispatched_at REAL,
+                        PRIMARY KEY (chat_id, message_id)
+                    );
+                """)
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_dispatched_at ON dispatched_downloads(dispatched_at DESC);")
+                await db.commit()
+                db.row_factory = aiosqlite.Row
+                async with db.execute("""
+                    SELECT chat_id, message_id, file_name, size_bytes, url, dispatched_at
+                    FROM dispatched_downloads
+                    ORDER BY dispatched_at DESC
+                    LIMIT 50;
+                """) as cur:
+                    for r in await cur.fetchall():
+                        cid = r["chat_id"]
+                        mid = r["message_id"]
+                        fname = r["file_name"] or "Unknown"
+                        sz = r["size_bytes"] or 0
+                        sz_mb = sz / (1024 * 1024)
+                        self.recent_feed.append({
+                            "id": f"sniff_{cid}_{mid}",
+                            "chat_id": cid,
+                            "message_id": mid,
+                            "filename": fname,
+                            "size": sz,
+                            "size_bytes": sz,
+                            "size_formatted": f"{sz_mb:.1f} MB",
+                            "download_url": r["url"],
+                            "manager": "Auto-Dispatched",
+                            "status": "dispatched",
+                            "timestamp": r["dispatched_at"] or time.time()
+                        })
+        except Exception as e:
+            logger.warning(f"Could not initialize dispatched_downloads aiosqlite table: {e}")
+
+    async def ais_dispatched(self, chat_id: Union[int, str], message_id: int) -> bool:
+        key = (str(chat_id), int(message_id))
+        if key in self._processed_messages:
+            return True
+        try:
+            async with aiosqlite.connect(str(SUITE_DB_PATH), timeout=10.0) as db:
+                async with db.execute(
+                    "SELECT 1 FROM dispatched_downloads WHERE chat_id = ? AND message_id = ? LIMIT 1;",
+                    (str(chat_id), int(message_id))
+                ) as cur:
+                    if await cur.fetchone() is not None:
+                        self._processed_messages.add(key)
+                        return True
+        except Exception as e:
+            logger.debug(f"aiosqlite ais_dispatched error: {e}")
+        return False
+
+    async def arecord_dispatch(self, chat_id: Union[int, str], message_id: int, file_name: str, size_bytes: int, url: str) -> None:
+        key = (str(chat_id), int(message_id))
+        self._processed_messages.add(key)
+        try:
+            async with aiosqlite.connect(str(SUITE_DB_PATH), timeout=10.0) as db:
+                await db.execute("""
+                    INSERT OR REPLACE INTO dispatched_downloads
+                    (chat_id, message_id, file_name, size_bytes, url, dispatched_at)
+                    VALUES (?, ?, ?, ?, ?, ?);
+                """, (str(chat_id), int(message_id), file_name, int(size_bytes), str(url), time.time()))
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"Could not record dispatch to aiosqlite: {e}")
+
+    async def aget_recent_dispatches(self, limit: int = 25) -> List[Dict]:
+        try:
+            async with aiosqlite.connect(str(SUITE_DB_PATH), timeout=10.0) as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute("""
+                    SELECT chat_id, message_id, file_name, size_bytes, url, dispatched_at
+                    FROM dispatched_downloads
+                    ORDER BY dispatched_at DESC
+                    LIMIT ?;
+                """, (limit,)) as cur:
+                    rows = []
+                    for r in await cur.fetchall():
+                        size_mb = (r["size_bytes"] or 0) / (1024 * 1024)
+                        dispatched_time = time.strftime("%H:%M:%S", time.localtime(r["dispatched_at"]))
+                        rows.append({
+                            "chat_id": r["chat_id"],
+                            "message_id": r["message_id"],
+                            "name": r["file_name"] or "Unknown",
+                            "size": f"{size_mb:.2f} MB",
+                            "time": dispatched_time,
+                            "url": r["url"]
+                        })
+                    return rows
+        except Exception as e:
+            logger.debug(f"aiosqlite error querying recent dispatches: {e}")
+            return []
+
+    async def aclear_feed(self):
+        self.recent_feed.clear()
+        if hasattr(self, "_feed") and isinstance(self._feed, list):
+            self._feed.clear()
+        if self.socket_emitter:
+            try:
+                self.socket_emitter("feed_snapshot", [])
+            except Exception as e:
+                logger.debug(f"Error emitting feed_snapshot: {e}")
+        else:
+            try:
+                from app.socket_handlers import broadcast_sniffer_event
+                broadcast_sniffer_event("feed_snapshot", [])
+            except Exception:
+                pass
+        try:
+            async with aiosqlite.connect(str(SUITE_DB_PATH), timeout=10.0) as db:
+                await db.execute("DELETE FROM dispatched_downloads;")
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"Error clearing dispatched_downloads: {e}")
+
+    def clear_feed(self):
+        self.recent_feed.clear()
+        if hasattr(self, "_feed") and isinstance(self._feed, list):
+            self._feed.clear()
+        if self.socket_emitter:
+            try:
+                self.socket_emitter("feed_snapshot", [])
+            except Exception as e:
+                logger.debug(f"Error emitting feed_snapshot: {e}")
+        else:
+            try:
+                from app.socket_handlers import broadcast_sniffer_event
+                broadcast_sniffer_event("feed_snapshot", [])
+            except Exception:
+                pass
+        try:
+            with sqlite3.connect(str(SUITE_DB_PATH), timeout=10.0) as conn:
+                conn.execute("DELETE FROM dispatched_downloads;")
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Error clearing dispatched_downloads: {e}")
 
     def _is_duplicate(self, chat_id: int, message_id: int) -> bool:
         return self.is_dispatched(chat_id, message_id)
@@ -361,7 +538,7 @@ class SnifferService:
                 res_label = item.get("res_label", "")
 
                 # Record in persistent store
-                self.record_dispatch(chat_id, message_id, fname, size_bytes, link)
+                await self.arecord_dispatch(chat_id, message_id, fname, size_bytes, link)
                 self._last_dispatch_time = time.time()
 
                 mgr, pushed = await auto_send(link)
@@ -574,7 +751,7 @@ class SnifferService:
 
         self._cache_message((chat_id, message_id), event.message)
 
-        if not force and self.is_dispatched(chat_id, message_id):
+        if not force and await self.ais_dispatched(chat_id, message_id):
             return
 
         self._ensure_dispatch_worker()

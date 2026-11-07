@@ -288,9 +288,7 @@ export function draftWebSeriesBySeason(
   const drafts: WebSeriesDraft[] = [];
 
   mergedShowsMap.forEach((show, showKey) => {
-    // If a show has multiple episodes or is clearly labeled as a series, bundle it into a WebSeriesDraft
-    if (show.episodes.length > 1 || show.episodes.some((e) => e.seasonNumber > 1 || e.episodeNumber > 1)) {
-      // Partition episodes by season
+    if (show.episodes.length > 0) {
       const seasonMap = new Map<number, WebSeriesEpisode[]>();
 
       show.episodes.forEach((ep) => {

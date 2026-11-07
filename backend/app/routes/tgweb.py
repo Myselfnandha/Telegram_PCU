@@ -7,7 +7,7 @@ without being blocked by X-Frame-Options: DENY or Content-Security-Policy.
 import logging
 from typing import Optional
 from fastapi import APIRouter, Request, Response
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse
 import httpx
 
 logger = logging.getLogger("tgweb_proxy")

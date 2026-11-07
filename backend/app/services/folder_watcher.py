@@ -27,6 +27,7 @@ class FolderWatcherDaemon:
         self._delete_after_upload: bool = False
         self._scan_interval: float = 6.0
         self._task: Optional[asyncio.Task] = None
+        self._stop_task: Optional[asyncio.Task] = None
         self._file_stability_cache: Dict[str, Dict[str, Any]] = {}
         self._init_db()
 
@@ -64,18 +65,27 @@ class FolderWatcherDaemon:
         return self._enabled
 
     def start(self):
-        """Starts the background directory watcher loop."""
+        if self._stop_task and not self._stop_task.done():
+            self._stop_task.cancel()
+            self._stop_task = None
+        self._enabled = True
         if self._task is None or self._task.done():
-            self._enabled = True
             self._task = asyncio.create_task(self._watch_loop())
             logger.info(f"📁 FolderWatcherDaemon started. Watching: {self._watch_dir}")
 
-    def stop(self):
-        """Stops the background directory watcher loop."""
+    async def stop(self):
         self._enabled = False
-        if self._task and not self._task.done():
-            self._task.cancel()
+        if self._stop_task and not self._stop_task.done() and asyncio.current_task() != self._stop_task:
+            self._stop_task.cancel()
+            self._stop_task = None
+        task = self._task
         self._task = None
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         logger.info("📁 FolderWatcherDaemon stopped.")
 
     async def _watch_loop(self):
@@ -224,7 +234,6 @@ class FolderWatcherDaemon:
         target_chat: Optional[str] = None,
         delete_after_upload: Optional[bool] = None
     ) -> Dict[str, Any]:
-        """Updates watcher configuration dynamically."""
         if watch_dir:
             p = Path(watch_dir).expanduser().resolve()
             p.mkdir(parents=True, exist_ok=True)
@@ -237,7 +246,41 @@ class FolderWatcherDaemon:
             if enabled:
                 self.start()
             else:
-                self.stop()
+                self._enabled = False
+                task = self._task
+                self._task = None
+                if task and not task.done():
+                    task.cancel()
+                try:
+                    loop = asyncio.get_running_loop()
+                    if self._stop_task and not self._stop_task.done():
+                        self._stop_task.cancel()
+                    self._stop_task = loop.create_task(self.stop())
+                except RuntimeError:
+                    pass
+
+        return self.get_status()
+
+    async def update_config_async(
+        self,
+        enabled: Optional[bool] = None,
+        watch_dir: Optional[str] = None,
+        target_chat: Optional[str] = None,
+        delete_after_upload: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        if watch_dir:
+            p = Path(watch_dir).expanduser().resolve()
+            p.mkdir(parents=True, exist_ok=True)
+            self._watch_dir = p
+        if target_chat is not None:
+            self._target_chat = target_chat
+        if delete_after_upload is not None:
+            self._delete_after_upload = bool(delete_after_upload)
+        if enabled is not None:
+            if enabled:
+                self.start()
+            else:
+                await self.stop()
 
         return self.get_status()
 

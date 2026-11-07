@@ -42,12 +42,11 @@ COPY assets /app/assets
 # Create required runtime directories
 RUN mkdir -p /app/backend/data /app/backend/sessions /app/backend/temp_uploads /app/backend/downloads
 
-WORKDIR /app/backend
+WORKDIR /app
 
 EXPOSE 8088
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8088/api/system/stats || exit 1
+    CMD curl -f http://localhost:8088/api/system/health || exit 1
 
-ENTRYPOINT ["python", "run.py"]
-CMD ["start", "--foreground"]
+CMD ["python", "backend/run.py", "start", "--foreground"]

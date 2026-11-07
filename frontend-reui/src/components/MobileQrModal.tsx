@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { QrCode, Tv, Smartphone, Copy, Download, Check } from 'lucide-react';
-import { api } from '../services/api';
-import { useApp } from '../context/AppContext';
+import { QrCode, Tv, Smartphone, Copy, Check } from 'lucide-react';
+import { api } from '@/services/api';
+import { useApp } from '@/context/AppContext';
 
 interface MobileQrModalProps {
   open: boolean;

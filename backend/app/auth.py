@@ -1,12 +1,9 @@
 import os
-from fastapi import Request, HTTPException, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Request, HTTPException
 from typing import Optional
 
 API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "").strip()
 ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "false").lower() in ("1", "true", "yes")
-
-security = HTTPBearer(auto_error=False)
 
 
 def is_loopback_request(request: Request) -> bool:

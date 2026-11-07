@@ -1,4 +1,4 @@
-export type TabType = 'uploader' | 'sniffer' | 'history' | 'cinema' | 'settings';
+export type TabType = 'cinema' | 'dashboard' | 'settings' | 'uploader' | 'sniffer' | 'history';
 
 export interface ChatItem {
   id: number | string;

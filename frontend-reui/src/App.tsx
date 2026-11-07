@@ -7,10 +7,10 @@ import { AuthModal } from '@/components/AuthModal';
 import { ToastContainer } from '@/components/ToastContainer';
 import { Loader2 } from 'lucide-react';
 
-const UploaderView = React.lazy(() => import('@/views/UploaderView').then((m) => ({ default: m.UploaderView })));
-const SnifferView = React.lazy(() => import('@/views/SnifferView').then((m) => ({ default: m.SnifferView })));
+const ManagementDashboardView = React.lazy(() =>
+  import('@/views/ManagementDashboardView').then((m) => ({ default: m.ManagementDashboardView }))
+);
 const CinemaView = React.lazy(() => import('@/views/CinemaView').then((m) => ({ default: m.CinemaView })));
-const HistoryView = React.lazy(() => import('@/views/HistoryView').then((m) => ({ default: m.HistoryView })));
 const SettingsView = React.lazy(() => import('@/views/SettingsView').then((m) => ({ default: m.SettingsView })));
 
 const ViewLoadingFallback: React.FC = () => (
@@ -61,22 +61,27 @@ const MainLayout: React.FC = () => {
           className="flex-1 min-h-0 min-w-0 w-full relative focus:outline-none flex flex-col overflow-hidden"
         >
           <Suspense fallback={<ViewLoadingFallback />}>
+            {activeTab === 'dashboard' && (
+              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+                <ManagementDashboardView />
+              </div>
+            )}
             {activeTab === 'uploader' && (
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <UploaderView />
+              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+                <ManagementDashboardView initialSubTab="uploader" />
               </div>
             )}
             {activeTab === 'sniffer' && (
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <SnifferView />
+              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+                <ManagementDashboardView initialSubTab="sniffer" />
+              </div>
+            )}
+            {activeTab === 'history' && (
+              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+                <ManagementDashboardView initialSubTab="history" />
               </div>
             )}
             {activeTab === 'cinema' && <CinemaView />}
-            {activeTab === 'history' && (
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <HistoryView />
-              </div>
-            )}
             {activeTab === 'settings' && (
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <SettingsView />

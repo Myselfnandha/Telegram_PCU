@@ -56,37 +56,67 @@ def setup_file_logging():
     root_logger.setLevel(logging.INFO)
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
 
-    # 1. Persistent Rotating File Handler
-    file_handler = logging.handlers.RotatingFileHandler(
-        str(LOG_FILE),
-        maxBytes=10 * 1024 * 1024,
-        backupCount=3,
-        encoding="utf-8"
-    )
-    file_handler.setFormatter(fmt)
-    root_logger.addHandler(file_handler)
+    has_file = any(isinstance(h, logging.handlers.RotatingFileHandler) for h in root_logger.handlers)
+    has_stream = any(isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.RotatingFileHandler) for h in root_logger.handlers)
 
-    # 2. Live Terminal Console Stream Handler (filtered)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(fmt)
-    root_logger.addHandler(console_handler)
+    if not has_file:
+        file_handler = logging.handlers.RotatingFileHandler(
+            str(LOG_FILE),
+            maxBytes=10 * 1024 * 1024,
+            backupCount=3,
+            encoding="utf-8"
+        )
+        file_handler.setFormatter(fmt)
+        root_logger.addHandler(file_handler)
 
-    # 3. Suppress polling noise from uvicorn HTTP access logger
+    if not has_stream:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(fmt)
+        root_logger.addHandler(console_handler)
+
     logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
-
     logging.getLogger("telethon.network").setLevel(logging.ERROR)
+
+def is_pid_alive(pid: int) -> bool:
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    if sys.platform != "win32":
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+
+        proc_status = Path(f"/proc/{pid}/status")
+        if proc_status.exists():
+            try:
+                for line in proc_status.read_text().splitlines():
+                    if line.startswith("State:"):
+                        if "Z" in line or "zombie" in line.lower():
+                            return False
+                        break
+            except Exception:
+                pass
+        return True
+    else:
+        try:
+            import psutil
+            if not psutil.pid_exists(pid):
+                return False
+            p = psutil.Process(pid)
+            return p.status() != psutil.STATUS_ZOMBIE
+        except Exception:
+            return False
 
 def get_running_pid():
     if PID_FILE.exists():
         try:
             pid = int(PID_FILE.read_text().strip())
-            if sys.platform != "win32":
-                os.kill(pid, 0)
+            if pid > 0 and is_pid_alive(pid):
                 return pid
-            else:
-                import psutil
-                if psutil.pid_exists(pid):
-                    return pid
         except (ValueError, OSError, ProcessLookupError):
             pass
         except Exception:
@@ -102,14 +132,14 @@ def get_running_pid():
             val = res.stdout.strip()
             if val and val.isdigit():
                 spid = int(val)
-                if spid > 0:
-                    os.kill(spid, 0)
+                if spid > 0 and is_pid_alive(spid):
                     return spid
         except Exception:
             pass
     return None
 
 def acquire_pid_lock():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     pid = get_running_pid()
     if pid and pid != os.getpid():
         return False, pid
@@ -153,11 +183,18 @@ def cli_stop():
             if sys.platform != "win32":
                 os.kill(pid, signal.SIGTERM)
             else:
-                subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
-            time.sleep(1)
-            if get_running_pid():
+                subprocess.run(["taskkill", "/PID", str(pid)], capture_output=True)
+            stopped = False
+            for _ in range(12):
+                time.sleep(0.5)
+                if not is_pid_alive(pid):
+                    stopped = True
+                    break
+            if not stopped and is_pid_alive(pid):
                 if sys.platform != "win32":
                     os.kill(pid, signal.SIGKILL)
+                else:
+                    subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
         except Exception as e:
             print(f"  ❌ Error stopping process: {e}\n")
 
@@ -258,12 +295,14 @@ def run_server(enable_tray: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(description="TG Power Suite CLI")
+    parser.add_argument("--foreground", action="store_true", help="Run in foreground")
     subparsers = parser.add_subparsers(dest="command")
 
     # start
     p_start = subparsers.add_parser("start", help="Start TG Power Suite server")
     p_start.add_argument("--tray", action="store_true", help="Enable system tray icon")
     p_start.add_argument("--daemon", action="store_true", help="Run detached in background")
+    p_start.add_argument("--foreground", action="store_true", help="Run in foreground")
 
     # stop
     subparsers.add_parser("stop", help="Stop running TG Power Suite server")
@@ -294,7 +333,8 @@ def main():
         cli_logs(follow=args.follow, lines=args.lines)
     elif args.command == "start" or args.command is None:
         tray_flag = getattr(args, "tray", False) or ("--tray" in sys.argv)
-        daemon_flag = getattr(args, "daemon", False) or ("--daemon" in sys.argv)
+        foreground_flag = getattr(args, "foreground", False) or ("--foreground" in sys.argv)
+        daemon_flag = (getattr(args, "daemon", False) or ("--daemon" in sys.argv)) and not foreground_flag
 
         if daemon_flag:
             cmd = [sys.executable, str(Path(__file__).resolve())]

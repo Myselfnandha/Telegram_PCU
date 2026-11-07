@@ -1,6 +1,6 @@
 import aiosqlite
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from app.config import DB_PATH
@@ -152,7 +152,7 @@ async def save_cinema_cached_videos_db(chat_id: str, videos: list):
         import json
         videos_json = json.dumps(videos)
         count = len(videos)
-        now = datetime.utcnow().timestamp()
+        now = datetime.now(timezone.utc).timestamp()
         async with aiosqlite.connect(str(DB_PATH), timeout=5.0) as db:
             await db.execute("""
                 INSERT INTO cinema_videos_cache (chat_id, videos_json, video_count, updated_at)

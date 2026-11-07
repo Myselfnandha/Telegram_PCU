@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useMemo, useContext, useEffect, useRef, useState } from 'react';
 import type { AuthStatus, ChatItem, TabType, TelemetryStats, ThemeType, UploadTask } from '@/types';
 import { api } from '@/services/api';
 import { socketService } from '@/services/socket';
@@ -8,6 +8,7 @@ export interface ToastMessage {
   type: 'info' | 'success' | 'warning' | 'error';
   title?: string;
   message: string;
+  count?: number;
 }
 
 interface AppContextValue {
@@ -19,7 +20,7 @@ interface AppContextValue {
   setAuthModalOpen: (open: boolean) => void;
   selectedChat: ChatItem;
   setSelectedChat: (chat: ChatItem) => void;
-  telemetry: TelemetryStats | null;
+  telemetry?: TelemetryStats | null;
   isSocketConnected: boolean;
   floodWait: { active: boolean; seconds: number; message?: string } | null;
   theme: ThemeType;
@@ -49,22 +50,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return 'cinema';
     }
     const saved = localStorage.getItem('tg_active_tab') as TabType;
-    if (saved && ['uploader', 'sniffer', 'cinema', 'history', 'settings'].includes(saved)) {
+    if (saved && ['dashboard', 'uploader', 'sniffer', 'cinema', 'history', 'settings'].includes(saved)) {
       return saved;
     }
     return 'cinema';
   });
 
-  const setActiveTab = (tab: TabType) => {
+  const setActiveTab = useCallback((tab: TabType) => {
     setActiveTabState(tab);
     try {
       localStorage.setItem('tg_active_tab', tab);
     } catch {}
-  };
+  }, []);
+
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [selectedChat, setSelectedChatState] = useState<ChatItem>(DEFAULT_CHAT);
-  const [telemetry, setTelemetry] = useState<TelemetryStats | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [floodWait, setFloodWait] = useState<{ active: boolean; seconds: number; message?: string } | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -72,27 +73,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [theme, setThemeState] = useState<ThemeType>(() => {
     const saved = localStorage.getItem('tg_theme');
     if (saved === 'light' || saved === 'dark' || saved === 'cyber-emerald') return saved as ThemeType;
-    return 'cyber-emerald'; // Default premier theme: Midnight Emerald / Cyber Core
+    return 'cyber-emerald';
   });
 
-  const setTheme = (nextTheme: ThemeType) => {
+  const toastHistoryRef = useRef<Map<string, { time: number; id: string; count: number; baseMessage: string }>>(new Map());
+
+  const setTheme = useCallback((nextTheme: ThemeType) => {
     setThemeState(nextTheme);
     try {
       localStorage.setItem('tg_theme', nextTheme);
     } catch {}
-  };
+  }, []);
 
-  const addToast = (toast: Omit<ToastMessage, 'id'>) => {
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const addToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
+    const now = Date.now();
+    const key = `${toast.type}:${toast.title || ''}:${toast.message}`;
+    const existing = toastHistoryRef.current.get(key);
+
+    if (existing && now - existing.time < 2500) {
+      existing.count += 1;
+      existing.time = now;
+      setToasts((prev) =>
+        prev.map((t) =>
+          t.id === existing.id
+            ? {
+                ...t,
+                count: existing.count,
+                message: `${existing.baseMessage} (${existing.count}x)`,
+              }
+            : t
+        )
+      );
+      return;
+    }
+
+    if (toastHistoryRef.current.size > 40) {
+      for (const [k, v] of toastHistoryRef.current.entries()) {
+        if (now - v.time > 10000) {
+          toastHistoryRef.current.delete(k);
+        }
+      }
+    }
+
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { ...toast, id }]);
+    toastHistoryRef.current.set(key, {
+      time: now,
+      id,
+      count: 1,
+      baseMessage: toast.message,
+    });
+
+    setToasts((prev) => {
+      const trimmed = prev.length >= 2 ? prev.slice(prev.length - 1) : prev;
+      return [...trimmed, { ...toast, id, count: 1 }];
+    });
+
     setTimeout(() => {
       removeToast(id);
     }, 4500);
-  };
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, [removeToast]);
 
   const setSelectedChat = (chat: ChatItem) => {
     setSelectedChatState(chat);
@@ -101,15 +144,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   };
 
-  const toggleTheme = () => {
-    // Cycle: cyber-emerald -> dark -> light -> cyber-emerald
+  const toggleTheme = useCallback(() => {
     const nextTheme: ThemeType =
       theme === 'cyber-emerald' ? 'dark' : theme === 'dark' ? 'light' : 'cyber-emerald';
     setTheme(nextTheme);
-  };
+  }, [theme, setTheme]);
 
   // Synchronize HTML dark and cyber-emerald classes
-  useEffect(() => {
+  useMemo(() => {
     const root = document.documentElement;
     if (theme === 'cyber-emerald') {
       root.classList.add('dark', 'cyber-emerald');
@@ -149,7 +191,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     socketService.init();
 
     const unsubConn = socketService.onConnectionChange(setIsSocketConnected);
-    const unsubTelemetry = socketService.onTelemetry(setTelemetry);
     const unsubFloodWait = socketService.onFloodWait((fw) => {
       setFloodWait(fw.active ? fw : null);
     });
@@ -202,7 +243,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       unsubConn();
-      unsubTelemetry();
       unsubFloodWait();
       unsubQueue();
       unsubProgress();
@@ -220,7 +260,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAuthModalOpen,
         selectedChat,
         setSelectedChat,
-        telemetry,
+        telemetry: null,
         isSocketConnected,
         floodWait,
         theme,
@@ -236,6 +276,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {children}
     </AppContext.Provider>
   );
+};
+
+export const useTelemetry = () => {
+  const [telemetry, setTelemetry] = useState<TelemetryStats | null>(null);
+  useEffect(() => {
+    const unsub = socketService.onTelemetry(setTelemetry);
+    return () => {
+      unsub();
+    };
+  }, []);
+  return telemetry;
 };
 
 export const useApp = () => {

@@ -102,6 +102,7 @@ async def test_queue_manager_lifecycle():
 @pytest.mark.asyncio
 async def test_database_history():
     await init_db()
+    await clear_history()
     
     with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
         f.write(b"Database test")
@@ -176,6 +177,7 @@ async def test_api_endpoints():
 @pytest.mark.asyncio
 async def test_string_chat_id_history():
     await init_db()
+    await clear_history()
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
         f.write(b"%PDF-1.4 dummy test document")
         f_path = Path(f.name)

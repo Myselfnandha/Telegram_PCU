@@ -25,7 +25,11 @@ while [ -h "$SOURCE" ]; do
     [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [ -f "$SCRIPT_DIR/backend/run.py" ]; then
+    APP_DIR="$(cd "$SCRIPT_DIR" && pwd)"
+else
+    APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 VENV_PYTHON="$APP_DIR/venv/bin/python"
 BACKEND_RUN="$APP_DIR/backend/run.py"
 PID_FILE="$APP_DIR/backend/data/tg_power_suite.pid"

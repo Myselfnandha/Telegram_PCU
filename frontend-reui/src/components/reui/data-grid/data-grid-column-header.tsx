@@ -394,7 +394,7 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
               className={headerButtonClassName}
               disabled={isLoading}
             >
-              {icon && icon}
+              {icon}
               {resolvedTitle}
               {sortIcon}
             </Button>
@@ -446,7 +446,7 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
           disabled={isLoading}
           onClick={handleSort}
         >
-          {icon && icon}
+          {icon}
           {resolvedTitle}
           {sortIcon}
         </Button>
@@ -456,7 +456,7 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
 
   return (
     <div className={headerLabelClassName}>
-      {icon && icon}
+      {icon}
       {resolvedTitle}
     </div>
   )

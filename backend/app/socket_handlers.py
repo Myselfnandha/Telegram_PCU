@@ -2,7 +2,7 @@ import logging
 import socketio
 from typing import Dict, Any
 from app.config import CORS_ORIGINS
-from app.models import UploadTaskState, UploadStatus
+from app.models import UploadStatus
 from app.services.queue_manager import queue_manager, UploadItem
 
 logger = logging.getLogger("socket_handlers")
@@ -130,6 +130,7 @@ async def download_cancel(sid, data: Dict[str, Any]):
         download_manager.cancel_task(task_id)
 
 @sio.event
+@sio.on("queue:get")
 async def queue_get(sid):
     tasks = queue_manager.get_all_tasks()
     task_snapshots = [_item_to_state_dict(t) for t in tasks]

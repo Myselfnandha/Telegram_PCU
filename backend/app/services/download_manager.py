@@ -12,6 +12,10 @@ from app.config import DOWNLOADS_DIR
 logger = logging.getLogger("download_manager")
 
 
+class DownloadCancelledError(Exception):
+    pass
+
+
 class DownloadStatus:
     QUEUED = "queued"
     DOWNLOADING = "downloading"
@@ -67,6 +71,7 @@ class DownloadTask:
 
 class DownloadManager:
     def __init__(self):
+        self._is_running: bool = False
         self.tasks: Dict[str, DownloadTask] = {}
         self.progress_emitter: Optional[Callable[[dict], None]] = None
         self._worker_task: Optional[asyncio.Task] = None
@@ -83,9 +88,37 @@ class DownloadManager:
                 logger.debug(f"Progress emitter error: {e}")
 
     def start(self):
+        self._is_running = True
+        try:
+            current_loop = asyncio.get_running_loop()
+            if hasattr(self._queue, "_loop") and getattr(self._queue, "_loop") not in (None, current_loop):
+                self._queue = asyncio.Queue()
+        except RuntimeError:
+            pass
         if not self._worker_task or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._worker_loop())
             logger.info("Background Download Manager worker started.")
+
+    async def stop(self):
+        self._is_running = False
+        if self._worker_task and not self._worker_task.done():
+            self._worker_task.cancel()
+            try:
+                await self._worker_task
+            except asyncio.CancelledError:
+                pass
+            self._worker_task = None
+
+        while not self._queue.empty():
+            try:
+                task = self._queue.get_nowait()
+                if task.status == DownloadStatus.QUEUED:
+                    task.status = DownloadStatus.CANCELLED
+                    self._notify(task)
+                self._queue.task_done()
+            except (asyncio.QueueEmpty, ValueError):
+                break
+        self._queue = asyncio.Queue()
 
     async def add_url_download(self, url: str, custom_filename: Optional[str] = None) -> DownloadTask:
         task_id = f"dl_{uuid.uuid4().hex[:10]}"
@@ -137,25 +170,36 @@ class DownloadManager:
         return [t.to_dict() for t in self.tasks.values()]
 
     async def _worker_loop(self):
-        while True:
+        while self._is_running:
             try:
                 task: DownloadTask = await self._queue.get()
+            except asyncio.CancelledError:
+                break
+
+            try:
+                if not self._is_running:
+                    break
+
                 if task.status == DownloadStatus.CANCELLED:
-                    self._queue.task_done()
                     continue
 
                 await self._process_download(task)
-                self._queue.task_done()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Download worker loop error: {e}", exc_info=True)
+            finally:
+                self._queue.task_done()
 
     async def _process_download(self, task: DownloadTask):
+        if task.cancel_event.is_set():
+            task.status = DownloadStatus.CANCELLED
+            self._notify(task)
+            return
+
         task.status = DownloadStatus.DOWNLOADING
         self._notify(task)
 
-        # Check existing downloaded bytes for HTTP Range resumption
         resume_offset = 0
         if task.file_path.exists():
             resume_offset = task.file_path.stat().st_size
@@ -188,12 +232,14 @@ class DownloadManager:
                     async with aiofiles.open(task.file_path, mode) as f:
                         async for chunk in resp.aiter_bytes(chunk_size=256 * 1024):
                             if task.cancel_event.is_set():
-                                raise asyncio.CancelledError("Download cancelled by user.")
+                                raise DownloadCancelledError("Download cancelled by user.")
 
                             if not task.pause_event.is_set():
                                 task.status = DownloadStatus.PAUSED
                                 self._notify(task)
                                 await task.pause_event.wait()
+                                if task.cancel_event.is_set():
+                                    raise DownloadCancelledError("Download cancelled by user.")
                                 task.status = DownloadStatus.DOWNLOADING
                                 self._notify(task)
 
@@ -219,7 +265,6 @@ class DownloadManager:
                                 last_emit = now
                                 self._notify(task)
 
-            # Successfully completed
             task.status = DownloadStatus.COMPLETED
             task.progress = 100.0
             task.completed_at = time.time()
@@ -229,9 +274,13 @@ class DownloadManager:
             self._notify(task)
             logger.info(f"Successfully downloaded {task.filename} ({task.file_size} bytes)")
 
+        except DownloadCancelledError:
+            task.status = DownloadStatus.CANCELLED
+            self._notify(task)
         except asyncio.CancelledError:
             task.status = DownloadStatus.CANCELLED
             self._notify(task)
+            raise
         except Exception as e:
             logger.error(f"Download failed for {task.filename}: {e}")
             task.status = DownloadStatus.FAILED

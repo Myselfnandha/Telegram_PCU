@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '@/context/AppContext';
 import type { CinemaVideo, ContinueWatchingItem } from '@/types';
 import { api } from '@/services/api';
@@ -34,9 +34,13 @@ import {
   ExternalLink,
   Film,
   Grid3x3,
+  Hash,
   LayoutGrid,
   List,
+  Maximize,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   MoreVertical,
   Play,
   PlayCircle,
@@ -117,12 +121,13 @@ export const CinemaView: React.FC = () => {
   const [continueWatching, setContinueWatching] = useState<ContinueWatchingItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'movies' | 'series' | 'hd'>('all');
+  const [filter, setFilter] = useState<'all' | 'movies' | 'series'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'size' | 'title'>('newest');
-  const [viewMode, setViewMode] = useState<'large' | 'dense' | 'files'>(() => {
+  const [viewMode, setViewMode] = useState<'large' | 'dense' | 'fit' | 'files'>(() => {
     const saved = localStorage.getItem('cinema_view_mode');
     if (saved === 'files') return 'files';
     if (saved === 'large') return 'large';
+    if (saved === 'fit') return 'fit';
     return 'dense';
   });
   const [isContinueWatchingOpen, setContinueWatchingOpen] = useState<boolean>(() => {
@@ -133,6 +138,50 @@ export const CinemaView: React.FC = () => {
     const saved = localStorage.getItem('cinema_channel_dock_open');
     return saved !== 'false';
   });
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
+  const prevDockStateRef = useRef<{ channel: boolean; resume: boolean }>({
+    channel: true,
+    resume: true,
+  });
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsBrowserFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const isFitScreen = !isChannelDockOpen && !isContinueWatchingOpen;
+
+  const handleToggleFitScreen = () => {
+    if (!isFitScreen) {
+      prevDockStateRef.current = {
+        channel: isChannelDockOpen,
+        resume: isContinueWatchingOpen,
+      };
+      setChannelDockOpen(false);
+      setContinueWatchingOpen(false);
+      localStorage.setItem('cinema_channel_dock_open', 'false');
+      localStorage.setItem('cinema_resume_dock_open', 'false');
+    } else {
+      const restoreChannel = prevDockStateRef.current.channel ?? true;
+      const restoreResume = prevDockStateRef.current.resume ?? true;
+      setChannelDockOpen(restoreChannel);
+      setContinueWatchingOpen(restoreResume);
+      localStorage.setItem('cinema_channel_dock_open', String(restoreChannel));
+      localStorage.setItem('cinema_resume_dock_open', String(restoreResume));
+    }
+  };
+
+  const handleToggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
   const [isChatPickerOpen, setChatPickerOpen] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<CinemaVideo | null>(null);
   const [qrModalVideo, setQrModalVideo] = useState<CinemaVideo | null>(null);
@@ -149,10 +198,13 @@ export const CinemaView: React.FC = () => {
 
   // Movie Draft States
   const [movieSortMode, setMovieSortMode] = useState<MovieSortOption>('date-desc');
-  const [movieCollectionType, setMovieCollectionType] = useState<'all' | 'franchise' | 'year'>('all');
+  const [movieCollectionType, setMovieCollectionType] = useState<'movies' | 'franchise' | 'year'>('movies');
   const [movieViewStyle, setMovieViewStyle] = useState<'split' | 'bundled' | 'flat'>('split');
   const [selectedMovieCollectionId, setSelectedMovieCollectionId] = useState<string>('');
   const [expandedMovieCollections, setExpandedMovieCollections] = useState<Record<string, boolean>>({});
+
+  const [visibleCount, setVisibleCount] = useState<number>(60);
+  const catalogScrollRef = useRef<HTMLDivElement>(null);
 
   // Centered Draggable Filter Navigation State
   const navDragRef = useRef<HTMLDivElement>(null);
@@ -164,12 +216,12 @@ export const CinemaView: React.FC = () => {
     hasMoved: false,
   });
 
-  const handleSetViewMode = (mode: 'large' | 'dense' | 'files') => {
+  const handleSetViewMode = (mode: 'large' | 'dense' | 'fit' | 'files') => {
     setViewMode(mode);
     localStorage.setItem('cinema_view_mode', mode);
   };
 
-  const loadVideos = async (forceRefresh = false) => {
+  const loadVideos = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
       const res = await api.getCinemaVideos(selectedChat.id, forceRefresh);
@@ -180,7 +232,8 @@ export const CinemaView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedChat.id]);
+
 
   const loadContinueWatching = async () => {
     try {
@@ -190,6 +243,10 @@ export const CinemaView: React.FC = () => {
       console.debug('Failed to load continue watching:', e);
     }
   };
+
+  useEffect(() => {
+    setVisibleCount(60);
+  }, [selectedChat.id, filter, search, sortBy]);
 
   useEffect(() => {
     loadVideos(false);
@@ -674,6 +731,7 @@ export const CinemaView: React.FC = () => {
   const {
     franchises: movieFranchises,
     yearCollections: movieYearCollections,
+    movieTitleGroups,
   } = useMemo(() => {
     return draftMoviesByFranchiseAndYear(videos, {
       sortBy: movieSortMode,
@@ -684,8 +742,8 @@ export const CinemaView: React.FC = () => {
   const activeMovieCollections = useMemo(() => {
     if (movieCollectionType === 'franchise') return movieFranchises;
     if (movieCollectionType === 'year') return movieYearCollections;
-    return [...movieFranchises, ...movieYearCollections];
-  }, [movieFranchises, movieYearCollections, movieCollectionType]);
+    return movieTitleGroups;
+  }, [movieFranchises, movieYearCollections, movieTitleGroups, movieCollectionType]);
 
   const activeSelectedMovieCollection = useMemo(() => {
     if (!activeMovieCollections.length) return null;
@@ -715,7 +773,6 @@ export const CinemaView: React.FC = () => {
 
         if (filter === 'series') return Boolean(v.is_series || v.series_name || v.season || v.episode);
         if (filter === 'movies') return !v.is_series && !v.series_name && !v.season && !v.episode;
-        if (filter === 'hd') return v.resolution?.includes('1080') || v.resolution?.includes('4K') || v.resolution?.includes('2160');
 
         return true;
       })
@@ -763,6 +820,25 @@ export const CinemaView: React.FC = () => {
     return groups;
   }, [filteredVideos]);
 
+  const visibleDateGroups = useMemo(() => {
+    let remaining = visibleCount;
+    const result: typeof dateGroups = [];
+    for (const group of dateGroups) {
+      if (remaining <= 0) break;
+      if (group.videos.length <= remaining) {
+        result.push(group);
+        remaining -= group.videos.length;
+      } else {
+        result.push({
+          ...group,
+          videos: group.videos.slice(0, remaining),
+        });
+        remaining = 0;
+      }
+    }
+    return result;
+  }, [dateGroups, visibleCount]);
+
   const hasContinueWatching = continueWatching.length > 0;
 
   const watchProgressMap = useMemo(() => {
@@ -774,6 +850,11 @@ export const CinemaView: React.FC = () => {
   }, [continueWatching]);
 
   const handleStartPlay = (v: CinemaVideo) => {
+    const playerPref = localStorage.getItem('tg_player_pref') || 'vlc';
+    if (playerPref === 'vlc') {
+      void handlePlayInVlc(v);
+      return;
+    }
     const prog = watchProgressMap.get(`${v.chat_id}_${v.message_id}`);
     const resumeSec = prog ? (prog.playback_seconds || prog.last_position_seconds || 0) : (v.playback_seconds || 0);
     setPreviewVideo({
@@ -786,7 +867,7 @@ export const CinemaView: React.FC = () => {
     <div id="cinema-view-container" className="w-full h-full p-2 sm:p-2.5 flex flex-col gap-2 min-h-0 overflow-hidden animate-in fade-in duration-300">
       {/* Top Header & Archive Controls */}
       <div className="shrink-0 p-2 sm:p-2.5 rounded-xl border border-border/60 bg-card/75 backdrop-blur-md shadow-xs space-y-1.5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 relative">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-7.5 h-7.5 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-inner">
               <Clapperboard className="w-4 h-4" />
@@ -798,25 +879,24 @@ export const CinemaView: React.FC = () => {
                   {videos.length} Videos
                 </Badge>
               </div>
-              <div className="text-[11px] text-muted-foreground truncate">
-                Channel:{' '}
-                <button
-                  onClick={() => {
-                    if (!isChannelDockOpen) {
-                      setChannelDockOpen(true);
-                      localStorage.setItem('cinema_channel_dock_open', 'true');
-                      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                        setContinueWatchingOpen(false);
-                        localStorage.setItem('cinema_resume_dock_open', 'false');
-                      }
-                    }
-                  }}
-                  className="font-medium text-foreground hover:underline cursor-pointer"
-                >
-                  {selectedChat.name}
-                </button>
-              </div>
             </div>
+          </div>
+
+          <div className="flex items-center justify-center min-w-0 px-2 sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:max-w-[40%] pointer-events-auto">
+            <button
+              onClick={() => {
+                if (!isChannelDockOpen) {
+                  setChannelDockOpen(true);
+                  localStorage.setItem('cinema_channel_dock_open', 'true');
+                }
+              }}
+              className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-border/80 bg-muted/40 hover:bg-muted/70 hover:border-primary/50 transition-all text-xs font-semibold text-foreground shadow-2xs cursor-pointer max-w-full group"
+              title="Click to view channels & chats"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <Hash className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="truncate group-hover:text-primary transition-colors">{selectedChat.name}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
@@ -828,10 +908,6 @@ export const CinemaView: React.FC = () => {
                   const next = !isContinueWatchingOpen;
                   setContinueWatchingOpen(next);
                   localStorage.setItem('cinema_resume_dock_open', String(next));
-                  if (next && typeof window !== 'undefined' && window.innerWidth < 1024) {
-                    setChannelDockOpen(false);
-                    localStorage.setItem('cinema_channel_dock_open', 'false');
-                  }
                 }}
                 className="h-7.5 px-2.5 gap-1.5 cursor-pointer text-xs"
               >
@@ -847,10 +923,6 @@ export const CinemaView: React.FC = () => {
                 const next = !isChannelDockOpen;
                 setChannelDockOpen(next);
                 localStorage.setItem('cinema_channel_dock_open', String(next));
-                if (next && typeof window !== 'undefined' && window.innerWidth < 1024) {
-                  setContinueWatchingOpen(false);
-                  localStorage.setItem('cinema_resume_dock_open', 'false');
-                }
               }}
               className="h-7.5 px-2.5 gap-1.5 cursor-pointer text-xs"
             >
@@ -866,59 +938,59 @@ export const CinemaView: React.FC = () => {
               className="h-7.5 px-2.5 text-xs cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
-              Sync Archive
+              Sync
             </Button>
           </div>
         </div>
 
-        {/* Centered/Left Filter Navigation Bar and Search & Sort Controls */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-1.5 pt-1 border-t border-border/40">
-          <div
-            ref={navDragRef}
-            onMouseDown={handleNavMouseDown}
-            onMouseMove={handleNavMouseMove}
-            onMouseUp={handleNavMouseUp}
-            onMouseLeave={handleNavMouseLeave}
-            role="tablist"
-            aria-label="Video category filters"
-            className={`inline-flex items-center gap-1 p-0.5 rounded-full bg-muted/40 border border-border/60 shadow-2xs backdrop-blur-md overflow-x-auto scrollbar-none select-none max-w-full touch-pan-x transition-colors ${
-              isNavDragging ? 'cursor-grabbing select-none' : 'cursor-grab'
-            }`}
-          >
-            {(
-              [
-                { id: 'all', label: 'All Videos' },
-                { id: 'movies', label: 'Movies' },
-                { id: 'series', label: 'Series / Episodes' },
-                { id: 'hd', label: '1080p & 4K' },
-              ] as const
-            ).map((tab) => {
-              const isActive = filter === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={(e) => {
-                    if (navDragState.current.hasMoved) {
-                      e.preventDefault();
-                      return;
-                    }
-                    setFilter(tab.id);
-                  }}
-                  className={`text-[11px] px-2.5 py-0.5 rounded-full transition-all shrink-0 select-none cursor-pointer ${
-                    isActive
-                      ? 'bg-foreground text-background font-bold shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 border-t border-border/40 relative min-h-[38px]">
+          <div className="w-full sm:w-auto flex justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2 pointer-events-auto">
+            <div
+              ref={navDragRef}
+              onMouseDown={handleNavMouseDown}
+              onMouseMove={handleNavMouseMove}
+              onMouseUp={handleNavMouseUp}
+              onMouseLeave={handleNavMouseLeave}
+              role="tablist"
+              aria-label="Video category filters"
+              className={`inline-flex items-center gap-1 p-0.5 rounded-full bg-muted/40 border border-border/60 shadow-2xs backdrop-blur-md overflow-x-auto scrollbar-none select-none max-w-full touch-pan-x transition-colors ${
+                isNavDragging ? 'cursor-grabbing select-none' : 'cursor-grab'
+              }`}
+            >
+              {(
+                [
+                  { id: 'all', label: 'All Videos' },
+                  { id: 'movies', label: 'Movies' },
+                  { id: 'series', label: 'Series / Episodes' },
+                ] as const
+              ).map((tab) => {
+                const isActive = filter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={(e) => {
+                      if (navDragState.current.hasMoved) {
+                        e.preventDefault();
+                        return;
+                      }
+                      setFilter(tab.id);
+                    }}
+                    className={`text-[11px] px-2.5 py-0.5 rounded-full transition-all shrink-0 select-none cursor-pointer ${
+                      isActive
+                        ? 'bg-foreground text-background font-bold shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0 ml-auto w-full sm:w-auto justify-end">
             {/* View Mode Toggle */}
             <div role="group" aria-label="View display mode" className="flex items-center p-0.5 rounded-lg border border-border bg-background">
               <button
@@ -948,6 +1020,19 @@ export const CinemaView: React.FC = () => {
                 <Grid3x3 className="w-3.5 h-3.5" />
               </button>
               <button
+                onClick={() => handleSetViewMode('fit')}
+                aria-label="Switch to screen-fit compact grid"
+                aria-pressed={viewMode === 'fit'}
+                className={`p-1 rounded-md transition-all cursor-pointer ${
+                  viewMode === 'fit'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Fit Screen (Compact View)"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
                 onClick={() => handleSetViewMode('files')}
                 aria-label="Switch to files table layout"
                 aria-pressed={viewMode === 'files'}
@@ -961,6 +1046,8 @@ export const CinemaView: React.FC = () => {
                 <List className="w-3.5 h-3.5" />
               </button>
             </div>
+
+
 
             {/* Sort Dropdown */}
             <div className="flex items-center gap-1 px-2 h-7 rounded-lg border border-border bg-background text-xs">
@@ -1051,7 +1138,17 @@ export const CinemaView: React.FC = () => {
         )}
 
         {/* Video Catalog (Expands to full remaining width; ONLY container that scrolls!) */}
-        <div id="cinema-files-catalog" className="flex-1 min-w-0 h-full overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
+        <div
+          ref={catalogScrollRef}
+          id="cinema-files-catalog"
+          className="flex-1 min-w-0 h-full overflow-y-auto space-y-2.5 pr-1 scrollbar-thin"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            if (el.scrollHeight - (el.scrollTop + el.clientHeight) < 600) {
+              setVisibleCount((prev) => (prev < filteredVideos.length ? prev + 60 : prev));
+            }
+          }}
+        >
 
           {/* Dedicated Movies Showcase (active when filter === 'movies') */}
           {filter === 'movies' && !loading && (
@@ -1076,17 +1173,16 @@ export const CinemaView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  {/* Collection Sub-Filter Tabs */}
                   <div className="flex items-center p-0.5 rounded-lg border border-border bg-background text-xs">
                     <button
-                      onClick={() => setMovieCollectionType('all')}
+                      onClick={() => setMovieCollectionType('movies')}
                       className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
-                        movieCollectionType === 'all'
+                        movieCollectionType === 'movies'
                           ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      All ({movieFranchises.length + movieYearCollections.length})
+                      Movies ({movieTitleGroups.length})
                     </button>
                     <button
                       onClick={() => setMovieCollectionType('franchise')}
@@ -1178,14 +1274,14 @@ export const CinemaView: React.FC = () => {
                 ) : (
                   <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
                     {/* Left Pane: Movie Collections List */}
-                    <div className="w-full lg:w-72 shrink-0 space-y-2 p-3 rounded-2xl border border-border/70 bg-card/75 backdrop-blur-md shadow-xs">
+                    <div className="w-full lg:w-52 xl:w-60 shrink-0 space-y-2 p-3 rounded-2xl border border-border/70 bg-card/75 backdrop-blur-md shadow-xs">
                       <div className="flex items-center justify-between pb-2 border-b border-border/40 px-1">
                         <span className="text-xs font-semibold text-foreground">
                           {movieCollectionType === 'franchise'
                             ? `Franchises (${activeMovieCollections.length})`
                             : movieCollectionType === 'year'
                             ? `Years (${activeMovieCollections.length})`
-                            : `Collections (${activeMovieCollections.length})`}
+                            : `Movies (${activeMovieCollections.length})`}
                         </span>
                         <span className="text-[10px] text-muted-foreground font-mono">Select Collection</span>
                       </div>
@@ -1329,7 +1425,7 @@ export const CinemaView: React.FC = () => {
                                   }`}
                                 >
                                   {/* Thumbnail Frame */}
-                                  <div className="relative aspect-[16/10] rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
+                                  <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
                                     <img
                                       src={movieThumb}
                                       alt={item.cleanTitle}
@@ -1359,9 +1455,12 @@ export const CinemaView: React.FC = () => {
                                         </span>
                                       )}
                                     </div>
-                                    <div className="absolute top-1.5 right-1.5 z-10">
+                                    <div className="absolute top-1.5 right-1.5 z-40">
                                       <button
-                                        onClick={() => toggleSelectVideo(movieVideo.message_id)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleSelectVideo(movieVideo.message_id);
+                                        }}
                                         className={`w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer ${
                                           isMovieSelected ? 'bg-primary text-primary-foreground shadow' : 'bg-black/60 text-white/70 hover:text-white'
                                         }`}
@@ -1376,11 +1475,16 @@ export const CinemaView: React.FC = () => {
                                       </span>
                                     </div>
                                     <div
-                                      onClick={() => handleStartPlay(movieVideo)}
-                                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer z-20"
-                                      title="Stream Movie"
+                                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20 pointer-events-none"
                                     >
-                                      <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                      <div
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStartPlay(movieVideo);
+                                        }}
+                                        className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform cursor-pointer pointer-events-auto"
+                                        title="Stream Movie"
+                                      >
                                         <Play className="w-4 h-4 fill-current ml-0.5" />
                                       </div>
                                     </div>
@@ -1574,7 +1678,7 @@ export const CinemaView: React.FC = () => {
                                       isMovieSelected ? 'border-primary ring-2 ring-primary/30' : 'border-border/60 hover:border-primary/40'
                                     }`}
                                   >
-                                    <div className="relative aspect-[16/10] rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
+                                    <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
                                       <img
                                         src={movieThumb}
                                         alt={item.cleanTitle}
@@ -1599,9 +1703,12 @@ export const CinemaView: React.FC = () => {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="absolute top-1.5 right-1.5 z-10">
+                                      <div className="absolute top-1.5 right-1.5 z-40">
                                         <button
-                                          onClick={() => toggleSelectVideo(movieVideo.message_id)}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleSelectVideo(movieVideo.message_id);
+                                          }}
                                           className={`w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer ${
                                             isMovieSelected ? 'bg-primary text-primary-foreground shadow' : 'bg-black/60 text-white/70 hover:text-white'
                                           }`}
@@ -1616,11 +1723,16 @@ export const CinemaView: React.FC = () => {
                                         </span>
                                       </div>
                                       <div
-                                        onClick={() => handleStartPlay(movieVideo)}
-                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer z-20"
-                                        title="Stream Movie"
+                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20 pointer-events-none"
                                       >
-                                        <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <div
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleStartPlay(movieVideo);
+                                          }}
+                                          className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform cursor-pointer pointer-events-auto"
+                                          title="Stream Movie"
+                                        >
                                           <Play className="w-4 h-4 fill-current ml-0.5" />
                                         </div>
                                       </div>
@@ -1794,7 +1906,7 @@ export const CinemaView: React.FC = () => {
                 ) : (
                   <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
                     {/* Left Pane: Shows List */}
-                    <div className="w-full lg:w-72 shrink-0 space-y-2 p-3 rounded-2xl border border-border/70 bg-card/75 backdrop-blur-md shadow-xs">
+                    <div className="w-full lg:w-52 xl:w-60 shrink-0 space-y-2 p-3 rounded-2xl border border-border/70 bg-card/75 backdrop-blur-md shadow-xs">
                       <div className="flex items-center justify-between pb-2 border-b border-border/40 px-1">
                         <span className="text-xs font-semibold text-foreground">Web Series ({webSeriesDrafts.length})</span>
                         <span className="text-[10px] text-muted-foreground font-mono">Select a Show</span>
@@ -1962,7 +2074,7 @@ export const CinemaView: React.FC = () => {
                                     }`}
                                   >
                                     {/* Thumbnail Frame */}
-                                    <div className="relative aspect-[16/10] rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
+                                    <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
                                       <img
                                         src={epThumb}
                                         alt={ep.displayTitle}
@@ -1980,9 +2092,12 @@ export const CinemaView: React.FC = () => {
                                           {ep.episodeLabel}
                                         </span>
                                       </div>
-                                      <div className="absolute top-1.5 right-1.5 z-10">
+                                      <div className="absolute top-1.5 right-1.5 z-40">
                                         <button
-                                          onClick={() => toggleSelectVideo(epVideo.message_id)}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleSelectVideo(epVideo.message_id);
+                                          }}
                                           className={`w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer ${
                                             isEpSelected ? 'bg-primary text-primary-foreground shadow' : 'bg-black/60 text-white/70 hover:text-white'
                                           }`}
@@ -1997,11 +2112,16 @@ export const CinemaView: React.FC = () => {
                                         </span>
                                       </div>
                                       <div
-                                        onClick={() => handleStartPlay(epVideo)}
-                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer z-20"
-                                        title="Stream Episode"
+                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20 pointer-events-none"
                                       >
-                                        <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <div
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleStartPlay(epVideo);
+                                          }}
+                                          className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform cursor-pointer pointer-events-auto"
+                                          title="Stream Episode"
+                                        >
                                           <Play className="w-4 h-4 fill-current ml-0.5" />
                                         </div>
                                       </div>
@@ -2233,7 +2353,7 @@ export const CinemaView: React.FC = () => {
                                       }`}
                                     >
                                       {/* Episode Thumbnail Frame */}
-                                      <div className="relative aspect-[16/10] rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
+                                      <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-950 flex items-center justify-center">
                                         <img
                                           src={epThumb}
                                           alt={ep.displayTitle}
@@ -2256,9 +2376,12 @@ export const CinemaView: React.FC = () => {
                                           </span>
                                         </div>
 
-                                        <div className="absolute top-1.5 right-1.5 z-10">
+                                        <div className="absolute top-1.5 right-1.5 z-40">
                                           <button
-                                            onClick={() => toggleSelectVideo(epVideo.message_id)}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleSelectVideo(epVideo.message_id);
+                                            }}
                                             className={`w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer ${
                                               isEpSelected ? 'bg-primary text-primary-foreground shadow' : 'bg-black/60 text-white/70 hover:text-white'
                                             }`}
@@ -2276,11 +2399,16 @@ export const CinemaView: React.FC = () => {
 
                                         {/* Play Hover Overlay */}
                                         <div
-                                          onClick={() => handleStartPlay(epVideo)}
-                                          className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer z-20"
-                                          title="Stream Episode"
+                                          className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20 pointer-events-none"
                                         >
-                                          <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                          <div
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleStartPlay(epVideo);
+                                            }}
+                                            className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform cursor-pointer pointer-events-auto"
+                                            title="Stream Episode"
+                                          >
                                             <Play className="w-4 h-4 fill-current ml-0.5" />
                                           </div>
                                         </div>
@@ -2358,7 +2486,7 @@ export const CinemaView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="rounded-2xl border border-border/60 bg-card/40 overflow-hidden space-y-3 p-3">
-                    <Skeleton className="w-full aspect-[16/10] rounded-xl" />
+                    <Skeleton className="w-full aspect-video rounded-xl" />
                     <Skeleton className="h-4 w-3/4 rounded" />
                     <Skeleton className="h-3 w-1/2 rounded" />
                     <div className="grid grid-cols-3 gap-2 pt-2">
@@ -2374,31 +2502,37 @@ export const CinemaView: React.FC = () => {
                 <Film className="w-10 h-10 text-muted-foreground/40 mb-1" />
                 <p className="text-sm font-semibold text-foreground">No Videos Found</p>
                 <p className="text-xs text-muted-foreground max-w-sm">
-                  No video files found matching your search. Choose a different Telegram channel or click Sync Archive.
+                  No video files found matching your search. Choose a different Telegram channel or click Sync.
                 </p>
               </div>
             ) : viewMode !== 'files' ? (
             <div
               className={`grid ${
-                viewMode === 'dense'
+                viewMode === 'fit'
                   ? isChannelDockOpen && isContinueWatchingOpen && hasContinueWatching
-                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 gap-2.5 sm:gap-3'
+                    ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2'
                     : isChannelDockOpen || (isContinueWatchingOpen && hasContinueWatching)
-                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-3'
-                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-2.5 sm:gap-3'
+                    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2'
+                    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-2'
+                  : viewMode === 'dense'
+                  ? isChannelDockOpen && isContinueWatchingOpen && hasContinueWatching
+                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5'
+                    : isChannelDockOpen || (isContinueWatchingOpen && hasContinueWatching)
+                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5'
+                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5'
                   : isChannelDockOpen && isContinueWatchingOpen && hasContinueWatching
                   ? 'grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-3'
                   : isChannelDockOpen || (isContinueWatchingOpen && hasContinueWatching)
-                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5'
-                  : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5'
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
+                  : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3'
               }`}
             >
-              {dateGroups.map((group) => {
+              {visibleDateGroups.map((group) => {
                 const groupSelected = group.videos.length > 0 && group.videos.every((v) => selectedIds.has(v.message_id));
                 return (
                   <React.Fragment key={`date-group-${group.key}`}>
                     {/* Date Break Line */}
-                    <div className="col-span-full my-2 flex items-center gap-2 select-none">
+                    <div className="col-span-full my-1.5 flex items-center gap-2 select-none">
                       <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-border/70" />
                       <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-card/90 text-foreground border border-border shadow-2xs backdrop-blur-md">
                         <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -2455,7 +2589,7 @@ export const CinemaView: React.FC = () => {
                     }`}
                   >
                     {/* Poster Thumbnail Frame */}
-                    <div className="relative aspect-[16/10] bg-zinc-950/90 overflow-hidden flex items-center justify-center">
+                    <div className="relative aspect-video bg-zinc-950/90 overflow-hidden flex items-center justify-center">
                       <img
                         src={thumbUrl}
                         alt={`Poster frame for ${media.cleanTitle}`}
@@ -2479,7 +2613,7 @@ export const CinemaView: React.FC = () => {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none z-10" />
 
                       {/* Top Badges & Selection Checkbox */}
-                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-20">
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-40">
                         <div className="flex items-center gap-1 flex-wrap">
                           {resolution && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/90 text-white shadow-xs backdrop-blur-md tracking-wider">
@@ -2504,10 +2638,13 @@ export const CinemaView: React.FC = () => {
                         </div>
 
                         <button
-                          onClick={() => toggleSelectVideo(video.message_id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectVideo(video.message_id);
+                          }}
                           aria-label={isSelected ? `Deselect ${media.cleanTitle}` : `Select ${media.cleanTitle} for playlist`}
                           aria-pressed={isSelected}
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer backdrop-blur-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer backdrop-blur-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none pointer-events-auto ${
                             isSelected
                               ? 'bg-primary text-primary-foreground shadow-md ring-2 ring-primary/50'
                               : 'bg-black/60 text-white/70 border border-white/20 hover:scale-105 hover:text-white'
@@ -2533,10 +2670,11 @@ export const CinemaView: React.FC = () => {
                         const cardProg = watchProgressMap.get(`${video.chat_id}_${video.message_id}`);
                         const cardPct = cardProg ? (cardProg.percent !== undefined ? cardProg.percent : (cardProg.progress_percent !== undefined ? Math.round(cardProg.progress_percent) : 0)) : 0;
                         if (cardPct <= 0) return null;
+                        const progressColor = cardPct >= 80 ? 'bg-emerald-400' : cardPct >= 40 ? 'bg-amber-400' : 'bg-sky-400';
                         return (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/60 z-20">
+                          <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/70 z-20 overflow-hidden">
                             <div
-                              className="bg-amber-400 h-full rounded-r transition-all"
+                              className={`${progressColor} h-full rounded-r transition-all shadow-xs`}
                               style={{ width: `${Math.max(5, cardPct)}%` }}
                               title={`Watched: ${cardPct}%`}
                             />
@@ -2545,19 +2683,19 @@ export const CinemaView: React.FC = () => {
                       })()}
 
                       {/* Center Hover Action Controls */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 bg-black/50 backdrop-blur-[2px] gap-2.5 z-30">
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 bg-black/50 backdrop-blur-[2px] gap-2.5 z-30 pointer-events-none">
                         <button
-                          onClick={() => handleStartPlay(video)}
-                          aria-label={`Stream ${media.cleanTitle} in browser`}
-                          className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-                          title="Stream in Browser (Auto-Resumes)"
+                          onClick={() => void handlePlayInVlc(video)}
+                          aria-label={`Play ${media.cleanTitle} in desktop VLC`}
+                          className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer pointer-events-auto focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+                          title="Play in Desktop VLC (Default)"
                         >
                           <Play className="w-4 h-4 fill-current ml-0.5" />
                         </button>
                         <button
                           onClick={() => setQrModalVideo(video)}
                           aria-label={`Stream ${media.cleanTitle} to mobile or smart TV via QR`}
-                          className="w-9 h-9 rounded-full bg-zinc-900/90 text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/20 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+                          className="w-9 h-9 rounded-full bg-zinc-900/90 text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer pointer-events-auto border border-white/20 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
                           title="Stream to Mobile / Smart TV (QR)"
                         >
                           <QrCode className="w-4 h-4 text-amber-400" />
@@ -2566,57 +2704,57 @@ export const CinemaView: React.FC = () => {
                     </div>
 
                     {/* Card Content & Action Bar */}
-                    <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
+                    <div className={`${viewMode === 'fit' ? 'p-2 space-y-1.5' : viewMode === 'dense' ? 'p-2.5 space-y-2' : 'p-3.5 space-y-2.5'} flex-1 flex flex-col justify-between`}>
                       <div>
                         <div
-                          className="text-xs font-semibold text-foreground line-clamp-1 leading-snug hover:text-primary transition-colors cursor-pointer"
+                          className={`${viewMode === 'fit' ? 'text-[11px]' : 'text-xs'} font-semibold text-foreground line-clamp-1 leading-snug hover:text-primary transition-colors cursor-pointer`}
                           title={video.filename}
-                          onClick={() => handleStartPlay(video)}
+                          onClick={() => void handlePlayInVlc(video)}
                         >
                           {media.cleanTitle}
                         </div>
 
-                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground flex-wrap">
+                        <div className={`flex items-center ${viewMode === 'fit' ? 'gap-1 mt-0.5 text-[10px]' : 'gap-1.5 mt-1 text-[11px]'} text-muted-foreground flex-wrap`}>
                           {media.seasonEpisode && (
-                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-primary/30 text-primary bg-primary/5 font-semibold">
+                            <Badge variant="outline" className={`${viewMode === 'fit' ? 'text-[8px] px-1 h-3.5' : 'text-[9px] px-1.5 h-4'} border-primary/30 text-primary bg-primary/5 font-semibold`}>
                               {media.seasonEpisode}
                             </Badge>
                           )}
                           {video.date ? (
-                            <span className="text-[10px] text-muted-foreground/80 font-mono flex items-center gap-1 bg-muted/40 px-1.5 py-0.5 rounded">
+                            <span className={`${viewMode === 'fit' ? 'text-[9px] px-1 py-0' : 'text-[10px] px-1.5 py-0.5'} text-muted-foreground/80 font-mono flex items-center gap-1 bg-muted/40 rounded`}>
                               <Calendar className="w-2.5 h-2.5 text-muted-foreground/60" />
                               {formatMediaDate(video.date)}
                             </span>
                           ) : null}
-                          <span className="text-[10px] text-muted-foreground/60 truncate font-mono max-w-full" title={video.filename}>
+                          <span className={`${viewMode === 'fit' ? 'text-[9px]' : 'text-[10px]'} text-muted-foreground/60 truncate font-mono max-w-full`} title={video.filename}>
                             {video.filename}
                           </span>
                         </div>
                       </div>
 
-                      {/* Clean 3-Action Bar: Stream (Primary), VLC (Direct), Dropdown Menu (More) */}
-                      <div className="flex items-center gap-1.5 pt-2 border-t border-border/40">
+                      <div className={`flex items-center gap-1.5 ${viewMode === 'fit' ? 'pt-1.5' : 'pt-2'} border-t border-border/40`}>
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => handleStartPlay(video)}
-                          aria-label={`Stream ${media.cleanTitle}`}
-                          className="h-8 flex-1 gap-1.5 text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 cursor-pointer shadow-xs"
+                          onClick={() => void handlePlayInVlc(video)}
+                          aria-label={`Play ${media.cleanTitle} in desktop VLC`}
+                          className={`${viewMode === 'fit' ? 'h-6.5 text-[11px] px-2' : 'h-7.5 sm:h-8 text-xs'} flex-1 gap-1.5 font-medium bg-primary text-primary-foreground hover:opacity-90 cursor-pointer shadow-xs`}
+                          title="Play in Desktop VLC (Default)"
                         >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Stream</span>
+                          <PlayCircle className="w-3.5 h-3.5 fill-current" />
+                          <span>VLC</span>
                         </Button>
 
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => void handlePlayInVlc(video)}
-                          aria-label={`Play ${media.cleanTitle} in desktop VLC`}
-                          className="h-8 px-2.5 text-xs font-medium gap-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 transition-colors cursor-pointer"
-                          title="Play immediately in desktop VLC"
+                          onClick={() => handleStartPlay(video)}
+                          aria-label={`Stream ${media.cleanTitle} in browser`}
+                          className={`${viewMode === 'fit' ? 'h-6.5 px-2 text-[11px]' : 'h-7.5 sm:h-8 px-2.5 text-xs'} font-medium gap-1 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 transition-colors cursor-pointer`}
+                          title="Stream in Browser Player"
                         >
-                          <PlayCircle className="w-3.5 h-3.5" />
-                          <span>VLC</span>
+                          <Play className="w-3.5 h-3.5" />
+                          <span>Stream</span>
                         </Button>
 
                         <DropdownMenu>
@@ -2625,7 +2763,7 @@ export const CinemaView: React.FC = () => {
                               size="sm"
                               variant="ghost"
                               aria-label="More media options"
-                              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
+                              className={`${viewMode === 'fit' ? 'h-6.5 w-6.5' : 'h-7.5 sm:h-8 w-7.5 sm:w-8'} p-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer`}
                             >
                               <MoreVertical className="w-4 h-4" />
                             </Button>
@@ -2681,7 +2819,7 @@ export const CinemaView: React.FC = () => {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/40 border-b border-border text-muted-foreground font-semibold">
                     <tr>
-                      <th className="py-3 px-3 w-10 text-center">
+                      <th className="py-2 px-2.5 w-10 text-center">
                         <button
                           onClick={handleSelectAll}
                           className="w-4 h-4 rounded border border-muted-foreground/40 inline-flex items-center justify-center cursor-pointer"
@@ -2692,37 +2830,37 @@ export const CinemaView: React.FC = () => {
                           )}
                         </button>
                       </th>
-                      <th className="py-3 px-3">Title & Media Details</th>
-                      <th className="py-3 px-3 w-28">Format / Quality</th>
-                      <th className="py-3 px-3 w-24">Duration</th>
-                      <th className="py-3 px-3 w-24">Size</th>
-                      <th className="py-3 px-3 w-28">Date</th>
-                      <th className="py-3 px-3 w-48 text-right">Actions</th>
+                      <th className="py-2 px-2.5">Title & Media Details</th>
+                      <th className="py-2 px-2.5 w-28">Format / Quality</th>
+                      <th className="py-2 px-2.5 w-24">Duration</th>
+                      <th className="py-2 px-2.5 w-24">Size</th>
+                      <th className="py-2 px-2.5 w-28">Date</th>
+                      <th className="py-2 px-2.5 w-44 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
-                    {dateGroups.map((group) => {
+                    {visibleDateGroups.map((group) => {
                       const groupSelected = group.videos.length > 0 && group.videos.every((v) => selectedIds.has(v.message_id));
                       return (
                         <React.Fragment key={`date-group-table-${group.key}`}>
                           {/* Date Break Line in Table */}
                           <tr className="bg-muted/15 select-none hover:bg-muted/15">
-                            <td colSpan={7} className="py-2.5 px-4">
-                              <div className="flex items-center gap-3">
+                            <td colSpan={7} className="py-1.5 px-3">
+                              <div className="flex items-center gap-2">
                                 <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-border/70" />
-                                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-card/90 text-foreground border border-border shadow-xs backdrop-blur-md">
-                                  <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-card/90 text-foreground border border-border shadow-xs backdrop-blur-md">
+                                  <Calendar className="w-3 h-3 text-primary shrink-0" />
                                   <span>{group.label}</span>
                                   {group.subLabel && (
                                     <span className="text-[10px] text-muted-foreground font-mono font-normal">({group.subLabel})</span>
                                   )}
-                                  <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-2 py-0.5 rounded-full font-normal">
+                                  <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-1.5 py-0.2 rounded-full font-normal">
                                     {group.videos.length} {group.videos.length === 1 ? 'file' : 'files'} • {formatBytes(group.totalSize)}
                                   </span>
                                   <button
                                     onClick={() => handleToggleSelectDateGroup(group.videos)}
                                     title={groupSelected ? `Deselect all on ${group.label}` : `Select all on ${group.label}`}
-                                    className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer border ${
+                                    className={`ml-1 px-1.5 py-0.2 rounded text-[10px] font-mono transition-colors cursor-pointer border ${
                                       groupSelected
                                         ? 'bg-primary text-primary-foreground border-primary font-bold'
                                         : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60 hover:bg-muted'
@@ -2758,57 +2896,60 @@ export const CinemaView: React.FC = () => {
                             return (
                               <tr
                                 key={`${video.chat_id}_${video.message_id}`}
-                                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 44px' }}
+                                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 38px' }}
                                 className={`hover:bg-muted/30 transition-colors ${
                                   isSelected ? 'bg-primary/5' : ''
                                 }`}
                               >
-                                <td className="py-2.5 px-3 text-center">
+                                <td className="py-1.5 px-2.5 text-center">
                                   <button
-                                    onClick={() => toggleSelectVideo(video.message_id)}
-                                    className={`w-4 h-4 rounded inline-flex items-center justify-center transition-all cursor-pointer ${
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleSelectVideo(video.message_id);
+                                    }}
+                                    className={`w-3.5 h-3.5 rounded inline-flex items-center justify-center transition-all cursor-pointer ${
                                       isSelected
                                         ? 'bg-primary text-primary-foreground'
                                         : 'border border-border hover:border-primary'
                                     }`}
                                   >
-                                    {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : null}
+                                    {isSelected ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : null}
                                   </button>
                                 </td>
 
-                                <td className="py-2.5 px-3">
+                                <td className="py-1.5 px-2.5">
                                   <div className="font-semibold text-foreground flex items-center gap-2">
-                                    <span>{media.cleanTitle}</span>
+                                    <span className="truncate max-w-sm">{media.cleanTitle}</span>
                                     {media.year && (
-                                      <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.2 rounded">
+                                      <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.2 rounded shrink-0">
                                         {media.year}
                                       </span>
                                     )}
                                     {media.seasonEpisode && (
-                                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/30 text-primary">
+                                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/30 text-primary shrink-0">
                                         {media.seasonEpisode}
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="text-[10px] text-muted-foreground/60 truncate max-w-md font-mono mt-0.5" title={video.filename}>
+                                  <div className="text-[10px] text-muted-foreground/60 truncate max-w-md font-mono" title={video.filename}>
                                     {video.filename}
                                   </div>
                                 </td>
 
-                                <td className="py-2.5 px-3">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                <td className="py-1.5 px-2.5">
+                                  <div className="flex items-center gap-1 flex-wrap">
                                     {ext && (
-                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-muted/80 text-foreground border border-border/70">
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-mono font-bold bg-muted/80 text-foreground border border-border/70">
                                         {ext}
                                       </span>
                                     )}
                                     {resolution && (
-                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-extrabold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                                         {resolution}
                                       </span>
                                     )}
                                     {media.audio && (
-                                      <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-muted text-muted-foreground">
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-medium bg-muted text-muted-foreground">
                                         {media.audio}
                                       </span>
                                     )}
@@ -2818,28 +2959,28 @@ export const CinemaView: React.FC = () => {
                                   </div>
                                 </td>
 
-                                <td className="py-2.5 px-3 font-mono text-muted-foreground">
+                                <td className="py-1.5 px-2.5 font-mono text-muted-foreground">
                                   {formatDuration(video.duration)}
                                 </td>
 
-                                <td className="py-2.5 px-3 font-mono font-medium text-foreground">
+                                <td className="py-1.5 px-2.5 font-mono font-medium text-foreground">
                                   {formatBytes(fileSize)}
                                 </td>
 
-                                <td className="py-2.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
+                                <td className="py-1.5 px-2.5 font-mono text-muted-foreground whitespace-nowrap">
                                   {formatMediaDate(video.date) || '--'}
                                 </td>
 
-                                <td className="py-2.5 px-3 text-right">
+                                <td className="py-1.5 px-2.5 text-right">
                                   <div className="inline-flex items-center gap-1.5">
                                     <Button
                                       size="sm"
                                       variant="default"
                                       onClick={() => handleStartPlay(video)}
-                                      className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
+                                      className="h-6 text-[11px] px-2 gap-1 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
                                       title="Stream in Browser (Auto-Resumes)"
                                     >
-                                      <Play className="w-3 h-3 fill-current" />
+                                      <Play className="w-2.5 h-2.5 fill-current" />
                                       <span>Stream</span>
                                     </Button>
 
@@ -2847,10 +2988,10 @@ export const CinemaView: React.FC = () => {
                                       size="sm"
                                       variant="secondary"
                                       onClick={() => void handlePlayInVlc(video)}
-                                      className="h-7 px-2 text-xs font-medium gap-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 cursor-pointer"
+                                      className="h-6 px-1.5 text-[11px] font-medium gap-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 cursor-pointer"
                                       title="Play in Desktop VLC"
                                     >
-                                      <PlayCircle className="w-3 h-3" />
+                                      <PlayCircle className="w-2.5 h-2.5" />
                                       <span>VLC</span>
                                     </Button>
 
@@ -2859,7 +3000,7 @@ export const CinemaView: React.FC = () => {
                                         <Button
                                           size="sm"
                                           variant="ghost"
-                                          className="h-7 w-7 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
+                                          className="h-6 w-6 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
                                         >
                                           <MoreVertical className="w-3.5 h-3.5" />
                                         </Button>
@@ -2919,9 +3060,20 @@ export const CinemaView: React.FC = () => {
               <div className="text-xs text-muted-foreground flex items-center gap-2">
                 <Film className="w-4 h-4 text-primary" />
                 <span>
-                  Showing all <span className="font-semibold text-foreground">{filteredVideos.length}</span> videos across{' '}
+                  Showing <span className="font-semibold text-foreground">{Math.min(visibleCount, filteredVideos.length)}</span> of{' '}
+                  <span className="font-semibold text-foreground">{filteredVideos.length}</span> videos across{' '}
                   <span className="font-semibold text-foreground">{dateGroups.length}</span> date timeline sections
                 </span>
+                {visibleCount < filteredVideos.length && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setVisibleCount((prev) => Math.min(prev + 120, filteredVideos.length))}
+                    className="ml-2 h-6 text-[10px] px-2 cursor-pointer"
+                  >
+                    Load More
+                  </Button>
+                )}
               </div>
 
               <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
@@ -2957,7 +3109,7 @@ export const CinemaView: React.FC = () => {
                 item.thumb_url ||
                 item.thumbnail_url ||
                 `/stream/${encodeURIComponent(String(item.chat_id))}/${item.message_id}/thumb`;
-              setPreviewVideo({
+              const videoObj: CinemaVideo = {
                 chat_id: item.chat_id,
                 message_id: item.message_id,
                 filename: item.filename,
@@ -2965,7 +3117,13 @@ export const CinemaView: React.FC = () => {
                 duration: total,
                 thumb_url: thumbUrl,
                 playback_seconds: seconds,
-              });
+              };
+              const playerPref = localStorage.getItem('tg_player_pref') || 'vlc';
+              if (playerPref === 'vlc') {
+                void handlePlayInVlc(videoObj);
+              } else {
+                setPreviewVideo(videoObj);
+              }
             }}
             onRemove={handleRemoveContinueWatching}
             onClose={() => {

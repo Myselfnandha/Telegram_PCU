@@ -60,7 +60,9 @@ class StreamEngine:
         # 3. Cancel and clear matching in-flight chunk futures
         matching_keys = [k for k in list(self._in_flight_chunks.keys()) if k[0] == norm_cid and k[1] == int(message_id)]
         for k in matching_keys:
-            self._in_flight_chunks.pop(k, None)
+            fut = self._in_flight_chunks.pop(k, None)
+            if fut and not fut.done():
+                fut.cancel()
 
     async def stream_media(
         self,
@@ -493,7 +495,7 @@ class StreamEngine:
                 return c_idx, data
             except asyncio.CancelledError:
                 if stop_event.is_set():
-                    if is_lead and wt and not wt.done():
+                    if getattr(wt, "_chunk_idx", 1) > 0 and is_lead and wt and not wt.done():
                         wt.cancel()
                     raise
                 cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
@@ -647,17 +649,19 @@ class StreamEngine:
                     logger.debug(f"STREAM [{clean_name}] Producer notice: {e}")
                 finally:
                     if in_flight:
-                        drain_timeout = 0.05 if stop_event.is_set() else 0.6
-                        done, pending = await asyncio.wait(list(in_flight.keys()), timeout=drain_timeout)
-                        for d in done:
-                            try:
-                                d.result()
-                            except Exception:
-                                pass
-                        for p in pending:
-                            p.cancel()
-                        if pending:
-                            await asyncio.gather(*pending, return_exceptions=True)
+                        if stop_event.is_set():
+                            for t in list(in_flight.keys()):
+                                if not t.done():
+                                    t.cancel()
+                        else:
+                            done, pending = await asyncio.wait(list(in_flight.keys()), timeout=0.5)
+                            for d in done:
+                                try:
+                                    d.result()
+                                except Exception:
+                                    pass
+                            for p in pending:
+                                p.cancel()
                     try:
                         queue.put_nowait(None)
                     except Exception:

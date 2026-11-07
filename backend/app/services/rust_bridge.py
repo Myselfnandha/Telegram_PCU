@@ -126,7 +126,7 @@ class RustBridge:
             if self._process:
                 try:
                     self._process.terminate()
-                    self._process.wait(timeout=3)
+                    await asyncio.to_thread(self._process.wait, 3)
                 except Exception:
                     try:
                         self._process.kill()

@@ -129,11 +129,14 @@ class QueueManager:
     async def stop_workers(self):
         """Stops all background queue workers and scheduler."""
         self._is_running = False
+        tasks = list(self._workers)
         if self._scheduler_task:
-            self._scheduler_task.cancel()
+            tasks.append(self._scheduler_task)
             self._scheduler_task = None
-        for worker in self._workers:
+        for worker in tasks:
             worker.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         self._workers.clear()
         logger.info("Upload queue workers stopped.")
 
@@ -415,8 +418,7 @@ class QueueManager:
                         item.eta = (remaining_bytes / item.speed) if item.speed > 0 else 0
                         last_time = now
                         last_bytes = overall_current
-
-                    self._notify_update(item)
+                        self._notify_update(item)
 
                 msg = await send_file_to_telegram(
                     client=client,

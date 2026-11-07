@@ -126,6 +126,7 @@ export function draftMoviesByFranchiseAndYear(
   videos: CinemaVideo[],
   options?: MovieDraftOptions
 ): {
+  movieTitleGroups: MovieCollectionDraft[];
   franchises: MovieCollectionDraft[];
   yearCollections: MovieCollectionDraft[];
   allMovieDrafts: MovieDraftItem[];
@@ -275,7 +276,46 @@ export function draftMoviesByFranchiseAndYear(
     });
   });
 
-  // Apply sorting
+  const titleMap = new Map<string, MovieDraftItem[]>();
+  movieItems.forEach((m) => {
+    const rawKey = `${m.franchiseTitle.toLowerCase()}__${m.year || 'na'}`;
+    if (!titleMap.has(rawKey)) {
+      titleMap.set(rawKey, []);
+    }
+    titleMap.get(rawKey)!.push(m);
+  });
+
+  const movieTitleGroups: MovieCollectionDraft[] = [];
+  titleMap.forEach((items, tKey) => {
+    items.sort((a, b) => {
+      if (a.partNumber && b.partNumber) return a.partNumber - b.partNumber;
+      return b.releaseDate - a.releaseDate;
+    });
+
+    const lead = items[0];
+    const totalBytes = items.reduce((acc, m) => acc + (m.video.size || m.video.file_size || 0), 0);
+    const dates = items.map((m) => m.releaseDate).filter((d) => d > 0);
+    const latestDate = dates.length > 0 ? Math.max(...dates) : 0;
+    const earliestDate = dates.length > 0 ? Math.min(...dates) : 0;
+    const leadThumb = items.find((m) => m.video.thumb_url)?.video.thumb_url;
+    const displayTitle = lead.year ? `${lead.franchiseTitle} (${lead.year})` : lead.franchiseTitle;
+
+    movieTitleGroups.push({
+      id: `movie_${tKey.replace(/[^a-z0-9]/g, '_')}`,
+      collectionTitle: displayTitle,
+      type: 'franchise',
+      totalMovies: items.length,
+      totalBytes,
+      latestDate,
+      earliestDate,
+      latestDateFormatted: formatMediaDate(latestDate),
+      latestYear: lead.year,
+      earliestYear: lead.year,
+      leadThumbUrl: leadThumb,
+      movies: items,
+    });
+  });
+
   const sortCollectionFn = (a: MovieCollectionDraft, b: MovieCollectionDraft) => {
     if (sortBy === 'date-desc') return b.latestDate - a.latestDate;
     if (sortBy === 'date-asc') return a.latestDate - b.latestDate;
@@ -288,10 +328,11 @@ export function draftMoviesByFranchiseAndYear(
 
   franchises.sort(sortCollectionFn);
   yearCollections.sort(sortCollectionFn);
+  movieTitleGroups.sort(sortCollectionFn);
 
-  // Filter if query is provided
   let filteredFranchises = franchises;
   let filteredYearCollections = yearCollections;
+  let filteredMovieTitles = movieTitleGroups;
 
   if (filterQuery) {
     filteredFranchises = franchises.filter((f) =>
@@ -302,9 +343,14 @@ export function draftMoviesByFranchiseAndYear(
       y.collectionTitle.toLowerCase().includes(filterQuery) ||
       y.movies.some((m) => m.cleanTitle.toLowerCase().includes(filterQuery))
     );
+    filteredMovieTitles = movieTitleGroups.filter((g) =>
+      g.collectionTitle.toLowerCase().includes(filterQuery) ||
+      g.movies.some((m) => m.cleanTitle.toLowerCase().includes(filterQuery))
+    );
   }
 
   return {
+    movieTitleGroups: filteredMovieTitles,
     franchises: filteredFranchises,
     yearCollections: filteredYearCollections,
     allMovieDrafts: movieItems,

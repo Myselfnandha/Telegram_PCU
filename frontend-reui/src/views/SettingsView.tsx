@@ -1,29 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/services/api';
-import { formatBytes } from '@/lib/formatters';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import {
-  Activity,
-  CheckCircle2,
-  Clock,
   FolderDown,
   HardDrive,
   Languages,
-  Laptop,
-  LogOut,
   Moon,
-  Network,
-  Radio,
-  RefreshCw,
-  Server,
   Settings,
   ShieldCheck,
   Sparkles,
-  Subtitles,
   Sun,
   Trash2,
   Tv,
@@ -34,7 +23,7 @@ import { SecondaryAuthModal } from '@/components/SecondaryAuthModal';
 import type { SecondaryAuthStatus } from '@/types';
 
 export const SettingsView: React.FC = () => {
-  const { authStatus, setAuthModalOpen, refreshAuth, telemetry, theme, setTheme, toggleTheme, addToast } = useApp();
+  const { authStatus, setAuthModalOpen, theme, setTheme, addToast } = useApp();
   const [preferredPlayer, setPreferredPlayer] = useState<'vlc' | 'web'>(() => {
     const val = localStorage.getItem('tg_player_pref');
     return val === 'web' ? 'web' : 'vlc';
