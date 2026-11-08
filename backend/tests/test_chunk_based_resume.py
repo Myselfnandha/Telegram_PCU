@@ -62,3 +62,18 @@ def test_playback_tracker_chunk_persistence(tmp_path, monkeypatch):
     item = next(i for i in cw if i["message_id"] == 789)
     assert item["last_chunk_index"] == 100
     assert item["last_position_seconds"] == 300.0
+
+    prog_channel = tracker.get_playback_progress("-100123456", 789)
+    assert prog_channel is not None
+    assert prog_channel["last_position_seconds"] == 300.0
+
+    tracker.update_byte_progress(
+        chat_id="123456",
+        message_id=789,
+        filename="Movie.2026.1080p.mkv",
+        streamed_byte_offset=25 * 1024 * 1024,
+        total_file_size=2 * 1024 * 1024 * 1024
+    )
+    prog_rewind = tracker.get_playback_progress("123456", 789)
+    assert prog_rewind["last_chunk_index"] == 50
+    assert prog_rewind["last_position_seconds"] < 300.0

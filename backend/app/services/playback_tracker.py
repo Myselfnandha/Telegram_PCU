@@ -171,8 +171,7 @@ class PlaybackTracker:
         if total_file_size <= 0:
             return
 
-        # Ignore container header reads (first 16MB) and tail index probes
-        if streamed_byte_offset <= 16 * 1024 * 1024 or streamed_byte_offset >= (total_file_size - 16 * 1024 * 1024):
+        if streamed_byte_offset <= 1024 * 1024 or streamed_byte_offset >= (total_file_size - 1024 * 1024):
             return
 
         chunk_index = streamed_byte_offset // chunk_size
@@ -218,12 +217,12 @@ class PlaybackTracker:
                     last_watched_at = excluded.last_watched_at,
                     duration_seconds = CASE WHEN playback_history.duration_seconds > 0 THEN playback_history.duration_seconds ELSE excluded.duration_seconds END,
                     last_position_seconds = CASE 
-                        WHEN playback_history.last_position_seconds > excluded.last_position_seconds THEN playback_history.last_position_seconds 
-                        ELSE excluded.last_position_seconds 
+                        WHEN excluded.last_position_seconds > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.last_position_seconds 
+                        ELSE playback_history.last_position_seconds 
                     END,
                     progress_percent = CASE 
-                        WHEN playback_history.progress_percent > excluded.progress_percent THEN playback_history.progress_percent 
-                        ELSE excluded.progress_percent 
+                        WHEN excluded.progress_percent > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.progress_percent 
+                        ELSE playback_history.progress_percent 
                     END,
                     thumbnail_url = COALESCE(playback_history.thumbnail_url, excluded.thumbnail_url)
             """, (
@@ -236,11 +235,19 @@ class PlaybackTracker:
             conn.commit()
 
     def get_playback_progress(self, chat_id: str, message_id: int) -> Optional[Dict[str, Any]]:
-        """Returns watch progress and chunk offsets for a specific video."""
-        record_id = f"{chat_id}_{message_id}"
+        s_cid = str(chat_id).strip()
+        norm_cid = s_cid[4:] if s_cid.startswith("-100") else (s_cid[3:] if s_cid.startswith("100") else s_cid.lstrip("-"))
+        candidate_ids = list(set([s_cid, norm_cid, f"-100{norm_cid}", f"-{norm_cid}"]))
+        placeholders = ",".join("?" for _ in candidate_ids)
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM playback_history WHERE id = ?", (record_id,))
+            cursor.execute(f"""
+                SELECT * FROM playback_history 
+                WHERE (chat_id IN ({placeholders}) AND message_id = ?)
+                   OR id IN ({placeholders})
+                ORDER BY last_watched_at DESC
+                LIMIT 1
+            """, (*candidate_ids, message_id, *[f"{cid}_{message_id}" for cid in candidate_ids]))
             row = cursor.fetchone()
             if row:
                 d = dict(row)
@@ -430,7 +437,7 @@ class PlaybackTracker:
         if total_file_size <= 0:
             return
 
-        if streamed_byte_offset <= 16 * 1024 * 1024 or streamed_byte_offset >= (total_file_size - 16 * 1024 * 1024):
+        if streamed_byte_offset <= 1024 * 1024 or streamed_byte_offset >= (total_file_size - 1024 * 1024):
             return
 
         chunk_index = streamed_byte_offset // chunk_size
@@ -474,12 +481,12 @@ class PlaybackTracker:
                     last_watched_at = excluded.last_watched_at,
                     duration_seconds = CASE WHEN playback_history.duration_seconds > 0 THEN playback_history.duration_seconds ELSE excluded.duration_seconds END,
                     last_position_seconds = CASE 
-                        WHEN playback_history.last_position_seconds > excluded.last_position_seconds THEN playback_history.last_position_seconds 
-                        ELSE excluded.last_position_seconds 
+                        WHEN excluded.last_position_seconds > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.last_position_seconds 
+                        ELSE playback_history.last_position_seconds 
                     END,
                     progress_percent = CASE 
-                        WHEN playback_history.progress_percent > excluded.progress_percent THEN playback_history.progress_percent 
-                        ELSE excluded.progress_percent 
+                        WHEN excluded.progress_percent > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.progress_percent 
+                        ELSE playback_history.progress_percent 
                     END,
                     thumbnail_url = COALESCE(playback_history.thumbnail_url, excluded.thumbnail_url)
             """, (
@@ -501,8 +508,10 @@ class PlaybackTracker:
         except Exception:
             pass
 
+        s_cid = str(chat_id).strip()
+        norm_cid = s_cid[4:] if s_cid.startswith("-100") else (s_cid[3:] if s_cid.startswith("100") else s_cid.lstrip("-"))
         canonical_id, aliases = canonicalize_chat_id(chat_id, my_id)
-        candidate_ids = list(set([str(chat_id), canonical_id] + aliases))
+        candidate_ids = list(set([str(chat_id), canonical_id, s_cid, norm_cid, f"-100{norm_cid}", f"-{norm_cid}"] + aliases))
         placeholders = ",".join("?" for _ in candidate_ids)
 
         async with aiosqlite.connect(str(DB_PATH), timeout=10.0) as db:

@@ -1745,6 +1745,8 @@ async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, fi
     prog = await playback_tracker.aget_playback_progress(str(clean_chat_id), message_id)
     start_sec = int(prog.get("last_position_seconds", 0)) if prog else 0
     duration_sec = int(prog.get("duration_seconds", 0)) if prog else 0
+    if start_sec <= 0 and prog and prog.get("last_byte_offset", 0) > 0 and duration_sec > 0 and file_size > 0:
+        start_sec = int((prog["last_byte_offset"] / file_size) * duration_sec)
     is_finished = bool(prog.get("finished", False)) if prog else False
     if is_finished or (duration_sec > 0 and start_sec >= duration_sec - 15):
         start_sec = 0

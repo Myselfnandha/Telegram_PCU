@@ -708,6 +708,14 @@ class StreamEngine:
                         f"STREAM [{clean_name}] Progress: {bytes_sent:,}/{length:,}B "
                         f"({pct:.1f}%) | Player Rate: {playback_speed:.2f} MB/s | Buffer Runway: ~{buffered_mb:.1f}MB ({q_len} chunks in RAM) | {delivered_chunks} delivered"
                     )
+                    if is_media_player and bytes_sent >= 2 * 1024 * 1024:
+                        try:
+                            from app.services.playback_tracker import playback_tracker
+                            asyncio.create_task(playback_tracker.aupdate_byte_progress(
+                                str(chat_id), message_id, clean_name, start + bytes_sent, file_size, chunk_size=chunk_size
+                            ))
+                        except Exception:
+                            pass
 
             elapsed = max(0.01, time.time() - t0)
             avg_speed = (bytes_sent / (1024 * 1024)) / elapsed
@@ -715,6 +723,14 @@ class StreamEngine:
                 f"STREAM [{clean_name}] Complete: sent {bytes_sent:,}/{length:,}B "
                 f"in {elapsed:.2f}s ({avg_speed:.2f} MB/s)"
             )
+            if is_media_player and bytes_sent >= 2 * 1024 * 1024:
+                try:
+                    from app.services.playback_tracker import playback_tracker
+                    asyncio.create_task(playback_tracker.aupdate_byte_progress(
+                        str(chat_id), message_id, clean_name, start + bytes_sent, file_size, chunk_size=chunk_size
+                    ))
+                except Exception:
+                    pass
 
         except (ConnectionResetError, BrokenPipeError) as ce:
             elapsed = max(0.01, time.time() - t0)
@@ -722,6 +738,14 @@ class StreamEngine:
                 f"STREAM [{clean_name}] Client seek/disconnect at byte {start + bytes_sent:,} "
                 f"(delivered {bytes_sent:,}/{length:,}B in {elapsed:.2f}s)"
             )
+            if is_media_player and bytes_sent >= 2 * 1024 * 1024:
+                try:
+                    from app.services.playback_tracker import playback_tracker
+                    asyncio.create_task(playback_tracker.aupdate_byte_progress(
+                        str(chat_id), message_id, clean_name, start + bytes_sent, file_size, chunk_size=chunk_size
+                    ))
+                except Exception:
+                    pass
             raise
         except asyncio.CancelledError:
             elapsed = max(0.01, time.time() - t0)
@@ -729,6 +753,14 @@ class StreamEngine:
                 f"STREAM [{clean_name}] Stream cancelled at byte {start + bytes_sent:,} "
                 f"(delivered {bytes_sent:,}/{length:,}B in {elapsed:.2f}s)"
             )
+            if is_media_player and bytes_sent >= 2 * 1024 * 1024:
+                try:
+                    from app.services.playback_tracker import playback_tracker
+                    asyncio.create_task(playback_tracker.aupdate_byte_progress(
+                        str(chat_id), message_id, clean_name, start + bytes_sent, file_size, chunk_size=chunk_size
+                    ))
+                except Exception:
+                    pass
             raise
         finally:
             stop_event.set()
