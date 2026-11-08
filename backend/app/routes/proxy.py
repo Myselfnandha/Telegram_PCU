@@ -479,6 +479,7 @@ async def get_media_thumbnail(chat_id: str, message_id: int):
 
 @router.api_route("/dl/{chat_id}/{message_id}", methods=["GET", "HEAD"])
 @router.api_route("/dl/{chat_id}/{message_id}/{filename}", methods=["GET", "HEAD"])
+@router.api_route("/dl/{chat_id}/{message_id}/{filename:path}", methods=["GET", "HEAD"])
 async def handle_proxy_download(
     chat_id: str,
     message_id: int,
@@ -821,6 +822,7 @@ async def handle_proxy_download(
         pt.add_done_callback(lambda _t: _ACTIVE_PREFETCH_TASKS.pop(media_key, None) if _ACTIVE_PREFETCH_TASKS.get(media_key) is _t else None)
 
     req_client_host = getattr(getattr(request, "client", None), "host", "127.0.0.1") or "127.0.0.1"
+    norm_client_host = "127.0.0.1" if req_client_host in ("::1", "localhost", "testclient", "testserver") else req_client_host
     ua_lower = user_agent.lower() if user_agent else ""
     if "vlc" in ua_lower:
         client_tag = "vlc"
@@ -832,7 +834,7 @@ async def handle_proxy_download(
         client_tag = "generic"
 
     curr_task = asyncio.current_task()
-    session_key = (norm_chat_id, message_id, client_tag, req_client_host) if is_media_player else (norm_chat_id, message_id, f"dl_{id(curr_task)}_{start}", req_client_host)
+    session_key = (norm_chat_id, message_id, client_tag, norm_client_host) if is_media_player else (norm_chat_id, message_id, f"dl_{id(curr_task)}_{start}", norm_client_host)
 
     stop_event = asyncio.Event()
     handle = StreamIteratorHandle(stop_event=stop_event)
@@ -840,7 +842,7 @@ async def handle_proxy_download(
     if curr_task and is_media_player:
         host_player_keys = [
             k for k in list(_ACTIVE_STREAM_ITERS.keys())
-            if len(k) >= 4 and k[2] == client_tag and k[3] == req_client_host and k[1] != message_id
+            if len(k) >= 4 and k[2] == client_tag and k[3] == norm_client_host and k[1] != message_id
         ]
         for sk in host_player_keys:
             old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
@@ -940,6 +942,7 @@ async def handle_proxy_download(
 
 @router.api_route("/stream/{chat_id}/{message_id}", methods=["GET", "HEAD"])
 @router.api_route("/stream/{chat_id}/{message_id}/{filename}", methods=["GET", "HEAD"])
+@router.api_route("/stream/{chat_id}/{message_id}/{filename:path}", methods=["GET", "HEAD"])
 async def handle_transmux_stream(
     chat_id: str,
     message_id: int,

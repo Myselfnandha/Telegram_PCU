@@ -280,11 +280,18 @@ class PlaybackTracker:
             return results
 
     def remove_progress(self, chat_id: str, message_id: int):
-        """Removes an item from continue watching."""
-        record_id = f"{chat_id}_{message_id}"
+        s_cid = str(chat_id).strip()
+        norm_cid = s_cid.lstrip("-").replace("100", "", 1)
+        candidates = {
+            f"{s_cid}_{message_id}",
+            f"{norm_cid}_{message_id}",
+            f"-100{norm_cid}_{message_id}",
+            f"-{norm_cid}_{message_id}"
+        }
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM playback_history WHERE id = ?", (record_id,))
+            for rid in candidates:
+                cursor.execute("DELETE FROM playback_history WHERE id = ?", (rid,))
             conn.commit()
 
     async def ainit_db(self):
@@ -542,9 +549,17 @@ class PlaybackTracker:
                 return results
 
     async def aremove_progress(self, chat_id: str, message_id: int):
-        record_id = f"{chat_id}_{message_id}"
+        s_cid = str(chat_id).strip()
+        norm_cid = s_cid.lstrip("-").replace("100", "", 1)
+        candidates = {
+            f"{s_cid}_{message_id}",
+            f"{norm_cid}_{message_id}",
+            f"-100{norm_cid}_{message_id}",
+            f"-{norm_cid}_{message_id}"
+        }
         async with aiosqlite.connect(str(DB_PATH), timeout=10.0) as db:
-            await db.execute("DELETE FROM playback_history WHERE id = ?", (record_id,))
+            for rid in candidates:
+                await db.execute("DELETE FROM playback_history WHERE id = ?", (rid,))
             await db.commit()
 
 

@@ -206,16 +206,30 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     updateBufferStatus();
   };
 
+  const handleNextClick = useCallback(() => {
+    if (video && currentTimeSec > 5) {
+      syncProgress(Math.floor(currentTimeSec));
+    }
+    if (onNext) onNext();
+  }, [video, currentTimeSec, syncProgress, onNext]);
+
+  const handlePrevClick = useCallback(() => {
+    if (video && currentTimeSec > 5) {
+      syncProgress(Math.floor(currentTimeSec));
+    }
+    if (onPrevious) onPrevious();
+  }, [video, currentTimeSec, syncProgress, onPrevious]);
+
   const handleEnded = () => {
+    if (video) {
+      api.removeContinueWatching(video.chat_id, video.message_id).catch(() => {});
+    }
     if (onNext && hasNext) {
       showOsd('Playing next video...');
       onNext();
     } else {
       setIsPlaying(false);
-      if (video) {
-        api.removeContinueWatching(video.chat_id, video.message_id).catch(() => {});
-        showOsd('Completed playback');
-      }
+      showOsd('Completed playback');
     }
   };
 
@@ -426,19 +440,19 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       } else if (e.shiftKey && e.key.toLowerCase() === 'n') {
         if (onNext && hasNext) {
           e.preventDefault();
-          onNext();
+          handleNextClick();
         }
       } else if (e.shiftKey && e.key.toLowerCase() === 'p') {
         if (onPrevious && hasPrevious) {
           e.preventDefault();
-          onPrevious();
+          handlePrevClick();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, currentTimeSec, duration, volume, isMuted, subtitlesEnabled, fitMode, onNext, onPrevious, hasNext, hasPrevious]);
+  }, [open, currentTimeSec, duration, volume, isMuted, subtitlesEnabled, fitMode, onNext, onPrevious, hasNext, hasPrevious, handleNextClick, handlePrevClick]);
 
   const [isLaunchingVlc, setIsLaunchingVlc] = useState(false);
 
@@ -707,7 +721,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             {/* Previous Video */}
             {onPrevious && (
               <button
-                onClick={onPrevious}
+                onClick={handlePrevClick}
                 disabled={!hasPrevious}
                 aria-label="Previous video (Shift+P)"
                 className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer"
@@ -730,7 +744,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             {/* Next Video */}
             {onNext && (
               <button
-                onClick={onNext}
+                onClick={handleNextClick}
                 disabled={!hasNext}
                 aria-label="Next video (Shift+N)"
                 className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer"
