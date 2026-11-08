@@ -137,7 +137,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     try {
       videoRef.current.currentTime = resumeTargetSec;
       initialSeekDone.current = true;
-      showOsd(`Resumed at ${formatDuration(resumeTargetSec)}`);
+      showOsd(`Resumed at ${formatDuration(resumeTargetSec)}${video?.last_chunk_index ? ` (Chunk #${video.last_chunk_index})` : ''}`);
     } catch (e) {
       console.debug('Resume seek deferred:', e);
     }
@@ -685,9 +685,18 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             {hoverTime !== null && hoverPct !== null && (
               <div
                 style={{ left: `${Math.min(94, Math.max(6, hoverPct))}%` }}
-                className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded bg-zinc-900 border border-white/20 text-white text-[10px] font-mono shadow-lg pointer-events-none z-30"
+                className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded bg-zinc-900 border border-white/20 text-white text-[10px] font-mono shadow-lg pointer-events-none z-30 whitespace-nowrap"
               >
                 {formatDuration(hoverTime)}
+                {(() => {
+                  const fileSize = video?.size || (video as any)?.file_size || 0;
+                  if (duration > 0 && fileSize > 0) {
+                    const hoverBytes = Math.floor((hoverTime / duration) * fileSize);
+                    const hoverChunk = Math.floor(hoverBytes / (512 * 1024));
+                    return ` • Chunk ${hoverChunk}`;
+                  }
+                  return '';
+                })()}
               </div>
             )}
 

@@ -166,6 +166,8 @@ export interface CinemaVideo {
   mime_type?: string;
   has_subtitles?: boolean;
   playback_seconds?: number;
+  last_chunk_index?: number;
+  last_byte_offset?: number;
 }
 
 export interface ContinueWatchingItem {
@@ -187,6 +189,8 @@ export interface ContinueWatchingItem {
   season_num?: number;
   episode_num?: number;
   display_title?: string;
+  last_chunk_index?: number;
+  last_byte_offset?: number;
 }
 
 export interface UploadHistoryItem {

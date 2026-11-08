@@ -857,6 +857,8 @@ export const CinemaView: React.FC = () => {
     setPreviewVideo({
       ...v,
       playback_seconds: resumeSec,
+      last_chunk_index: prog?.last_chunk_index,
+      last_byte_offset: prog?.last_byte_offset,
     });
   }, [previewVideo, watchProgressMap]);
 
@@ -2735,7 +2737,7 @@ export const CinemaView: React.FC = () => {
                             <div
                               className={`${progressColor} h-full rounded-r transition-all shadow-xs`}
                               style={{ width: `${Math.max(5, cardPct)}%` }}
-                              title={`Watched: ${cardPct}%`}
+                              title={`Watched: ${cardPct}%${cardProg?.last_chunk_index ? ` • Chunk #${cardProg.last_chunk_index}` : ''}`}
                             />
                           </div>
                         );
@@ -3176,6 +3178,8 @@ export const CinemaView: React.FC = () => {
                 duration: total,
                 thumb_url: thumbUrl,
                 playback_seconds: seconds,
+                last_chunk_index: item.last_chunk_index,
+                last_byte_offset: item.last_byte_offset,
               };
               const playerPref = localStorage.getItem('tg_player_pref') || 'vlc';
               if (playerPref === 'vlc') {

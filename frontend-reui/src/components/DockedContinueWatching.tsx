@@ -123,6 +123,14 @@ export const DockedContinueWatching: React.FC<DockedContinueWatchingProps> = ({
                         <span>{formatDuration(seconds)}</span>
                         <span className="text-muted-foreground/40">•</span>
                         <span className="text-amber-400 font-semibold">{pct}%</span>
+                        {item.last_chunk_index !== undefined && item.last_chunk_index > 0 && (
+                          <>
+                            <span className="text-muted-foreground/40">•</span>
+                            <span className="text-zinc-400 font-sans" title={`Chunk #${item.last_chunk_index}`}>
+                              Chunk {item.last_chunk_index}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
 
