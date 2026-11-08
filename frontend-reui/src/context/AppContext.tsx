@@ -65,7 +65,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
-  const [selectedChat, setSelectedChatState] = useState<ChatItem>(DEFAULT_CHAT);
+  const [selectedChat, setSelectedChatState] = useState<ChatItem>(() => {
+    try {
+      const saved = localStorage.getItem('tg_selected_chat');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.id) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_CHAT;
+  });
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [floodWait, setFloodWait] = useState<{ active: boolean; seconds: number; message?: string } | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -170,18 +181,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [theme]);
 
-  // Load saved selected chat
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('tg_selected_chat');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && parsed.id) {
-          setSelectedChatState(parsed);
-        }
-      }
-    } catch {}
-  }, []);
+
 
   const refreshAuth = async () => {
     try {

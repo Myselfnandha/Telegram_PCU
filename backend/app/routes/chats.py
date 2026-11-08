@@ -1,7 +1,9 @@
 import os
 import time
+import json
 import asyncio
 import logging
+from pathlib import Path
 from typing import List, Optional, Union, Any, Dict
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Query
@@ -14,10 +16,54 @@ logger = logging.getLogger("chats")
 
 router = APIRouter(prefix="/api", tags=["chats"])
 
-# Cache chats in memory for 10 minutes to ensure instant response times
+CHATS_CACHE_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "chats_cache.json"
+
 _chats_cache: List[ChatItem] = []
 _cache_time: float = 0
-CACHE_TTL = 600  # 10 minutes
+_is_refreshing: bool = False
+CACHE_TTL = 600
+
+def _load_disk_cache():
+    global _chats_cache, _cache_time
+    try:
+        if CHATS_CACHE_FILE.exists():
+            with open(CHATS_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                _chats_cache = [ChatItem(**item) for item in data]
+                _cache_time = CHATS_CACHE_FILE.stat().st_mtime
+    except Exception as e:
+        logger.debug(f"Chats disk cache load notice: {e}")
+
+_load_disk_cache()
+
+def _save_disk_cache():
+    try:
+        CHATS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CHATS_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump([c.model_dump() for c in _chats_cache], f)
+    except Exception as e:
+        logger.debug(f"Chats disk cache save notice: {e}")
+
+async def _refresh_chats_background():
+    global _is_refreshing
+    if _is_refreshing:
+        return
+    _is_refreshing = True
+    try:
+        await fetch_dialogs_from_telegram()
+        try:
+            from app.socket_handlers import sio
+            payload = {
+                "chat_id": "all",
+                "dialogs": [c.model_dump() for c in _chats_cache]
+            }
+            await sio.emit("chats:dialog_updated", payload)
+        except Exception:
+            pass
+    except Exception as e:
+        logger.debug(f"Background chats refresh notice: {e}")
+    finally:
+        _is_refreshing = False
 
 async def preload_chats():
     """Background task to pre-fetch and warm up the dialogs cache on server startup."""
@@ -40,11 +86,14 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
 
     me = await client.get_me()
     
-    main_dialogs = await client.get_dialogs(limit=None)
-    try:
-        archived_dialogs = await client.get_dialogs(folder=1, limit=None)
-    except Exception:
-        archived_dialogs = []
+    main_task = client.get_dialogs(limit=None)
+    arch_task = client.get_dialogs(folder=1, limit=None)
+    contacts_task = client(GetContactsRequest(hash=0))
+
+    gather_res = await asyncio.gather(main_task, arch_task, contacts_task, return_exceptions=True)
+    main_dialogs = gather_res[0] if isinstance(gather_res[0], list) else []
+    archived_dialogs = gather_res[1] if isinstance(gather_res[1], list) else []
+    contacts_res = gather_res[2] if not isinstance(gather_res[2], BaseException) else None
 
     seen_ids = {("User", me.id)}
     result: List[ChatItem] = []
@@ -93,8 +142,7 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
 
     # 2. Fetch all Telegram Contacts from user address book
     try:
-        contacts_res = await client(GetContactsRequest(hash=0))
-        if hasattr(contacts_res, "users"):
+        if contacts_res and hasattr(contacts_res, "users"):
             for u in contacts_res.users:
                 if not u or ("User", u.id) in seen_ids:
                     continue
@@ -119,6 +167,7 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
 
     _chats_cache = result
     _cache_time = time.time()
+    _save_disk_cache()
     return result
 
 
@@ -165,6 +214,7 @@ def update_dialog_on_message(chat_id: Union[int, str], msg: Any) -> None:
                 insert_idx = len(_chats_cache)
         _chats_cache.insert(insert_idx, target_chat)
         _cache_time = time.time()
+        _save_disk_cache()
 
         try:
             from app.socket_handlers import sio
@@ -318,8 +368,10 @@ async def list_chats(
     global _chats_cache, _cache_time
 
     now = time.time()
-    if not force_refresh and _chats_cache and (now - _cache_time) < CACHE_TTL:
+    if _chats_cache and not force_refresh:
         chats = _chats_cache
+        if (now - _cache_time) > 60:
+            asyncio.create_task(_refresh_chats_background())
     else:
         try:
             chats = await fetch_dialogs_from_telegram()

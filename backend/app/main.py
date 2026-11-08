@@ -222,6 +222,11 @@ async def lifespan(app: FastAPI):
                         sec_info = await TelegramClientManager.get_secondary_me_info()
                         if sec_info:
                             logger.info(f"Secondary Telegram client ready: {sec_info.get('first_name')} (@{sec_info.get('username')})")
+                try:
+                    from app.routes.chats import preload_chats
+                    asyncio.create_task(preload_chats())
+                except Exception as pce:
+                    logger.debug(f"Preload chats launch notice: {pce}")
             else:
                 logger.info("Telegram client is not authorized yet. Log in via setup_auth.py or Web Settings.")
         except Exception as e:
