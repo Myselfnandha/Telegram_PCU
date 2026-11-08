@@ -1828,6 +1828,11 @@ async def launch_vlc_batch(payload: Dict[str, Any], request: Request):
         cid = item.get("chat_id")
         mid = item.get("message_id")
         fname = item.get("filename") or f"video_{mid}.mp4"
+        if fname.startswith("video_") and not item.get("filename"):
+            clean_cid = int(cid) if str(cid).lstrip("-").isdigit() else cid
+            cached_msg = sniffer_service._message_cache.get((clean_cid, mid)) or sniffer_service._message_cache.get((str(clean_cid), mid))
+            if cached_msg and getattr(cached_msg, "file", None) and getattr(cached_msg.file, "name", None):
+                fname = auto_rename(cached_msg.file.name)
         if not cid or not mid:
             continue
         grant = playback_grants.issue(str(cid), int(mid))

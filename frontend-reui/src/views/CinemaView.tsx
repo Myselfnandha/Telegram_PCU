@@ -862,6 +862,18 @@ export const CinemaView: React.FC = () => {
 
   const activePlaylist: CinemaVideo[] = useMemo(() => {
     if (!previewVideo) return [];
+    if (activeSelectedShow) {
+      for (const season of activeSelectedShow.seasons) {
+        if (season.episodes.some((e) => String(e.video.chat_id) === String(previewVideo.chat_id) && e.video.message_id === previewVideo.message_id)) {
+          return season.episodes.map((e) => e.video);
+        }
+      }
+    }
+    if (activeSelectedMovieCollection) {
+      if (activeSelectedMovieCollection.movies.some((m) => String(m.video.chat_id) === String(previewVideo.chat_id) && m.video.message_id === previewVideo.message_id)) {
+        return activeSelectedMovieCollection.movies.map((m) => m.video);
+      }
+    }
     if (filteredVideos.some((v) => String(v.chat_id) === String(previewVideo.chat_id) && v.message_id === previewVideo.message_id)) {
       return filteredVideos;
     }
@@ -879,7 +891,7 @@ export const CinemaView: React.FC = () => {
       }));
     }
     return filteredVideos;
-  }, [previewVideo, filteredVideos, videos, continueWatching]);
+  }, [previewVideo, filteredVideos, videos, continueWatching, activeSelectedShow, activeSelectedMovieCollection]);
 
   const currentVideoIndex = useMemo(() => {
     if (!previewVideo || !activePlaylist.length) return -1;
