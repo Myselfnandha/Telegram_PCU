@@ -41,7 +41,7 @@ def is_authenticated(request: Request) -> bool:
         if not token_to_check and not ENABLE_API_AUTH and path.startswith(("/dl/", "/stream/")):
             return True
         media_identity = None
-        if path.startswith("/dl/") and len(parts) >= 4 and parts[2] and parts[3].isdigit():
+        if (path.startswith("/dl/") or path.startswith("/stream/")) and len(parts) >= 4 and parts[2] and parts[3].isdigit():
             media_identity = (parts[2], int(parts[3]))
         elif path.startswith("/api/media/subtitles/download/") and len(parts) >= 7 and parts[5] and parts[6].isdigit():
             media_identity = (parts[5], int(parts[6]))

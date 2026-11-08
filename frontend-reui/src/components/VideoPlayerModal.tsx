@@ -611,6 +611,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           )}
 
           <video
+            key={`${video?.chat_id}_${video?.message_id}`}
             ref={videoRef}
             src={open ? streamUrl : undefined}
             autoPlay
@@ -638,6 +639,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             }}
           >
             <track
+              key={subtitleUrl || `${video?.chat_id}_${video?.message_id}`}
               label="Default Subtitles"
               kind="subtitles"
               srcLang="en"

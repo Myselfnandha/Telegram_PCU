@@ -863,34 +863,55 @@ export const CinemaView: React.FC = () => {
     });
   };
 
+  const activePlaylist: CinemaVideo[] = useMemo(() => {
+    if (!previewVideo) return [];
+    if (filteredVideos.some((v) => String(v.chat_id) === String(previewVideo.chat_id) && v.message_id === previewVideo.message_id)) {
+      return filteredVideos;
+    }
+    if (videos.some((v) => String(v.chat_id) === String(previewVideo.chat_id) && v.message_id === previewVideo.message_id)) {
+      return videos;
+    }
+    if (continueWatching.some((v) => String(v.chat_id) === String(previewVideo.chat_id) && v.message_id === previewVideo.message_id)) {
+      return continueWatching.map((cw) => ({
+        chat_id: cw.chat_id,
+        message_id: cw.message_id,
+        filename: cw.filename,
+        size: (cw as any).size || (cw as any).file_size || 0,
+        playback_seconds: cw.playback_seconds || cw.last_position_seconds,
+        duration: cw.duration_seconds,
+      }));
+    }
+    return filteredVideos;
+  }, [previewVideo, filteredVideos, videos, continueWatching]);
+
   const currentVideoIndex = useMemo(() => {
-    if (!previewVideo) return -1;
-    return filteredVideos.findIndex(
+    if (!previewVideo || !activePlaylist.length) return -1;
+    return activePlaylist.findIndex(
       (v) => String(v.chat_id) === String(previewVideo.chat_id) && v.message_id === previewVideo.message_id
     );
-  }, [filteredVideos, previewVideo]);
+  }, [activePlaylist, previewVideo]);
 
-  const hasNext = currentVideoIndex >= 0 && currentVideoIndex < filteredVideos.length - 1;
+  const hasNext = currentVideoIndex >= 0 && currentVideoIndex < activePlaylist.length - 1;
   const hasPrevious = currentVideoIndex > 0;
 
   const handlePlayNextVideo = useCallback(() => {
-    if (hasNext && filteredVideos[currentVideoIndex + 1]) {
-      handleStartPlay(filteredVideos[currentVideoIndex + 1]);
+    if (hasNext && activePlaylist[currentVideoIndex + 1]) {
+      handleStartPlay(activePlaylist[currentVideoIndex + 1]);
     }
-  }, [hasNext, currentVideoIndex, filteredVideos]);
+  }, [hasNext, currentVideoIndex, activePlaylist, handleStartPlay]);
 
   const handlePlayPreviousVideo = useCallback(() => {
-    if (hasPrevious && filteredVideos[currentVideoIndex - 1]) {
-      handleStartPlay(filteredVideos[currentVideoIndex - 1]);
+    if (hasPrevious && activePlaylist[currentVideoIndex - 1]) {
+      handleStartPlay(activePlaylist[currentVideoIndex - 1]);
     }
-  }, [hasPrevious, currentVideoIndex, filteredVideos]);
+  }, [hasPrevious, currentVideoIndex, activePlaylist, handleStartPlay]);
 
   useEffect(() => {
-    if (hasNext && filteredVideos[currentVideoIndex + 1]) {
-      const nextVid = filteredVideos[currentVideoIndex + 1];
+    if (hasNext && activePlaylist[currentVideoIndex + 1]) {
+      const nextVid = activePlaylist[currentVideoIndex + 1];
       fetch(`/api/media/prewarm/${encodeURIComponent(String(nextVid.chat_id))}/${nextVid.message_id}`).catch(() => {});
     }
-  }, [currentVideoIndex, hasNext, filteredVideos]);
+  }, [currentVideoIndex, hasNext, activePlaylist]);
 
   return (
     <div id="cinema-view-container" className="w-full h-full p-2 sm:p-2.5 flex flex-col gap-2 min-h-0 overflow-hidden animate-in fade-in duration-300">

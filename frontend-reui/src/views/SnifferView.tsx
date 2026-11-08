@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import type { CinemaVideo, SnifferFeedItem } from '@/types';
 import { api } from '@/services/api';
@@ -204,6 +204,39 @@ export const SnifferView: React.FC<{ isDocked?: boolean }> = ({ isDocked = false
     return true;
   });
 
+  const snifferVideoPlaylist: CinemaVideo[] = useMemo(() => {
+    return filteredFeed
+      .filter((item) => getFileCategory(item.filename) === 'video')
+      .map((item) => ({
+        chat_id: item.chat_id,
+        message_id: item.message_id,
+        filename: item.filename,
+        size: item.size || 0,
+      }));
+  }, [filteredFeed]);
+
+  const currentSnifferIdx = useMemo(() => {
+    if (!previewVideo) return -1;
+    return snifferVideoPlaylist.findIndex(
+      (v) => String(v.chat_id) === String(previewVideo.chat_id) && v.message_id === previewVideo.message_id
+    );
+  }, [snifferVideoPlaylist, previewVideo]);
+
+  const hasNextSniffer = currentSnifferIdx >= 0 && currentSnifferIdx < snifferVideoPlaylist.length - 1;
+  const hasPrevSniffer = currentSnifferIdx > 0;
+
+  const handleSnifferNext = useCallback(() => {
+    if (hasNextSniffer && snifferVideoPlaylist[currentSnifferIdx + 1]) {
+      setPreviewVideo(snifferVideoPlaylist[currentSnifferIdx + 1]);
+    }
+  }, [hasNextSniffer, currentSnifferIdx, snifferVideoPlaylist]);
+
+  const handleSnifferPrev = useCallback(() => {
+    if (hasPrevSniffer && snifferVideoPlaylist[currentSnifferIdx - 1]) {
+      setPreviewVideo(snifferVideoPlaylist[currentSnifferIdx - 1]);
+    }
+  }, [hasPrevSniffer, currentSnifferIdx, snifferVideoPlaylist]);
+
   const getCategoryIcon = (filename: string) => {
     const cat = getFileCategory(filename);
     switch (cat) {
@@ -342,6 +375,10 @@ export const SnifferView: React.FC<{ isDocked?: boolean }> = ({ isDocked = false
           video={previewVideo}
           open={Boolean(previewVideo)}
           onOpenChange={(open) => !open && setPreviewVideo(null)}
+          onNext={hasNextSniffer ? handleSnifferNext : undefined}
+          onPrevious={hasPrevSniffer ? handleSnifferPrev : undefined}
+          hasNext={hasNextSniffer}
+          hasPrevious={hasPrevSniffer}
         />
       </div>
     );
@@ -645,6 +682,10 @@ export const SnifferView: React.FC<{ isDocked?: boolean }> = ({ isDocked = false
         video={previewVideo}
         open={Boolean(previewVideo)}
         onOpenChange={(open) => !open && setPreviewVideo(null)}
+        onNext={hasNextSniffer ? handleSnifferNext : undefined}
+        onPrevious={hasPrevSniffer ? handleSnifferPrev : undefined}
+        hasNext={hasNextSniffer}
+        hasPrevious={hasPrevSniffer}
       />
     </div>
   );

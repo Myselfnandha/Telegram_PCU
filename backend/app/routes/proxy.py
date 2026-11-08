@@ -837,8 +837,28 @@ async def handle_proxy_download(
     stop_event = asyncio.Event()
     handle = StreamIteratorHandle(stop_event=stop_event)
 
+    if curr_task and is_media_player:
+        host_player_keys = [
+            k for k in list(_ACTIVE_STREAM_ITERS.keys())
+            if len(k) >= 4 and k[2] == client_tag and k[3] == req_client_host and k[1] != message_id
+        ]
+        for sk in host_player_keys:
+            old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
+            if old_h:
+                old_h.stop_event.set()
+                asyncio.create_task(old_h.close())
+            old_t = _ACTIVE_STREAM_TASKS.pop(sk, None)
+            if old_t and old_t[0] and not old_t[0].done() and old_t[0] is not curr_task:
+                old_t[0].cancel()
+            old_cid, old_mid = sk[0], sk[1]
+            stream_engine.abort_message_stream(old_cid, old_mid)
+            for old_conn_task in list(_ACTIVE_MEDIA_CONNS.get((old_cid, old_mid), ())):
+                if old_conn_task and not old_conn_task.done() and old_conn_task is not curr_task:
+                    old_conn_task.cancel()
+            _ACTIVE_MEDIA_CONNS.pop((old_cid, old_mid), None)
+
     if curr_task and not is_probe_request:
-        if start > 0 or is_media_player:
+        if is_media_player:
             pref_t = _ACTIVE_PREFETCH_TASKS.pop(media_key, None)
             if pref_t and not pref_t.done():
                 pref_t.cancel()
@@ -858,19 +878,6 @@ async def handle_proxy_download(
                     old_conn_task.cancel()
             _ACTIVE_MEDIA_CONNS[media_key].clear()
 
-            if is_media_player:
-                host_player_keys = [
-                    k for k in list(_ACTIVE_STREAM_ITERS.keys())
-                    if len(k) >= 4 and k[2] == client_tag and k[3] == req_client_host and k[1] != message_id
-                ]
-                for sk in host_player_keys:
-                    old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
-                    if old_h:
-                        old_h.stop_event.set()
-                        asyncio.create_task(old_h.close())
-                    old_t = _ACTIVE_STREAM_TASKS.pop(sk, None)
-                    if old_t and old_t[0] and not old_t[0].done() and old_t[0] is not curr_task:
-                        old_t[0].cancel()
         _ACTIVE_STREAM_TASKS[session_key] = (curr_task, start)
         _ACTIVE_MEDIA_CONNS[media_key].add(curr_task)
         _ACTIVE_STREAM_ITERS[session_key] = handle
@@ -878,7 +885,7 @@ async def handle_proxy_download(
     async def stream_wrapper():
         handle.task = asyncio.current_task()
         if stop_event.is_set():
-            raise ClientDisconnect()
+            return
 
         gen = stream_engine.stream_media(
             client=client,
@@ -901,13 +908,13 @@ async def handle_proxy_download(
         try:
             async for chunk in gen:
                 if stop_event.is_set():
-                    raise ClientDisconnect()
+                    return
                 yield chunk
         except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError, ClientDisconnect):
-            raise ClientDisconnect()
+            return
         except Exception as e:
             logger.debug(f"Stream wrapper notice for {clean_name}: {e}")
-            raise ClientDisconnect()
+            return
         finally:
             try:
                 await gen.aclose()
@@ -1903,6 +1910,9 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
     if not items:
         raise HTTPException(status_code=400, detail="No video items provided for batch playlist.")
 
+    host = request.headers.get("host") or f"{PROXY_HOST}:{PROXY_PORT}"
+    scheme = "https" if request.headers.get("x-forwarded-proto") == "https" else "http"
+
     lines = ["#EXTM3U"]
     for item in items:
         cid = item.get("chat_id")
@@ -1913,7 +1923,7 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
         grant = playback_grants.issue(str(cid), int(mid))
         safe_name = urllib.parse.quote(fname)
         safe_cid = urllib.parse.quote(str(cid), safe="")
-        ep_url = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{safe_cid}/{mid}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
+        ep_url = f"{scheme}://{host}/dl/{safe_cid}/{mid}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
         lines.append(f"#EXTINF:-1,{fname}")
         lines.append("#EXTVLCOPT:network-caching=2000")
         lines.append("#EXTVLCOPT:file-caching=2000")
@@ -1934,16 +1944,18 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
 
 @router.get("/api/media/vlc/playlist/{chat_id}/{message_id}", dependencies=[Depends(verify_auth)])
 @router.get("/api/media/vlc/playlist/{chat_id}/{message_id}/{filename:path}", dependencies=[Depends(verify_auth)])
-async def generate_single_vlc_playlist(chat_id: str, message_id: int, filename: Optional[str] = None):
+async def generate_single_vlc_playlist(chat_id: str, message_id: int, request: Request, filename: Optional[str] = None):
     import urllib.parse
     from app.config import PROXY_HOST, PROXY_PORT
     clean_name = filename or f"video_{message_id}.mp4"
     if clean_name.endswith(".m3u"):
         clean_name = clean_name[:-4]
+    host = (request.headers.get("host") if request else None) or f"{PROXY_HOST}:{PROXY_PORT}"
+    scheme = "https" if (request and request.headers.get("x-forwarded-proto") == "https") else "http"
     grant = playback_grants.issue(str(chat_id), int(message_id))
     safe_name = urllib.parse.quote(clean_name)
     safe_cid = urllib.parse.quote(str(chat_id), safe="")
-    ep_url = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{safe_cid}/{message_id}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
+    ep_url = f"{scheme}://{host}/dl/{safe_cid}/{message_id}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
     lines = [
         "#EXTM3U",
         f"#EXTINF:-1,{clean_name}",
