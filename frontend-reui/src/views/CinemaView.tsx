@@ -849,9 +849,9 @@ export const CinemaView: React.FC = () => {
     return map;
   }, [continueWatching]);
 
-  const handleStartPlay = (v: CinemaVideo) => {
+  const handleStartPlay = useCallback((v: CinemaVideo, forceBrowser: boolean = false) => {
     const playerPref = localStorage.getItem('tg_player_pref') || 'vlc';
-    if (playerPref === 'vlc') {
+    if (playerPref === 'vlc' && !forceBrowser && !previewVideo) {
       void handlePlayInVlc(v);
       return;
     }
@@ -861,7 +861,7 @@ export const CinemaView: React.FC = () => {
       ...v,
       playback_seconds: resumeSec,
     });
-  };
+  }, [previewVideo, watchProgressMap]);
 
   const activePlaylist: CinemaVideo[] = useMemo(() => {
     if (!previewVideo) return [];
@@ -896,13 +896,13 @@ export const CinemaView: React.FC = () => {
 
   const handlePlayNextVideo = useCallback(() => {
     if (hasNext && activePlaylist[currentVideoIndex + 1]) {
-      handleStartPlay(activePlaylist[currentVideoIndex + 1]);
+      handleStartPlay(activePlaylist[currentVideoIndex + 1], true);
     }
   }, [hasNext, currentVideoIndex, activePlaylist, handleStartPlay]);
 
   const handlePlayPreviousVideo = useCallback(() => {
     if (hasPrevious && activePlaylist[currentVideoIndex - 1]) {
-      handleStartPlay(activePlaylist[currentVideoIndex - 1]);
+      handleStartPlay(activePlaylist[currentVideoIndex - 1], true);
     }
   }, [hasPrevious, currentVideoIndex, activePlaylist, handleStartPlay]);
 
@@ -2788,7 +2788,7 @@ export const CinemaView: React.FC = () => {
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => handleStartPlay(video)}
+                          onClick={() => handleStartPlay(video, true)}
                           aria-label={`Stream ${media.cleanTitle} in browser`}
                           className={`${viewMode === 'fit' ? 'h-6.5 px-2 text-[11px]' : 'h-7.5 sm:h-8 px-2.5 text-xs'} font-medium gap-1 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 transition-colors cursor-pointer`}
                           title="Stream in Browser Player"
@@ -3016,7 +3016,7 @@ export const CinemaView: React.FC = () => {
                                     <Button
                                       size="sm"
                                       variant="default"
-                                      onClick={() => handleStartPlay(video)}
+                                      onClick={() => handleStartPlay(video, true)}
                                       className="h-6 text-[11px] px-2 gap-1 cursor-pointer font-medium bg-primary text-primary-foreground hover:opacity-90"
                                       title="Stream in Browser (Auto-Resumes)"
                                     >
