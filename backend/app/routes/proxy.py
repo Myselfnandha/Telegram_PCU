@@ -60,18 +60,6 @@ class StreamIteratorHandle:
 
     async def close(self):
         self.stop_event.set()
-        if self.task and not self.task.done():
-            self.task.cancel()
-        if self.it:
-            try:
-                if hasattr(self.it, "aclose"):
-                    await self.it.aclose()
-                elif hasattr(self.it, "close"):
-                    res = self.it.close()
-                    if asyncio.iscoroutine(res):
-                        await res
-            except Exception:
-                pass
 
 
 def parse_http_range(range_header: str, file_size: int) -> Tuple[int, int, int, Optional[Response]]:
@@ -573,7 +561,7 @@ async def handle_proxy_download(
     raw_name = "".join([c for c in raw_name if (c.isalnum() or c in " .-_()")]).strip()
     import urllib.parse
     real_name = auto_rename(raw_name)
-    if filename and filename != "thumb" and not filename.startswith("tg_media_"):
+    if filename and filename != "thumb" and not filename.startswith("tg_media_") and not filename.startswith("video_"):
         clean_name = urllib.parse.unquote(filename)
     else:
         clean_name = real_name
@@ -834,7 +822,7 @@ async def handle_proxy_download(
         client_tag = "generic"
 
     curr_task = asyncio.current_task()
-    session_key = (norm_chat_id, message_id, client_tag, norm_client_host) if is_media_player else (norm_chat_id, message_id, f"dl_{id(curr_task)}_{start}", norm_client_host)
+    session_key = (norm_chat_id, message_id, client_tag, norm_client_host, id(curr_task)) if is_media_player else (norm_chat_id, message_id, f"dl_{id(curr_task)}_{start}", norm_client_host)
 
     stop_event = asyncio.Event()
     handle = StreamIteratorHandle(stop_event=stop_event)
@@ -848,15 +836,9 @@ async def handle_proxy_download(
             old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
             if old_h:
                 old_h.stop_event.set()
-                asyncio.create_task(old_h.close())
-            old_t = _ACTIVE_STREAM_TASKS.pop(sk, None)
-            if old_t and old_t[0] and not old_t[0].done() and old_t[0] is not curr_task:
-                old_t[0].cancel()
+            _ACTIVE_STREAM_TASKS.pop(sk, None)
             old_cid, old_mid = sk[0], sk[1]
             stream_engine.abort_message_stream(old_cid, old_mid)
-            for old_conn_task in list(_ACTIVE_MEDIA_CONNS.get((old_cid, old_mid), ())):
-                if old_conn_task and not old_conn_task.done() and old_conn_task is not curr_task:
-                    old_conn_task.cancel()
             _ACTIVE_MEDIA_CONNS.pop((old_cid, old_mid), None)
 
     if curr_task and not is_probe_request:
@@ -864,21 +846,6 @@ async def handle_proxy_download(
             pref_t = _ACTIVE_PREFETCH_TASKS.pop(media_key, None)
             if pref_t and not pref_t.done():
                 pref_t.cancel()
-
-            matching_keys = [k for k in list(_ACTIVE_STREAM_ITERS.keys()) if k[0] == norm_chat_id and k[1] == message_id]
-            for sk in matching_keys:
-                old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
-                if old_h:
-                    old_h.stop_event.set()
-                    asyncio.create_task(old_h.close())
-                old_t = _ACTIVE_STREAM_TASKS.pop(sk, None)
-                if old_t and old_t[0] and not old_t[0].done() and old_t[0] is not curr_task:
-                    old_t[0].cancel()
-
-            for old_conn_task in list(_ACTIVE_MEDIA_CONNS.get(media_key, ())):
-                if old_conn_task and not old_conn_task.done() and old_conn_task is not curr_task:
-                    old_conn_task.cancel()
-            _ACTIVE_MEDIA_CONNS[media_key].clear()
 
         _ACTIVE_STREAM_TASKS[session_key] = (curr_task, start)
         _ACTIVE_MEDIA_CONNS[media_key].add(curr_task)
@@ -1641,7 +1608,7 @@ async def get_mobile_playback_info(chat_id: str, message_id: int, request: Reque
     host = request.headers.get("host", f"127.0.0.1:{PROXY_PORT}")
     scheme = request.url.scheme or "http"
     clean_fn = filename or f"video_{message_id}.mp4"
-    if clean_fn in ("thumb", "video.mp4") or clean_fn.startswith("tg_media_"):
+    if clean_fn in ("thumb", "video.mp4") or clean_fn.startswith("tg_media_") or clean_fn.startswith("video_"):
         clean_cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
         cached_msg = sniffer_service._message_cache.get((clean_cid, message_id)) or sniffer_service._message_cache.get((str(clean_cid), message_id))
         if not cached_msg:
@@ -1921,6 +1888,11 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
         cid = item.get("chat_id")
         mid = item.get("message_id")
         fname = item.get("filename") or f"video_{mid}.mp4"
+        if fname.startswith("video_") and not item.get("filename"):
+            clean_cid = int(cid) if str(cid).lstrip("-").isdigit() else cid
+            cached_msg = sniffer_service._message_cache.get((clean_cid, mid)) or sniffer_service._message_cache.get((str(clean_cid), mid))
+            if cached_msg and getattr(cached_msg, "file", None) and getattr(cached_msg.file, "name", None):
+                fname = auto_rename(cached_msg.file.name)
         if not cid or not mid:
             continue
         grant = playback_grants.issue(str(cid), int(mid))
@@ -1930,7 +1902,6 @@ async def generate_batch_playlist(payload: Dict[str, Any], request: Request):
         lines.append(f"#EXTINF:-1,{fname}")
         lines.append("#EXTVLCOPT:network-caching=2000")
         lines.append("#EXTVLCOPT:file-caching=2000")
-        lines.append("#EXTVLCOPT:http-reconnect")
         lines.append(ep_url)
 
     clean_title = "".join(c for c in title if c.isalnum() or c in " .-_").strip() or "playlist"
@@ -1953,6 +1924,11 @@ async def generate_single_vlc_playlist(chat_id: str, message_id: int, request: R
     clean_name = filename or f"video_{message_id}.mp4"
     if clean_name.endswith(".m3u"):
         clean_name = clean_name[:-4]
+    if clean_name.startswith("video_") and not filename:
+        clean_cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
+        cached_msg = sniffer_service._message_cache.get((clean_cid, message_id)) or sniffer_service._message_cache.get((str(clean_cid), message_id))
+        if cached_msg and getattr(cached_msg, "file", None) and getattr(cached_msg.file, "name", None):
+            clean_name = auto_rename(cached_msg.file.name)
     host = (request.headers.get("host") if request else None) or f"{PROXY_HOST}:{PROXY_PORT}"
     scheme = "https" if (request and request.headers.get("x-forwarded-proto") == "https") else "http"
     grant = playback_grants.issue(str(chat_id), int(message_id))
@@ -1964,7 +1940,6 @@ async def generate_single_vlc_playlist(chat_id: str, message_id: int, request: R
         f"#EXTINF:-1,{clean_name}",
         "#EXTVLCOPT:network-caching=2000",
         "#EXTVLCOPT:file-caching=2000",
-        "#EXTVLCOPT:http-reconnect",
         ep_url
     ]
     m3u_content = "\n".join(lines)

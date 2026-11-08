@@ -308,7 +308,6 @@ export const CinemaView: React.FC = () => {
         lines.push(`#EXTINF:-1,${cleanFileName(video.filename)}`);
         lines.push(`#EXTVLCOPT:network-caching=${cachingVal}`);
         lines.push(`#EXTVLCOPT:file-caching=${cachingVal}`);
-        lines.push('#EXTVLCOPT:http-reconnect');
         lines.push('#EXTVLCOPT:no-spdif');
         lines.push('#EXTVLCOPT:input-fast-seek');
         lines.push('#EXTVLCOPT:avcodec-hw=any');
@@ -524,7 +523,6 @@ export const CinemaView: React.FC = () => {
         lines.push(`#EXTINF:-1,${cleanFileName(v.filename)}`);
         lines.push(`#EXTVLCOPT:network-caching=${cachingVal}`);
         lines.push(`#EXTVLCOPT:file-caching=${cachingVal}`);
-        lines.push('#EXTVLCOPT:http-reconnect');
         lines.push('#EXTVLCOPT:no-spdif');
         lines.push('#EXTVLCOPT:input-fast-seek');
         lines.push('#EXTVLCOPT:avcodec-hw=any');
@@ -629,7 +627,6 @@ export const CinemaView: React.FC = () => {
         lines.push(`#EXTINF:-1,${cleanFileName(v.filename)}`);
         lines.push(`#EXTVLCOPT:network-caching=${cachingVal}`);
         lines.push(`#EXTVLCOPT:file-caching=${cachingVal}`);
-        lines.push('#EXTVLCOPT:http-reconnect');
         lines.push('#EXTVLCOPT:no-spdif');
         lines.push('#EXTVLCOPT:input-fast-seek');
         lines.push('#EXTVLCOPT:avcodec-hw=any');
