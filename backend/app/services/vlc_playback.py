@@ -23,8 +23,16 @@ class PlaybackGrantStore:
         self._grants: Dict[str, PlaybackGrant] = {}
         self._lock = threading.Lock()
 
+    def _norm_chat(self, chat_id: Union[str, int]) -> str:
+        s = str(chat_id).strip()
+        if s.startswith("-100"):
+            return s[4:]
+        if s.startswith("-"):
+            return s[1:]
+        return s
+
     def _get_sig(self, chat_id: Union[str, int], message_id: int) -> str:
-        norm_chat = str(chat_id).lstrip("-").replace("100", "", 1)
+        norm_chat = self._norm_chat(chat_id)
         data = f"{norm_chat}:{message_id}".encode()
         return hmac.new(SECRET, data, hashlib.sha256).hexdigest()
 
@@ -53,8 +61,8 @@ class PlaybackGrantStore:
                 if grant.expires_at is not None and grant.expires_at <= now:
                     self._grants.pop(token, None)
                     return False
-                norm_grant = str(grant.chat_id).lstrip("-").replace("100", "", 1)
-                norm_target = str(chat_id).lstrip("-").replace("100", "", 1)
+                norm_grant = self._norm_chat(grant.chat_id)
+                norm_target = self._norm_chat(chat_id)
                 if norm_grant == norm_target and grant.message_id == int(message_id):
                     return True
 

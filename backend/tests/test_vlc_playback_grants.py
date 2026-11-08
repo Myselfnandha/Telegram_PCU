@@ -32,6 +32,21 @@ def test_grant_is_bound_to_one_media_item():
     assert not store.allows("invalid", "-100123", 42)
 
 
+def test_grant_channel_id_normalization():
+    store = PlaybackGrantStore(ttl_seconds=60)
+    token1 = store.issue("-1002372906767", 886)
+    assert store.allows(token1, "2372906767", 886)
+    assert store.allows(token1, -1002372906767, 886)
+
+    token2 = store.issue("-100100456", 10)
+    assert store.allows(token2, "100456", 10)
+    assert store.allows(token2, -100100456, 10)
+
+    token3 = store.issue("-987654", 5)
+    assert store.allows(token3, "987654", 5)
+    assert store.allows(token3, -987654, 5)
+
+
 def test_grant_expires():
     store = PlaybackGrantStore(ttl_seconds=0)
     token = store.issue("-100123", 42)
