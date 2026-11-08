@@ -1383,3 +1383,18 @@ async def test_stream_engine_abort_message_stream_cancels_all_lookahead_tasks():
         await gen.aclose()
 
 
+@pytest.mark.asyncio
+async def test_stream_engine_abort_channel_candidate_cids():
+    from app.services.stream_engine import StreamEngine
+    engine = StreamEngine()
+    norm_cid = "12345678"
+    msg_id = 999
+    fut = asyncio.get_running_loop().create_future()
+    engine._in_flight_chunks[(norm_cid, msg_id, 0)] = fut
+    engine._active_stop_events[(norm_cid, msg_id)] = {asyncio.Event()}
+    engine.abort_message_stream(f"-100{norm_cid}", msg_id)
+    assert fut.cancelled()
+    assert (norm_cid, msg_id) not in engine._active_stop_events
+
+
+

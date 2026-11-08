@@ -43,22 +43,21 @@ class StreamEngine:
         and unfulfilled chunk futures for a specific message stream.
         Called immediately on seek or fast-forward to release sender sockets and Rust permits.
         """
-        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
-        media_key = (norm_cid, int(message_id))
+        s_cid = str(chat_id).strip()
+        norm_cid = s_cid[4:] if s_cid.startswith("-100") else (s_cid[3:] if s_cid.startswith("100") else s_cid.lstrip("-"))
+        candidate_cids = {s_cid, norm_cid, f"-100{norm_cid}", f"-{norm_cid}"}
 
-        # 1. Trigger all registered stop events
-        stop_events = self._active_stop_events.pop(media_key, set())
-        for ev in stop_events:
-            ev.set()
+        for cid in candidate_cids:
+            mk = (cid, int(message_id))
+            stop_events = self._active_stop_events.pop(mk, set())
+            for ev in stop_events:
+                ev.set()
+            wire_tasks = self._active_stream_wire_tasks.pop(mk, set())
+            for task in wire_tasks:
+                if not task.done():
+                    task.cancel()
 
-        # 2. Cancel all in-flight wire tasks for this media
-        wire_tasks = self._active_stream_wire_tasks.pop(media_key, set())
-        for task in wire_tasks:
-            if not task.done():
-                task.cancel()
-
-        # 3. Cancel and clear matching in-flight chunk futures
-        matching_keys = [k for k in list(self._in_flight_chunks.keys()) if k[0] == norm_cid and k[1] == int(message_id)]
+        matching_keys = [k for k in list(self._in_flight_chunks.keys()) if str(k[0]) in candidate_cids and k[1] == int(message_id)]
         for k in matching_keys:
             fut = self._in_flight_chunks.pop(k, None)
             if fut and not fut.done():

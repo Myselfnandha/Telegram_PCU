@@ -740,7 +740,7 @@ async def handle_proxy_download(
                     logger.info(f"STREAM [{clean_name}] Direct tail RAM hit: {len(probe_slice):,}B at offset {start:,} (0ms TTFB)")
                     return Response(content=probe_slice, status_code=status_code, headers=headers)
 
-    is_probe_request = (length <= 512 * 1024) and (start < 2 * 1024 * 1024 or (file_size > 0 and start >= (file_size - 4 * 1024 * 1024)))
+    is_probe_request = (length <= 512 * 1024)
 
     if is_probe_request and length <= 512 * 1024:
         chunk_size = 512 * 1024
@@ -830,16 +830,22 @@ async def handle_proxy_download(
     if curr_task and is_media_player:
         host_player_keys = [
             k for k in list(_ACTIVE_STREAM_ITERS.keys())
-            if len(k) >= 4 and k[2] == client_tag and k[3] == norm_client_host and k[1] != message_id
+            if len(k) >= 4 and k[3] == norm_client_host and (k[2] == client_tag or (k[0] == norm_chat_id and k[1] == message_id)) and (len(k) < 5 or k[4] != id(curr_task))
         ]
         for sk in host_player_keys:
             old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
             if old_h:
                 old_h.stop_event.set()
-            _ACTIVE_STREAM_TASKS.pop(sk, None)
+            old_task_tuple = _ACTIVE_STREAM_TASKS.pop(sk, None)
+            if old_task_tuple:
+                old_t, _ = old_task_tuple
+                if old_t and not old_t.done() and old_t is not curr_task:
+                    old_t.cancel()
             old_cid, old_mid = sk[0], sk[1]
             stream_engine.abort_message_stream(old_cid, old_mid)
             _ACTIVE_MEDIA_CONNS.pop((old_cid, old_mid), None)
+        if start > 0:
+            stream_engine.abort_message_stream(norm_chat_id, message_id)
 
     if curr_task and not is_probe_request:
         if is_media_player:

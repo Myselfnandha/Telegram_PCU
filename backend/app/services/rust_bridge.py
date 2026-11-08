@@ -213,6 +213,7 @@ class RustBridge:
                 m = re.search(r"Some\((\d+)\)", err_text) or re.search(r"FLOOD.*?(\d+)", err_text)
                 secs = int(m.group(1)) if m else 3
                 logger.info(f"Rust stream_chunk flood wait {secs}s on account {account_idx}")
+                self.trip_circuit(float(secs))
                 return None
             if "FILE_REFERENCE_EXPIRED" in err_text:
                 raise RuntimeError("FILE_REFERENCE_EXPIRED")
