@@ -494,17 +494,12 @@ class StreamEngine:
                     data = await asyncio.wait_for(asyncio.shield(wire_fut) if is_lead else wire_fut, timeout=20.0)
                 return c_idx, data
             except asyncio.CancelledError:
-                if stop_event.is_set():
-                    if getattr(wt, "_chunk_idx", 1) > 0 and is_lead and wt and not wt.done():
+                if getattr(wt, "_chunk_idx", 1) > 0:
+                    if wt and not wt.done():
                         wt.cancel()
-                    raise
-                cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
-                if cached_data and len(cached_data) == chunk_size:
-                    return c_idx, cached_data
-                data = await _download_chunk_from_mtproto(
-                    c_offset, chunk_size, worker_client, is_emergency, is_head_chunk=(c_idx == 0)
-                )
-                return c_idx, data
+                    if not wire_fut.done():
+                        wire_fut.cancel()
+                raise
             except Exception as fut_err:
                 if stop_event.is_set():
                     raise
@@ -649,19 +644,9 @@ class StreamEngine:
                     logger.debug(f"STREAM [{clean_name}] Producer notice: {e}")
                 finally:
                     if in_flight:
-                        if stop_event.is_set():
-                            for t in list(in_flight.keys()):
-                                if not t.done():
-                                    t.cancel()
-                        else:
-                            done, pending = await asyncio.wait(list(in_flight.keys()), timeout=0.5)
-                            for d in done:
-                                try:
-                                    d.result()
-                                except Exception:
-                                    pass
-                            for p in pending:
-                                p.cancel()
+                        for t in list(in_flight.keys()):
+                            if not t.done():
+                                t.cancel()
                     try:
                         queue.put_nowait(None)
                     except Exception:
@@ -761,9 +746,8 @@ class StreamEngine:
                 if getattr(wt, "_chunk_idx", 1) > 0 and not wt.done():
                     wt.cancel()
             if media_key in self._active_stream_wire_tasks:
-                for wt in list(self._active_stream_wire_tasks[media_key]):
-                    if getattr(wt, "_chunk_idx", 1) > 0 and not wt.done():
-                        wt.cancel()
+                for wt in list(stream_wire_tasks):
+                    self._active_stream_wire_tasks[media_key].discard(wt)
                 if not self._active_stream_wire_tasks[media_key]:
                     self._active_stream_wire_tasks.pop(media_key, None)
 

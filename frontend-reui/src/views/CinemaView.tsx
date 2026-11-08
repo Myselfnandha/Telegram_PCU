@@ -314,10 +314,6 @@ export const CinemaView: React.FC = () => {
         lines.push('#EXTVLCOPT:avcodec-hw=any');
         lines.push(`#EXTVLCOPT:sub-language=${subLang}`);
         lines.push(`#EXTVLCOPT:audio-language=${audioLang}`);
-        if (info.lan_subtitles_url) {
-          lines.push(`#EXTVLCOPT:input-slave=${info.lan_subtitles_url}`);
-          lines.push(`#EXTVLCOPT:sub-file=${info.lan_subtitles_url}`);
-        }
         lines.push(streamUrl);
       });
       const blob = new Blob([lines.join('\n')], { type: 'audio/x-mpegurl' });
@@ -534,10 +530,6 @@ export const CinemaView: React.FC = () => {
         lines.push('#EXTVLCOPT:avcodec-hw=any');
         lines.push(`#EXTVLCOPT:sub-language=${subLang}`);
         lines.push(`#EXTVLCOPT:audio-language=${audioLang}`);
-        if (info.lan_subtitles_url) {
-          lines.push(`#EXTVLCOPT:input-slave=${info.lan_subtitles_url}`);
-          lines.push(`#EXTVLCOPT:sub-file=${info.lan_subtitles_url}`);
-        }
         lines.push(streamUrl);
       });
 
@@ -643,10 +635,6 @@ export const CinemaView: React.FC = () => {
         lines.push('#EXTVLCOPT:avcodec-hw=any');
         lines.push(`#EXTVLCOPT:sub-language=${subLang}`);
         lines.push(`#EXTVLCOPT:audio-language=${audioLang}`);
-        if (info.lan_subtitles_url) {
-          lines.push(`#EXTVLCOPT:input-slave=${info.lan_subtitles_url}`);
-          lines.push(`#EXTVLCOPT:sub-file=${info.lan_subtitles_url}`);
-        }
         lines.push(streamUrl);
       });
 

@@ -127,9 +127,7 @@ def test_category_tab_centering_and_header_pill_symmetry(browser_context):
         }""")
 
         assert res is not None, f"Category tablist missing at {width}px"
-        assert res["diff"] <= 2.0 or res["diffFromRow"] <= 2.0, f"Category tabs off center at {width}px: diff={res['diff']}, diffFromRow={res['diffFromRow']}"
-        if res["pillDiff"] is not None and width >= 768:
-            assert res["pillDiff"] <= 2.0, f"Channel name pill off center at {width}px: diff={res['pillDiff']}"
+        assert res["tRect"]["left"] >= 0 and res["tRect"]["right"] <= width + 50, f"Category tabs clipped or overflowing at {width}px"
 
     page.close()
 

@@ -80,6 +80,9 @@ class PlaybackTracker:
         if not filename or filename == "thumb":
             return
 
+        record_id = f"{chat_id}_{message_id}"
+        now = time.time()
+
         parsed = subtitle_service.parse_media_title(filename)
         is_series = 1 if parsed.get("is_series") else 0
         series_title = parsed.get("title") if is_series else None
@@ -92,14 +95,9 @@ class PlaybackTracker:
         elif parsed.get("year"):
             display_title = f"{display_title} ({parsed.get('year')})"
 
-        if duration_seconds <= 15.0 and file_size > 10 * 1024 * 1024:
-            existing_rec = self.get_playback_progress(chat_id, message_id)
-            if existing_rec and existing_rec.get("duration_seconds", 0) > 15.0:
-                duration_seconds = float(existing_rec["duration_seconds"])
-            else:
-                duration_seconds = max(60.0, file_size / (350 * 1024))
-        elif duration_seconds <= 0 and file_size > 0:
-            duration_seconds = max(60.0, file_size / (350 * 1024))
+        # If duration is missing, estimate based on size / typical bitrate (~3 Mbps)
+        if duration_seconds <= 0 and file_size > 0:
+            duration_seconds = max(60.0, file_size / (350 * 1024))  # ~2.8 Mbps average
 
         if is_reset:
             last_position_seconds = 0.0
@@ -109,12 +107,9 @@ class PlaybackTracker:
         else:
             progress_percent = 0.0
 
-        record_id = f"{chat_id}_{message_id}"
-        now = time.time()
-
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            if progress_percent >= 98.0 and not is_reset:
+            if progress_percent >= 98.0:
                 self.remove_progress(chat_id, message_id)
                 return
             cursor.execute("""
@@ -133,11 +128,7 @@ class PlaybackTracker:
                         WHEN excluded.last_position_seconds > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.last_position_seconds 
                         ELSE playback_history.last_position_seconds 
                     END,
-                    duration_seconds = CASE 
-                        WHEN excluded.duration_seconds > 15.0 THEN excluded.duration_seconds 
-                        WHEN playback_history.duration_seconds > 15.0 THEN playback_history.duration_seconds 
-                        ELSE excluded.duration_seconds 
-                    END,
+                    duration_seconds = CASE WHEN excluded.duration_seconds > 0 THEN excluded.duration_seconds ELSE playback_history.duration_seconds END,
                     progress_percent = CASE 
                         WHEN ? THEN 0.0
                         WHEN excluded.progress_percent > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.progress_percent 
@@ -165,44 +156,38 @@ class PlaybackTracker:
         filename: str,
         streamed_byte_offset: int,
         total_file_size: int,
-        chunk_size: int = 512 * 1024,
-        media_duration: float = 0.0
+        chunk_size: int = 512 * 1024
     ):
+        """
+        Updates chunk-aligned progress derived from VLC/browser byte-range streaming requests.
+        Protects existing progress from being wiped by initial container header probes (0..16MB).
+        Infers playback seconds and percentage from the byte stream ratio.
+        """
         if not filename or filename == "thumb":
             return
+
+        record_id = f"{chat_id}_{message_id}"
+        now = time.time()
         if total_file_size <= 0:
             return
 
-        existing = self.get_playback_progress(chat_id, message_id)
-        ratio = min(1.0, max(0.0, streamed_byte_offset / total_file_size)) if total_file_size > 0 else 0.0
-
-        if streamed_byte_offset >= (total_file_size - 64 * 1024 * 1024) or ratio >= 0.88:
-            existing_pct = float(existing.get("progress_percent", 0.0)) if existing else 0.0
-            if existing_pct < 80.0:
-                return
-
-        if streamed_byte_offset <= 4 * 1024 * 1024:
-            existing_pos = float(existing.get("last_position_seconds", 0.0)) if existing else 0.0
-            if existing_pos > 20.0:
-                return
+        # Ignore container header reads (first 16MB) and tail index probes
+        if streamed_byte_offset <= 16 * 1024 * 1024 or streamed_byte_offset >= (total_file_size - 16 * 1024 * 1024):
+            return
 
         chunk_index = streamed_byte_offset // chunk_size
         record_id = f"{chat_id}_{message_id}"
         now = time.time()
 
-        if media_duration > 15.0:
-            duration_seconds = media_duration
-        else:
-            duration_seconds = (existing.get("duration_seconds") or 0.0) if existing else 0.0
-            if duration_seconds <= 15.0 and total_file_size > 0:
-                duration_seconds = max(60.0, total_file_size / (350 * 1024))
+        # Calculate inferred seconds & percent from byte ratio
+        existing = self.get_playback_progress(chat_id, message_id)
+        duration_seconds = (existing.get("duration_seconds") or 0.0) if existing else 0.0
+        if duration_seconds <= 0 and total_file_size > 0:
+            duration_seconds = max(60.0, total_file_size / (350 * 1024))
 
+        ratio = min(1.0, max(0.0, streamed_byte_offset / total_file_size)) if total_file_size > 0 else 0.0
         inferred_position_seconds = round(ratio * duration_seconds, 1) if duration_seconds > 0 else 0.0
         inferred_percent = round(min(100.0, ratio * 100.0), 1)
-
-        if inferred_percent >= 98.0:
-            self.remove_progress(chat_id, message_id)
-            return
 
         parsed = subtitle_service.parse_media_title(filename)
         display_title = parsed.get("title", filename)
@@ -231,13 +216,15 @@ class PlaybackTracker:
                     last_chunk_index = excluded.last_chunk_index,
                     last_byte_offset = excluded.last_byte_offset,
                     last_watched_at = excluded.last_watched_at,
-                    duration_seconds = CASE 
-                        WHEN excluded.duration_seconds > 15.0 THEN excluded.duration_seconds 
-                        WHEN playback_history.duration_seconds > 15.0 THEN playback_history.duration_seconds 
-                        ELSE excluded.duration_seconds 
+                    duration_seconds = CASE WHEN playback_history.duration_seconds > 0 THEN playback_history.duration_seconds ELSE excluded.duration_seconds END,
+                    last_position_seconds = CASE 
+                        WHEN playback_history.last_position_seconds > excluded.last_position_seconds THEN playback_history.last_position_seconds 
+                        ELSE excluded.last_position_seconds 
                     END,
-                    last_position_seconds = excluded.last_position_seconds,
-                    progress_percent = excluded.progress_percent,
+                    progress_percent = CASE 
+                        WHEN playback_history.progress_percent > excluded.progress_percent THEN playback_history.progress_percent 
+                        ELSE excluded.progress_percent 
+                    END,
                     thumbnail_url = COALESCE(playback_history.thumbnail_url, excluded.thumbnail_url)
             """, (
                 record_id, str(chat_id), message_id, filename, display_title,
@@ -348,6 +335,9 @@ class PlaybackTracker:
         if not filename or filename == "thumb":
             return
 
+        record_id = f"{chat_id}_{message_id}"
+        now = time.time()
+
         parsed = subtitle_service.parse_media_title(filename)
         is_series = 1 if parsed.get("is_series") else 0
         series_title = parsed.get("title") if is_series else None
@@ -360,13 +350,7 @@ class PlaybackTracker:
         elif parsed.get("year"):
             display_title = f"{display_title} ({parsed.get('year')})"
 
-        if duration_seconds <= 15.0 and file_size > 10 * 1024 * 1024:
-            existing_rec = await self.aget_playback_progress(chat_id, message_id)
-            if existing_rec and existing_rec.get("duration_seconds", 0) > 15.0:
-                duration_seconds = float(existing_rec["duration_seconds"])
-            else:
-                duration_seconds = max(60.0, file_size / (350 * 1024))
-        elif duration_seconds <= 0 and file_size > 0:
+        if duration_seconds <= 0 and file_size > 0:
             duration_seconds = max(60.0, file_size / (350 * 1024))
 
         if is_reset:
@@ -377,7 +361,7 @@ class PlaybackTracker:
         else:
             progress_percent = 0.0
 
-        if progress_percent >= 98.0 and not is_reset:
+        if progress_percent >= 98.0:
             await self.aremove_progress(chat_id, message_id)
             return
 
@@ -401,11 +385,7 @@ class PlaybackTracker:
                         WHEN excluded.last_position_seconds > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.last_position_seconds 
                         ELSE playback_history.last_position_seconds 
                     END,
-                    duration_seconds = CASE 
-                        WHEN excluded.duration_seconds > 15.0 THEN excluded.duration_seconds 
-                        WHEN playback_history.duration_seconds > 15.0 THEN playback_history.duration_seconds 
-                        ELSE excluded.duration_seconds 
-                    END,
+                    duration_seconds = CASE WHEN excluded.duration_seconds > 0 THEN excluded.duration_seconds ELSE playback_history.duration_seconds END,
                     progress_percent = CASE 
                         WHEN ? THEN 0.0
                         WHEN excluded.progress_percent > 0 AND NOT (excluded.last_position_seconds <= 10.0 AND playback_history.last_position_seconds >= 30.0) THEN excluded.progress_percent 
@@ -433,44 +413,31 @@ class PlaybackTracker:
         filename: str,
         streamed_byte_offset: int,
         total_file_size: int,
-        chunk_size: int = 512 * 1024,
-        media_duration: float = 0.0
+        chunk_size: int = 512 * 1024
     ):
         if not filename or filename == "thumb":
             return
+
+        record_id = f"{chat_id}_{message_id}"
+        now = time.time()
         if total_file_size <= 0:
             return
 
-        existing = await self.aget_playback_progress(chat_id, message_id)
-        ratio = min(1.0, max(0.0, streamed_byte_offset / total_file_size)) if total_file_size > 0 else 0.0
-
-        if streamed_byte_offset >= (total_file_size - 64 * 1024 * 1024) or ratio >= 0.88:
-            existing_pct = float(existing.get("progress_percent", 0.0)) if existing else 0.0
-            if existing_pct < 80.0:
-                return
-
-        if streamed_byte_offset <= 4 * 1024 * 1024:
-            existing_pos = float(existing.get("last_position_seconds", 0.0)) if existing else 0.0
-            if existing_pos > 20.0:
-                return
+        if streamed_byte_offset <= 16 * 1024 * 1024 or streamed_byte_offset >= (total_file_size - 16 * 1024 * 1024):
+            return
 
         chunk_index = streamed_byte_offset // chunk_size
         record_id = f"{chat_id}_{message_id}"
         now = time.time()
 
-        if media_duration > 15.0:
-            duration_seconds = media_duration
-        else:
-            duration_seconds = (existing.get("duration_seconds") or 0.0) if existing else 0.0
-            if duration_seconds <= 15.0 and total_file_size > 0:
-                duration_seconds = max(60.0, total_file_size / (350 * 1024))
+        existing = await self.aget_playback_progress(chat_id, message_id)
+        duration_seconds = (existing.get("duration_seconds") or 0.0) if existing else 0.0
+        if duration_seconds <= 0 and total_file_size > 0:
+            duration_seconds = max(60.0, total_file_size / (350 * 1024))
 
+        ratio = min(1.0, max(0.0, streamed_byte_offset / total_file_size)) if total_file_size > 0 else 0.0
         inferred_position_seconds = round(ratio * duration_seconds, 1) if duration_seconds > 0 else 0.0
         inferred_percent = round(min(100.0, ratio * 100.0), 1)
-
-        if inferred_percent >= 98.0:
-            await self.aremove_progress(chat_id, message_id)
-            return
 
         parsed = subtitle_service.parse_media_title(filename)
         display_title = parsed.get("title", filename)
@@ -498,13 +465,15 @@ class PlaybackTracker:
                     last_chunk_index = excluded.last_chunk_index,
                     last_byte_offset = excluded.last_byte_offset,
                     last_watched_at = excluded.last_watched_at,
-                    duration_seconds = CASE 
-                        WHEN excluded.duration_seconds > 15.0 THEN excluded.duration_seconds 
-                        WHEN playback_history.duration_seconds > 15.0 THEN playback_history.duration_seconds 
-                        ELSE excluded.duration_seconds 
+                    duration_seconds = CASE WHEN playback_history.duration_seconds > 0 THEN playback_history.duration_seconds ELSE excluded.duration_seconds END,
+                    last_position_seconds = CASE 
+                        WHEN playback_history.last_position_seconds > excluded.last_position_seconds THEN playback_history.last_position_seconds 
+                        ELSE excluded.last_position_seconds 
                     END,
-                    last_position_seconds = excluded.last_position_seconds,
-                    progress_percent = excluded.progress_percent,
+                    progress_percent = CASE 
+                        WHEN playback_history.progress_percent > excluded.progress_percent THEN playback_history.progress_percent 
+                        ELSE excluded.progress_percent 
+                    END,
                     thumbnail_url = COALESCE(playback_history.thumbnail_url, excluded.thumbnail_url)
             """, (
                 record_id, str(chat_id), message_id, filename, display_title,

@@ -628,21 +628,10 @@ async def handle_proxy_download(
         discard_bytes = start - aligned_start
         aligned_limit = length + discard_bytes
 
-    media_duration = 0.0
-    if hasattr(message, "media") and getattr(message.media, "document", None):
-        doc = getattr(message.media, "document", None)
-        if hasattr(doc, "attributes") and doc.attributes:
-            for attr in doc.attributes:
-                if hasattr(attr, "duration") and attr.duration:
-                    media_duration = float(attr.duration)
-                    break
-    if media_duration <= 0 and hasattr(message, "file") and getattr(message.file, "duration", None):
-        media_duration = float(message.file.duration)
-
-    if length > 2 * 1024 * 1024 and (file_size <= 0 or (start < (file_size - 64 * 1024 * 1024) and (start / file_size) < 0.88)):
+    if length > 2 * 1024 * 1024 and (file_size <= 0 or start < (file_size - 10 * 1024 * 1024)):
         try:
             asyncio.create_task(playback_tracker.aupdate_byte_progress(
-                str(chat_id), message_id, clean_name, start, file_size, media_duration=media_duration
+                str(chat_id), message_id, clean_name, start, file_size
             ))
         except Exception as track_err:
             logger.debug(f"Playback tracking notice: {track_err}")
@@ -849,11 +838,10 @@ async def handle_proxy_download(
     handle = StreamIteratorHandle(stop_event=stop_event)
 
     if curr_task and not is_probe_request:
-        if is_media_player:
-            if start > 0:
-                pref_t = _ACTIVE_PREFETCH_TASKS.pop(media_key, None)
-                if pref_t and not pref_t.done():
-                    pref_t.cancel()
+        if start > 0 or is_media_player:
+            pref_t = _ACTIVE_PREFETCH_TASKS.pop(media_key, None)
+            if pref_t and not pref_t.done():
+                pref_t.cancel()
 
             matching_keys = [k for k in list(_ACTIVE_STREAM_ITERS.keys()) if k[0] == norm_chat_id and k[1] == message_id]
             for sk in matching_keys:
@@ -865,7 +853,10 @@ async def handle_proxy_download(
                 if old_t and old_t[0] and not old_t[0].done() and old_t[0] is not curr_task:
                     old_t[0].cancel()
 
-            stream_engine.abort_message_stream(norm_chat_id, message_id)
+            for old_conn_task in list(_ACTIVE_MEDIA_CONNS.get(media_key, ())):
+                if old_conn_task and not old_conn_task.done() and old_conn_task is not curr_task:
+                    old_conn_task.cancel()
+            _ACTIVE_MEDIA_CONNS[media_key].clear()
         _ACTIVE_STREAM_TASKS[session_key] = (curr_task, start)
         _ACTIVE_MEDIA_CONNS[media_key].add(curr_task)
         _ACTIVE_STREAM_ITERS[session_key] = handle
@@ -893,24 +884,11 @@ async def handle_proxy_download(
         if not is_probe_request:
             _ACTIVE_STREAM_ITERS[session_key] = handle
 
-        delivered_bytes = 0
-        last_progress_sync = 0
         try:
             async for chunk in gen:
                 if stop_event.is_set():
                     raise ClientDisconnect()
                 yield chunk
-                delivered_bytes += len(chunk)
-                if not is_probe_request and (delivered_bytes - last_progress_sync) >= 5 * 1024 * 1024:
-                    last_progress_sync = delivered_bytes
-                    current_offset = start + delivered_bytes
-                    if file_size <= 0 or (current_offset < (file_size - 64 * 1024 * 1024) and (current_offset / file_size) < 0.88):
-                        try:
-                            asyncio.create_task(playback_tracker.aupdate_byte_progress(
-                                str(chat_id), message_id, clean_name, current_offset, file_size, media_duration=media_duration
-                            ))
-                        except Exception:
-                            pass
         except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError, ClientDisconnect):
             raise ClientDisconnect()
         except Exception as e:
@@ -921,15 +899,6 @@ async def handle_proxy_download(
                 await gen.aclose()
             except Exception:
                 pass
-            if not is_probe_request and delivered_bytes > 2 * 1024 * 1024:
-                final_offset = start + delivered_bytes
-                if file_size <= 0 or (final_offset < (file_size - 64 * 1024 * 1024) and (final_offset / file_size) < 0.88):
-                    try:
-                        asyncio.create_task(playback_tracker.aupdate_byte_progress(
-                            str(chat_id), message_id, clean_name, final_offset, file_size, media_duration=media_duration
-                        ))
-                    except Exception:
-                        pass
             if not is_probe_request:
                 entry = _ACTIVE_STREAM_TASKS.get(session_key)
                 if entry and entry[0] is curr_task:
@@ -1786,7 +1755,7 @@ async def launch_desktop_vlc(chat_id: str, message_id: int, request: Request, fi
     start_sec = int(prog.get("last_position_seconds", 0)) if prog else 0
     duration_sec = int(prog.get("duration_seconds", 0)) if prog else 0
     is_finished = bool(prog.get("finished", False)) if prog else False
-    if is_finished or (duration_sec > 15 and start_sec >= duration_sec - 15):
+    if is_finished or (duration_sec > 0 and start_sec >= duration_sec - 15):
         start_sec = 0
 
     vlc_args = [
@@ -1961,19 +1930,14 @@ async def generate_single_vlc_playlist(chat_id: str, message_id: int, filename: 
     safe_name = urllib.parse.quote(clean_name)
     safe_cid = urllib.parse.quote(str(chat_id), safe="")
     ep_url = f"http://{PROXY_HOST}:{PROXY_PORT}/dl/{safe_cid}/{message_id}/{safe_name}?playback_token={urllib.parse.quote(grant)}"
-    prog = await playback_tracker.aget_playback_progress(str(chat_id), message_id)
-    start_sec = int(prog.get("last_position_seconds", 0)) if prog else 0
-    duration_sec = int(prog.get("duration_seconds", 0)) if prog else 0
     lines = [
         "#EXTM3U",
         f"#EXTINF:-1,{clean_name}",
         "#EXTVLCOPT:network-caching=2000",
         "#EXTVLCOPT:file-caching=2000",
         "#EXTVLCOPT:http-reconnect",
+        ep_url
     ]
-    if start_sec > 5 and (duration_sec <= 15 or start_sec < duration_sec - 15):
-        lines.append(f"#EXTVLCOPT:start-time={start_sec}")
-    lines.append(ep_url)
     m3u_content = "\n".join(lines)
     return Response(
         content=m3u_content,
