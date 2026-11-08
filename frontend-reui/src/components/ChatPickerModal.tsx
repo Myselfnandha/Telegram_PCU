@@ -67,7 +67,7 @@ export const ChatPickerModal: React.FC<ChatPickerModalProps> = ({
     if (!matchesSearch) return false;
 
     if (filter === 'saved') return c.type === 'saved_messages';
-    if (filter === 'channel') return c.type === 'channel';
+    if (filter === 'channel') return c.type === 'channel' || c.type === 'supergroup';
     if (filter === 'group') return c.type === 'group' || c.type === 'supergroup';
     if (filter === 'user') return c.type === 'user';
     if (filter === 'bot') return c.type === 'bot';

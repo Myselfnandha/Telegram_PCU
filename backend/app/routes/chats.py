@@ -40,14 +40,13 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
 
     me = await client.get_me()
     
-    # 1. Fetch main dialogs and archived dialogs (compact slice to save RAM)
-    main_dialogs = await client.get_dialogs(limit=100)
+    main_dialogs = await client.get_dialogs(limit=None)
     try:
-        archived_dialogs = await client.get_dialogs(folder=1, limit=30)
+        archived_dialogs = await client.get_dialogs(folder=1, limit=None)
     except Exception:
         archived_dialogs = []
 
-    seen_ids = {me.id}
+    seen_ids = {("User", me.id)}
     result: List[ChatItem] = []
 
     # Always add "Saved Messages" as the very first option
@@ -61,9 +60,12 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
     ))
 
     for d in list(main_dialogs) + list(archived_dialogs):
-        if not d.entity or d.entity.id in seen_ids:
+        if not d.entity:
             continue
-        seen_ids.add(d.entity.id)
+        ent_key = (type(d.entity).__name__, d.entity.id)
+        if ent_key in seen_ids:
+            continue
+        seen_ids.add(ent_key)
 
         username = getattr(d.entity, "username", None)
         entity_type = "user"
@@ -94,9 +96,9 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
         contacts_res = await client(GetContactsRequest(hash=0))
         if hasattr(contacts_res, "users"):
             for u in contacts_res.users:
-                if not u or u.id in seen_ids:
+                if not u or ("User", u.id) in seen_ids:
                     continue
-                seen_ids.add(u.id)
+                seen_ids.add(("User", u.id))
                 full_name = f"{u.first_name or ''} {u.last_name or ''}".strip()
                 if not full_name:
                     full_name = u.username or f"Contact {u.id}"
@@ -168,7 +170,7 @@ def update_dialog_on_message(chat_id: Union[int, str], msg: Any) -> None:
             from app.socket_handlers import sio
             payload = {
                 "chat_id": str(target_chat.id),
-                "dialogs": [c.model_dump() for c in _chats_cache[:100]]
+                "dialogs": [c.model_dump() for c in _chats_cache]
             }
             try:
                 loop = asyncio.get_running_loop()
