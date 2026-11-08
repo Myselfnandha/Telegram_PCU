@@ -857,6 +857,20 @@ async def handle_proxy_download(
                 if old_conn_task and not old_conn_task.done() and old_conn_task is not curr_task:
                     old_conn_task.cancel()
             _ACTIVE_MEDIA_CONNS[media_key].clear()
+
+            if is_media_player:
+                host_player_keys = [
+                    k for k in list(_ACTIVE_STREAM_ITERS.keys())
+                    if len(k) >= 4 and k[2] == client_tag and k[3] == req_client_host and k[1] != message_id
+                ]
+                for sk in host_player_keys:
+                    old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
+                    if old_h:
+                        old_h.stop_event.set()
+                        asyncio.create_task(old_h.close())
+                    old_t = _ACTIVE_STREAM_TASKS.pop(sk, None)
+                    if old_t and old_t[0] and not old_t[0].done() and old_t[0] is not curr_task:
+                        old_t[0].cancel()
         _ACTIVE_STREAM_TASKS[session_key] = (curr_task, start)
         _ACTIVE_MEDIA_CONNS[media_key].add(curr_task)
         _ACTIVE_STREAM_ITERS[session_key] = handle

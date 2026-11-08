@@ -863,6 +863,35 @@ export const CinemaView: React.FC = () => {
     });
   };
 
+  const currentVideoIndex = useMemo(() => {
+    if (!previewVideo) return -1;
+    return filteredVideos.findIndex(
+      (v) => String(v.chat_id) === String(previewVideo.chat_id) && v.message_id === previewVideo.message_id
+    );
+  }, [filteredVideos, previewVideo]);
+
+  const hasNext = currentVideoIndex >= 0 && currentVideoIndex < filteredVideos.length - 1;
+  const hasPrevious = currentVideoIndex > 0;
+
+  const handlePlayNextVideo = useCallback(() => {
+    if (hasNext && filteredVideos[currentVideoIndex + 1]) {
+      handleStartPlay(filteredVideos[currentVideoIndex + 1]);
+    }
+  }, [hasNext, currentVideoIndex, filteredVideos]);
+
+  const handlePlayPreviousVideo = useCallback(() => {
+    if (hasPrevious && filteredVideos[currentVideoIndex - 1]) {
+      handleStartPlay(filteredVideos[currentVideoIndex - 1]);
+    }
+  }, [hasPrevious, currentVideoIndex, filteredVideos]);
+
+  useEffect(() => {
+    if (hasNext && filteredVideos[currentVideoIndex + 1]) {
+      const nextVid = filteredVideos[currentVideoIndex + 1];
+      fetch(`/api/media/prewarm/${encodeURIComponent(String(nextVid.chat_id))}/${nextVid.message_id}`).catch(() => {});
+    }
+  }, [currentVideoIndex, hasNext, filteredVideos]);
+
   return (
     <div id="cinema-view-container" className="w-full h-full p-2 sm:p-2.5 flex flex-col gap-2 min-h-0 overflow-hidden animate-in fade-in duration-300">
       {/* Top Header & Archive Controls */}
@@ -3141,6 +3170,10 @@ export const CinemaView: React.FC = () => {
             loadContinueWatching();
           }
         }}
+        onNext={hasNext ? handlePlayNextVideo : undefined}
+        onPrevious={hasPrevious ? handlePlayPreviousVideo : undefined}
+        hasNext={hasNext}
+        hasPrevious={hasPrevious}
       />
 
       <MobileQrModal

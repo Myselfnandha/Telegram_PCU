@@ -25,18 +25,28 @@ import {
   AlertCircle,
   Tv,
   ExternalLink,
+  SkipBack,
+  SkipForward,
 } from 'lucide-react';
 
 interface VideoPlayerModalProps {
   video: (CinemaVideo & { playback_seconds?: number }) | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
+  hasNext?: boolean;
+  hasPrevious?: boolean;
 }
 
 export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   video,
   open,
   onOpenChange,
+  onNext,
+  onPrevious,
+  hasNext = false,
+  hasPrevious = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -197,10 +207,15 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   };
 
   const handleEnded = () => {
-    setIsPlaying(false);
-    if (video) {
-      api.removeContinueWatching(video.chat_id, video.message_id).catch(() => {});
-      showOsd('Completed playback');
+    if (onNext && hasNext) {
+      showOsd('Playing next video...');
+      onNext();
+    } else {
+      setIsPlaying(false);
+      if (video) {
+        api.removeContinueWatching(video.chat_id, video.message_id).catch(() => {});
+        showOsd('Completed playback');
+      }
     }
   };
 
@@ -408,12 +423,22 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       } else if (e.key.toLowerCase() === 'z') {
         e.preventDefault();
         toggleFitMode();
+      } else if (e.shiftKey && e.key.toLowerCase() === 'n') {
+        if (onNext && hasNext) {
+          e.preventDefault();
+          onNext();
+        }
+      } else if (e.shiftKey && e.key.toLowerCase() === 'p') {
+        if (onPrevious && hasPrevious) {
+          e.preventDefault();
+          onPrevious();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, currentTimeSec, duration, volume, isMuted, subtitlesEnabled, fitMode]);
+  }, [open, currentTimeSec, duration, volume, isMuted, subtitlesEnabled, fitMode, onNext, onPrevious, hasNext, hasPrevious]);
 
   const [isLaunchingVlc, setIsLaunchingVlc] = useState(false);
 
@@ -677,6 +702,19 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         <div className="px-4 py-2.5 bg-zinc-950/95 flex flex-wrap items-center justify-between gap-3 text-xs border-t border-white/5 select-none">
           {/* Left: Playback Transport Buttons */}
           <div className="flex items-center gap-1.5">
+            {/* Previous Video */}
+            {onPrevious && (
+              <button
+                onClick={onPrevious}
+                disabled={!hasPrevious}
+                aria-label="Previous video (Shift+P)"
+                className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                title="Previous video (Shift+P)"
+              >
+                <SkipBack className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             {/* Play/Pause */}
             <button
               onClick={togglePlayPause}
@@ -686,6 +724,19 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             >
               {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
             </button>
+
+            {/* Next Video */}
+            {onNext && (
+              <button
+                onClick={onNext}
+                disabled={!hasNext}
+                aria-label="Next video (Shift+N)"
+                className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                title="Next video (Shift+N)"
+              >
+                <SkipForward className="w-3.5 h-3.5" />
+              </button>
+            )}
 
             {/* Replay -10s */}
             <button
