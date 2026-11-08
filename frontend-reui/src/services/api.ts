@@ -363,6 +363,10 @@ class ApiService {
     });
   }
 
+  async prewarmMedia(chatId: string | number, messageId: number): Promise<{ status: string }> {
+    return this.request(`/api/media/prewarm/${encodeURIComponent(String(chatId))}/${messageId}`);
+  }
+
   async getContinueWatching(): Promise<ContinueWatchingItem[]> {
     return this.request<ContinueWatchingItem[]>('/api/media/continue_watching');
   }

@@ -126,7 +126,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
     // Adaptive RAM buffer pre-warming on open
     if (open && video) {
-      fetch(`/api/media/prewarm/${encodeURIComponent(String(video.chat_id))}/${video.message_id}`).catch(() => {});
+      api.prewarmMedia(video.chat_id, video.message_id).catch(() => {});
     }
   }, [video?.chat_id, video?.message_id, open]);
 

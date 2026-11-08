@@ -918,7 +918,7 @@ export const CinemaView: React.FC = () => {
   useEffect(() => {
     if (hasNext && activePlaylist[currentVideoIndex + 1]) {
       const nextVid = activePlaylist[currentVideoIndex + 1];
-      fetch(`/api/media/prewarm/${encodeURIComponent(String(nextVid.chat_id))}/${nextVid.message_id}`).catch(() => {});
+      api.prewarmMedia(nextVid.chat_id, nextVid.message_id).catch(() => {});
     }
   }, [currentVideoIndex, hasNext, activePlaylist]);
 
