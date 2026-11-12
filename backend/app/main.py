@@ -155,6 +155,7 @@ async def _periodic_maintenance_loop():
             await asyncio.sleep(3600)
             cleanup_stale_temp_files()
             from app.services.stream_cache import stream_cache_service
+            stream_cache_service.check_disk_guard()
             stream_cache_service.evict_if_needed()
         except asyncio.CancelledError:
             break
@@ -174,7 +175,7 @@ async def lifespan(app: FastAPI):
     cleanup_stale_temp_files()
     try:
         from app.services.stream_cache import stream_cache_service
-        stream_cache_service.evict_if_needed()
+        stream_cache_service.startup_purge(wipe_all=True)
     except Exception as e:
         logger.debug(f"Initial stream cache sweep notice: {e}")
 
@@ -222,6 +223,10 @@ async def lifespan(app: FastAPI):
                         sec_info = await TelegramClientManager.get_secondary_me_info()
                         if sec_info:
                             logger.info(f"Secondary Telegram client ready: {sec_info.get('first_name')} (@{sec_info.get('username')})")
+                try:
+                    asyncio.create_task(TelegramClientManager.ensure_streaming_relay_channel())
+                except Exception as rce:
+                    logger.debug(f"Relay channel init task launch notice: {rce}")
                 try:
                     from app.routes.chats import preload_chats
                     asyncio.create_task(preload_chats())

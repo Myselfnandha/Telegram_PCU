@@ -62,6 +62,12 @@ SESSION_FILE_PATH_2 = SESSION_DIR / SESSION_NAME_2
 SESSION_STRING_2 = os.getenv("TG_SESSION_STRING_2", "").strip()
 ENABLE_MULTI_ACCOUNT_TURBO = os.getenv("ENABLE_MULTI_ACCOUNT_TURBO", "true").lower() in ("1", "true", "yes")
 
+STREAMING_RELAY_CHANNEL_ID_RAW = os.getenv("STREAMING_RELAY_CHANNEL_ID", "").strip()
+try:
+    STREAMING_RELAY_CHANNEL_ID = int(STREAMING_RELAY_CHANNEL_ID_RAW) if STREAMING_RELAY_CHANNEL_ID_RAW else 0
+except ValueError:
+    STREAMING_RELAY_CHANNEL_ID = 0
+
 def get_env_dict() -> Dict[str, str]:
     """Reads .env file into key-value dictionary."""
     config: Dict[str, str] = {}
@@ -142,6 +148,13 @@ def update_secondary_session_string_in_env(session_string: str) -> None:
     SESSION_STRING_2 = session_string
     os.environ["TG_SESSION_STRING_2"] = session_string
     save_env_dict({"TG_SESSION_STRING_2": session_string})
+
+
+def update_relay_channel_id_in_env(channel_id: int) -> None:
+    global STREAMING_RELAY_CHANNEL_ID
+    STREAMING_RELAY_CHANNEL_ID = channel_id
+    os.environ["STREAMING_RELAY_CHANNEL_ID"] = str(channel_id)
+    save_env_dict({"STREAMING_RELAY_CHANNEL_ID": str(channel_id)})
 
 
 

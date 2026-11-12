@@ -123,7 +123,7 @@ impl StreamEngine {
                     Ok(Ok(_)) => Ok(()),
                     Ok(Err(e)) => {
                         let err_str = format!("{e:?}");
-                        if err_str.contains("DC_ID_INVALID") {
+                        if err_str.contains("DC_ID_INVALID") || err_str.contains("AUTH_BYTES_INVALID") {
                             Ok(())
                         } else {
                             Err(format!("ImportAuthorization error: {e:?}"))
@@ -187,17 +187,15 @@ impl StreamEngine {
         if !self.authed_dcs.read().await.contains(&(account_idx, dc_id)) {
             let _guard = self.auth_lock.lock().await;
             if !self.authed_dcs.read().await.contains(&(account_idx, dc_id)) {
-                if let Err(e) = self.copy_auth_to_dc(client, dc_id, account_idx).await {
-                    return Err(e);
-                }
+                let _ = self.copy_auth_to_dc(client, dc_id, account_idx).await;
                 self.authed_dcs.write().await.insert((account_idx, dc_id));
             }
         }
 
         let invoke_fut = client.invoke_in_dc(dc_id, &req);
-        let invoke_res = tokio::time::timeout(std::time::Duration::from_secs(20), invoke_fut)
+        let invoke_res = tokio::time::timeout(std::time::Duration::from_secs(25), invoke_fut)
             .await
-            .map_err(|_| "MTProto GetFile timed out after 20s".to_string())?;
+            .map_err(|_| "MTProto GetFile timed out after 25s".to_string())?;
 
         let result = match invoke_res {
             Ok(file) => file,
@@ -210,9 +208,9 @@ impl StreamEngine {
                     }
                     self.authed_dcs.write().await.insert((account_idx, dc_id));
                     drop(_guard);
-                    tokio::time::timeout(std::time::Duration::from_secs(20), client.invoke_in_dc(dc_id, &req))
+                    tokio::time::timeout(std::time::Duration::from_secs(25), client.invoke_in_dc(dc_id, &req))
                         .await
-                        .map_err(|_| "MTProto GetFile retry timed out after 20s".to_string())?
+                        .map_err(|_| "MTProto GetFile retry timed out after 25s".to_string())?
                         .map_err(|e2| format!("MTProto GetFile retry error: {e2:?}"))?
                 } else if err_str.contains("FLOOD_WAIT") || err_str.contains("FLOOD_PREMIUM_WAIT") {
                     let mut wait_secs = 2u64;

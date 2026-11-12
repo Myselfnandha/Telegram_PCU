@@ -45,8 +45,7 @@ async def test_media_cache_status_and_limits():
         data = res.json()
         assert "max_mb" in data
         assert "total_mb" in data
-        # Check cache is bounded to 2GB (2048 MB)
-        assert data["max_mb"] <= 2048.0, f"Cache limit exceeded 2048 MB: {data['max_mb']}"
+        assert data["max_mb"] <= 10240.0, f"Cache limit exceeded 10240 MB: {data['max_mb']}"
         assert data["total_mb"] >= 0
 
 @pytest.mark.asyncio

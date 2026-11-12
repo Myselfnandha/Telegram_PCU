@@ -2,7 +2,8 @@ import sys
 import time
 import asyncio
 import logging
-from typing import Optional, Dict, Any
+import os
+from typing import Optional, Dict, Any, Set
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import (
@@ -25,6 +26,8 @@ from app.config import (
     ENABLE_MULTI_ACCOUNT_TURBO,
     update_secondary_session_string_in_env
 )
+
+update_session_string_2_in_env = update_secondary_session_string_in_env
 
 import io
 import base64
@@ -360,6 +363,28 @@ class TelegramClientManager:
     _secondary_qr_wait_task: Optional[asyncio.Task] = None
     _secondary_qr_status: Dict[str, Any] = {"status": "idle"}
 
+    _relay_channel_id: Optional[int] = None
+    _relay_message_map: Dict[Tuple[str, int], int] = {}
+    _relay_lock = asyncio.Lock()
+
+    @classmethod
+    def sync_tier_limits(cls) -> None:
+        from app.services.rate_governor import rate_governor
+        primary_active = bool(cls._client and cls._is_ready)
+        secondary_active = bool(cls._secondary_client and cls._is_secondary_ready and cls._cached_secondary_me)
+        primary_prem = bool(cls._cached_me and cls._cached_me.get("is_premium"))
+        secondary_prem = bool(cls._cached_secondary_me and cls._cached_secondary_me.get("is_premium"))
+
+        if primary_active and secondary_active:
+            rate_governor.configure_for_tier(is_premium=primary_prem, secondary_premium=secondary_prem)
+        elif primary_active:
+            rate_governor.configure_for_tier(is_premium=primary_prem, secondary_premium=None)
+        elif secondary_active:
+            rate_governor.configure_for_tier(is_premium=secondary_prem, secondary_premium=None)
+        else:
+            rate_governor.configure_for_tier(is_premium=False, secondary_premium=None)
+        sender_pool.set_max_senders(32)
+
     @classmethod
     async def get_client(cls) -> TelegramClient:
         """
@@ -453,9 +478,7 @@ class TelegramClientManager:
                                     "username": getattr(me, "username", None),
                                     "is_premium": is_prem
                                 }
-                                sender_pool.set_max_senders(32 if is_prem else 32)
-                                from app.services.rate_governor import rate_governor
-                                rate_governor.configure_for_tier(is_premium=is_prem)
+                                cls.sync_tier_limits()
                                 logger.info(f"Telegram user client authorized as: {getattr(me, 'first_name', '')} (@{getattr(me, 'username', 'N/A')}, Premium: {is_prem})")
                                 asyncio.create_task(cls._client.get_dialogs(limit=300))
                                 try:
@@ -476,6 +499,7 @@ class TelegramClientManager:
                                 "name": getattr(me, "first_name", "Telegram Bot"),
                                 "username": getattr(me, "username", None)
                             }
+                            cls.sync_tier_limits()
                             logger.info(f"Telegram client started as Bot: @{getattr(me, 'username', 'N/A')}")
                         except Exception as bot_err:
                             logger.warning(f"Failed bot login on user client: {bot_err}")
@@ -483,11 +507,10 @@ class TelegramClientManager:
                         cls._cached_me = None
                         logger.warning("Telethon client connected but NOT authorized yet. Run setup_auth.py to log in.")
                 else:
-                    # Client could not connect right now (e.g. WiFi switched, no route yet)
-                    # CRITICAL: Preserve existing authorization so network changes don't log out user!
                     if was_ready:
                         cls._is_ready = True
 
+        cls.sync_tier_limits()
         return cls._client
 
     @classmethod
@@ -552,7 +575,7 @@ class TelegramClientManager:
     @classmethod
     async def get_me_info(cls) -> Optional[dict]:
         """Fetch current authenticated Telegram user info (served from memory cache with phone privacy masking)."""
-        if cls._cached_me and "phone" in cls._cached_me:
+        if cls._cached_me and "phone" in cls._cached_me and "is_premium" in cls._cached_me:
             return cls._cached_me
         try:
             client = await cls.get_client()
@@ -573,8 +596,14 @@ class TelegramClientManager:
                 "name": full_name or getattr(me, "username", "Telegram User"),
                 "username": getattr(me, "username", None),
                 "phone": masked_phone,
-                "is_bot": getattr(me, "bot", False)
+                "is_bot": getattr(me, "bot", False),
+                "is_premium": getattr(me, "premium", False)
             }
+            if cls._secondary_client and cls._is_secondary_ready and cls._cached_secondary_me:
+                cls.sync_tier_limits()
+            else:
+                from app.services.rate_governor import rate_governor
+                rate_governor.configure_for_tier(is_premium=cls._cached_me.get("is_premium", False), secondary_premium=None)
             return cls._cached_me
         except Exception as e:
             logger.error(f"Error getting Telegram profile: {e}")
@@ -631,9 +660,10 @@ class TelegramClientManager:
                 new_str = client.session.save()
                 if new_str:
                     update_session_string_in_env(new_str)
+            cls._is_ready = True
             cls._cached_me = None
             me_info = await cls.get_me_info()
-            cls._is_ready = True
+            cls.sync_tier_limits()
             return {"status": "authorized", "user": me_info}
         except SessionPasswordNeededError:
             return {"status": "2fa_required", "message": "Two-Step Verification (2FA) is enabled on this Telegram account."}
@@ -647,9 +677,10 @@ class TelegramClientManager:
             new_str = client.session.save()
             if new_str:
                 update_session_string_in_env(new_str)
+        cls._is_ready = True
         cls._cached_me = None
         me_info = await cls.get_me_info()
-        cls._is_ready = True
+        cls.sync_tier_limits()
         return {"status": "authorized", "user": me_info}
 
     @classmethod
@@ -715,9 +746,10 @@ class TelegramClientManager:
                 new_str = cls._client.session.save()
                 if new_str:
                     update_session_string_in_env(new_str)
+            cls._is_ready = True
             cls._cached_me = None
             me_info = await cls.get_me_info()
-            cls._is_ready = True
+            cls.sync_tier_limits()
             cls._qr_status = {"status": "authorized", "user": me_info}
             logger.info(f"✅ Telegram QR login successful: {me_info.get('name') if me_info else 'User'}")
         except SessionPasswordNeededError:
@@ -753,14 +785,23 @@ class TelegramClientManager:
                 sf = SESSION_FILE_PATH.with_suffix(ext)
                 if sf.exists():
                     sf.unlink(missing_ok=True)
+            cls.sync_tier_limits()
             return {"status": "logged_out"}
 
     @classmethod
     async def get_secondary_client(cls) -> Optional[TelegramClient]:
+        if cls._secondary_client is not None and getattr(cls._secondary_client, "is_connected", lambda: True)():
+            return cls._secondary_client
+
         if not API_ID or not API_HASH:
             return None
 
-        has_session_string = bool(SESSION_STRING_2)
+        sec_session = (
+            os.getenv("TG_SESSION_STRING_2", "").strip()
+            or os.getenv("SESSION_STRING_2", "").strip()
+            or SESSION_STRING_2
+        )
+        has_session_string = bool(sec_session)
         session_file = SESSION_FILE_PATH_2.with_suffix(".session") if not str(SESSION_FILE_PATH_2).endswith(".session") else SESSION_FILE_PATH_2
         has_session_file = session_file.exists() or SESSION_FILE_PATH_2.exists()
         if not has_session_string and not has_session_file:
@@ -769,7 +810,7 @@ class TelegramClientManager:
         if cls._secondary_client is None or not cls._secondary_client.is_connected():
             async with cls._secondary_lock:
                 if cls._secondary_client is None:
-                    session_target = StringSession(SESSION_STRING_2) if SESSION_STRING_2 else str(SESSION_FILE_PATH_2)
+                    session_target = StringSession(sec_session) if sec_session else str(SESSION_FILE_PATH_2)
                     cls._secondary_client = TelegramClient(
                         session_target,
                         API_ID,
@@ -794,7 +835,7 @@ class TelegramClientManager:
                     if cls._is_secondary_ready:
                         if isinstance(cls._secondary_client.session, StringSession):
                             current_str = cls._secondary_client.session.save()
-                            if current_str and current_str != SESSION_STRING_2:
+                            if current_str and current_str != sec_session:
                                 update_secondary_session_string_in_env(current_str)
 
                         if not cls._cached_secondary_me:
@@ -817,15 +858,14 @@ class TelegramClientManager:
                                     "phone": masked_phone,
                                     "is_premium": is_prem
                                 }
-                                from app.services.rate_governor import rate_governor
-                                primary_prem = bool(cls._cached_me and cls._cached_me.get("is_premium"))
-                                rate_governor.configure_for_tier(is_premium=primary_prem, secondary_premium=is_prem)
+                                cls.sync_tier_limits()
                                 logger.info(f"Secondary Telegram client authorized as: {getattr(me, 'first_name', '')} (@{getattr(me, 'username', 'N/A')}, Premium: {is_prem})")
                             except Exception as me_err:
                                 logger.debug(f"Secondary get_me notice: {me_err}")
                 else:
                     return None
 
+        cls.sync_tier_limits()
         return cls._secondary_client if cls._is_secondary_ready else None
 
     @classmethod
@@ -864,6 +904,7 @@ class TelegramClientManager:
                 "phone": masked_phone,
                 "is_premium": getattr(me, "premium", False)
             }
+            cls.sync_tier_limits()
             return cls._cached_secondary_me
         except Exception as e:
             logger.error(f"Error getting secondary profile: {e}")
@@ -871,7 +912,6 @@ class TelegramClientManager:
 
     @classmethod
     async def get_active_streaming_clients(cls) -> list:
-        from app.config import ENABLE_MULTI_ACCOUNT_TURBO
         clients = []
         try:
             primary = await cls.get_client()
@@ -881,14 +921,145 @@ class TelegramClientManager:
             logger.debug(f"Primary client check notice: {pe}")
 
         try:
-            if ENABLE_MULTI_ACCOUNT_TURBO:
-                sec = await cls.get_secondary_client()
-                if sec and cls._is_secondary_ready:
-                    clients.append(sec)
+            sec = await cls.get_secondary_client()
+            if not sec and cls._secondary_client is not None and cls._is_secondary_ready and getattr(cls._secondary_client, "is_connected", lambda: True)():
+                sec = cls._secondary_client
+            if sec and cls._is_secondary_ready and sec not in clients:
+                clients.append(sec)
         except Exception as se:
             logger.debug(f"Secondary client check notice: {se}")
 
         return clients
+
+    @classmethod
+    def get_relay_channel_id(cls) -> Optional[int]:
+        if cls._relay_channel_id:
+            return cls._relay_channel_id
+        from app.config import STREAMING_RELAY_CHANNEL_ID
+        if STREAMING_RELAY_CHANNEL_ID:
+            cls._relay_channel_id = STREAMING_RELAY_CHANNEL_ID
+            return cls._relay_channel_id
+        return None
+
+    @classmethod
+    async def ensure_streaming_relay_channel(cls) -> Optional[int]:
+        if cls._relay_channel_id:
+            return cls._relay_channel_id
+        async with cls._relay_lock:
+            if cls._relay_channel_id:
+                return cls._relay_channel_id
+
+            from app.config import STREAMING_RELAY_CHANNEL_ID, update_relay_channel_id_in_env
+            primary = await cls.get_client()
+            if not primary or not await cls.is_authorized():
+                return None
+
+            sec = None
+            if await cls.is_secondary_authorized():
+                try:
+                    sec = await cls.get_secondary_client()
+                except Exception:
+                    sec = None
+
+            target_id = STREAMING_RELAY_CHANNEL_ID
+            if target_id:
+                try:
+                    entity = await primary.get_entity(target_id)
+                    if entity:
+                        cls._relay_channel_id = target_id
+                        if sec:
+                            try:
+                                await sec.get_entity(target_id)
+                            except Exception:
+                                try:
+                                    from telethon.tl.functions.messages import ExportChatInviteRequest, ImportChatInviteRequest
+                                    invite = await primary(ExportChatInviteRequest(peer=entity))
+                                    if invite and hasattr(invite, "link"):
+                                        inv_hash = invite.link.split("/")[-1].lstrip("+")
+                                        await sec(ImportChatInviteRequest(hash=inv_hash))
+                                except Exception:
+                                    pass
+                        return cls._relay_channel_id
+                except Exception as ent_err:
+                    logger.debug(f"Configured relay channel check error: {ent_err}")
+
+            try:
+                from telethon.tl.functions.channels import CreateChannelRequest
+                from telethon.tl.functions.messages import ExportChatInviteRequest, ImportChatInviteRequest
+                from telethon import utils as tg_utils
+
+                res = await primary(CreateChannelRequest(
+                    title="TG Stream Relay",
+                    about="Automated Streaming Relay Hub for TG Power Suite",
+                    megagroup=False
+                ))
+                if res and hasattr(res, "chats") and res.chats:
+                    channel = res.chats[0]
+                    peer_id = tg_utils.get_peer_id(channel)
+                    cls._relay_channel_id = peer_id
+                    update_relay_channel_id_in_env(peer_id)
+                    logger.info(f"Created dedicated streaming relay channel: {channel.title} (ID: {peer_id})")
+
+                    if sec:
+                        try:
+                            invite = await primary(ExportChatInviteRequest(peer=channel))
+                            if invite and hasattr(invite, "link"):
+                                inv_hash = invite.link.split("/")[-1].lstrip("+")
+                                await sec(ImportChatInviteRequest(hash=inv_hash))
+                                logger.info(f"Joined secondary account into streaming relay channel: {peer_id}")
+                        except Exception as inv_err:
+                            logger.debug(f"Secondary relay join error: {inv_err}")
+
+                    return cls._relay_channel_id
+            except Exception as cr_err:
+                logger.warning(f"Could not auto-provision streaming relay channel: {cr_err}")
+                return None
+
+    @classmethod
+    async def forward_to_relay_channel(cls, chat_id: Union[str, int], message_id: int) -> Optional[int]:
+        relay_id = cls.get_relay_channel_id()
+        if not relay_id:
+            relay_id = await cls.ensure_streaming_relay_channel()
+        if not relay_id:
+            return None
+
+        cid_str = str(chat_id)
+        if cid_str == str(relay_id):
+            return message_id
+
+        cache_key = (cid_str, int(message_id))
+        if cache_key in cls._relay_message_map:
+            return cls._relay_message_map[cache_key]
+
+        try:
+            client = await cls.get_client()
+            if not client or not await cls.is_authorized():
+                return None
+
+            from telethon import errors
+            try:
+                entity = await client.get_entity(relay_id)
+                fwd_res = await client.forward_messages(
+                    entity=entity,
+                    messages=message_id,
+                    from_peer=chat_id
+                )
+                if fwd_res:
+                    fwd_msg = fwd_res[0] if isinstance(fwd_res, list) else fwd_res
+                    new_id = getattr(fwd_msg, "id", None)
+                    if new_id:
+                        cls._relay_message_map[cache_key] = new_id
+                        logger.info(f"Relayed media from chat {chat_id}:{message_id} to relay channel {relay_id}:{new_id}")
+                        return new_id
+            except (getattr(errors, "ChatForwardsRestrictedError", Exception),
+                    getattr(errors, "ChatAdminRequiredError", Exception),
+                    getattr(errors, "ChannelPrivateError", Exception)) as perm_err:
+                logger.info(f"Media in chat {chat_id} is protected/restricted ({type(perm_err).__name__}); fallback to direct stream.")
+                return None
+        except Exception as e:
+            logger.debug(f"Relay forward exception: {e}")
+            return None
+        return None
 
     @classmethod
     async def send_secondary_login_code(cls, phone: str) -> dict:
@@ -1088,9 +1259,7 @@ class TelegramClientManager:
                 sf = SESSION_FILE_PATH_2.with_suffix(ext)
                 if sf.exists():
                     sf.unlink(missing_ok=True)
-            from app.services.rate_governor import rate_governor
-            primary_prem = bool(cls._cached_me and cls._cached_me.get("is_premium"))
-            rate_governor.configure_for_tier(is_premium=primary_prem, secondary_premium=None)
+            cls.sync_tier_limits()
             return {"status": "logged_out"}
 
     @classmethod
@@ -1156,6 +1325,7 @@ class MTProtoSenderPool:
         self._active_senders: Dict[Any, set] = {}
         self._auth_keys: Dict[Any, Any] = {}
         self._last_active: Dict[Any, float] = {}
+        self._prewarming_keys: Set[Any] = set()
         self._keepalive_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
         self._create_lock = asyncio.Lock()
@@ -1191,8 +1361,47 @@ class MTProtoSenderPool:
         for k in list(self._bulk_semaphores.keys()):
             self._bulk_semaphores[k] = asyncio.Semaphore(max_bulk)
 
+    async def prewarm_dc(self, client: Any, dc_id: int, target_hot_senders: int = 2) -> None:
+        if client is None:
+            return
+        if hasattr(client, "is_connected") and not client.is_connected():
+            try:
+                await asyncio.wait_for(client.connect(), timeout=5.0)
+            except Exception:
+                return
+
+        key = self._get_key(client, dc_id)
+        self._ensure_keepalive(client)
+
+        async with self._lock:
+            if not hasattr(self, "_prewarming_keys"):
+                self._prewarming_keys = set()
+            if key in self._prewarming_keys:
+                return
+            self._prewarming_keys.add(key)
+
+            current_idles = [s for s in self._idle_senders.get(key, []) if s.is_connected()]
+            self._idle_senders[key] = current_idles
+            active_count = len(self._active_senders.get(key, set()))
+            to_create = max(0, min(target_hot_senders - len(current_idles), self.max_per_dc - (len(current_idles) + active_count)))
+
+        try:
+            for _ in range(to_create):
+                try:
+                    sender = await self._create_sender(client, dc_id)
+                    if sender:
+                        async with self._lock:
+                            self._idle_senders.setdefault(key, []).append(sender)
+                            self._last_active[sender] = time.time()
+                        logger.debug(f"MTProtoPool: Pre-warmed hot sender for DC {dc_id} (key={key})")
+                except Exception as e:
+                    logger.debug(f"MTProtoPool: Pre-warm sender for DC {dc_id} skipped: {e}")
+                    break
+        finally:
+            async with self._lock:
+                self._prewarming_keys.discard(key)
+
     def _ensure_keepalive(self, client):
-        """Starts background keepalive ping loop if not already running."""
         if self._keepalive_task is None or self._keepalive_task.done():
             try:
                 self._keepalive_task = asyncio.create_task(self._keepalive_loop(client))
@@ -1200,36 +1409,49 @@ class MTProtoSenderPool:
                 pass
 
     async def _keepalive_loop(self, client):
-        """
-        Background keepalive loop: sends a lightweight 20-byte PingRequest
-        every 25s to idle pooled senders. Prevents Telegram server from closing
-        idle MTProto connections during continuous video playback.
-        Ensures instantaneous (<300ms) seeks even after hours of movie playback.
-        """
         while True:
             try:
-                await asyncio.sleep(25.0)
+                await asyncio.sleep(20.0)
                 now = time.time()
                 senders_to_ping = []
                 async with self._lock:
-                    for dc_id, idles in self._idle_senders.items():
+                    for key, idles in self._idle_senders.items():
                         for s in list(idles):
-                            if (now - self._last_active.get(s, 0)) >= 20.0:
-                                senders_to_ping.append((dc_id, s))
+                            if (now - self._last_active.get(s, 0)) >= 18.0:
+                                senders_to_ping.append((key, s))
 
-                for dc_id, s in senders_to_ping:
+                for key, s in senders_to_ping:
+                    if isinstance(key, str) and key.startswith("sec_"):
+                        target_client = TelegramClientManager._secondary_client or client
+                    else:
+                        target_client = client or TelegramClientManager._client
+
                     if not s.is_connected():
-                        await self.release(client, dc_id, s, healthy=False)
+                        async with self._lock:
+                            if key in self._idle_senders and s in self._idle_senders[key]:
+                                self._idle_senders[key].remove(s)
+                            self._last_active.pop(s, None)
+                        try:
+                            await s.disconnect()
+                        except Exception:
+                            pass
                         continue
                     try:
                         await asyncio.wait_for(
-                            client._call(s, functions.PingRequest(ping_id=secrets.randbits(31))),
+                            target_client._call(s, functions.PingRequest(ping_id=secrets.randbits(31))),
                             timeout=2.0
                         )
                         self._last_active[s] = time.time()
                     except Exception:
-                        logger.debug(f"MTProtoPool: Evicted stale idle sender on DC {dc_id}")
-                        await self.release(client, dc_id, s, healthy=False)
+                        logger.debug(f"MTProtoPool: Evicted stale idle sender on {key}")
+                        async with self._lock:
+                            if key in self._idle_senders and s in self._idle_senders[key]:
+                                self._idle_senders[key].remove(s)
+                            self._last_active.pop(s, None)
+                        try:
+                            await s.disconnect()
+                        except Exception:
+                            pass
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -1457,7 +1679,6 @@ class MTProtoSenderPool:
                         self._active_senders[key].discard(sender)
 
                 if not healthy:
-                    # Broken / cancelled dirty sender: cleanly disconnect and purge immediately
                     try:
                         await sender.disconnect()
                     except Exception:
@@ -1470,7 +1691,6 @@ class MTProtoSenderPool:
                         if key in self._idle_senders:
                             self._idle_senders[key] = [s for s in self._idle_senders[key] if s != sender]
                 elif sender == borrowed or (is_foreign and getattr(sender, "_is_independent", None) is not True and hasattr(client, "_return_exported_sender")):
-                    # Telethon's borrowed sender returned via Telethon's mechanism
                     self._last_active[sender] = time.time()
                     if hasattr(client, "_return_exported_sender"):
                         try:
@@ -1478,15 +1698,18 @@ class MTProtoSenderPool:
                         except Exception:
                             pass
                 else:
-                    # Independent pooled sender: return to idle pool for immediate reuse
                     async with self._lock:
                         if sender.is_connected():
                             self._last_active[sender] = time.time()
                             if key not in self._idle_senders:
                                 self._idle_senders[key] = []
-                            self._idle_senders[key].append(sender)
+                            if sender not in self._idle_senders[key]:
+                                self._idle_senders[key].append(sender)
                         else:
                             self._last_active.pop(sender, None)
+                            if hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
+                                if sender == borrowed or dc_id in client._borrowed_senders:
+                                    client._borrowed_senders.pop(dc_id, None)
                             try:
                                 await sender.disconnect()
                             except Exception:
@@ -1572,6 +1795,8 @@ class MTProtoSenderPool:
             self._active_senders.clear()
             self._semaphores.clear()
             self._last_active.clear()
+            if hasattr(self, "_prewarming_keys"):
+                self._prewarming_keys.clear()
         if client and hasattr(client, "_borrowed_senders") and isinstance(client._borrowed_senders, dict):
             client._borrowed_senders.clear()
 

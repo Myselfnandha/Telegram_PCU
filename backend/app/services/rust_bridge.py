@@ -203,7 +203,8 @@ class RustBridge:
 
         try:
             client = self._get_client()
-            resp = await client.post("/api/stream/chunk", json=payload, timeout=24.0)
+            req_timeout = 30.0
+            resp = await client.post("/api/stream/chunk", json=payload, timeout=req_timeout)
             if resp.status_code == 200:
                 self._consecutive_failures = 0
                 return resp.content
@@ -217,22 +218,24 @@ class RustBridge:
                 return None
             if "FILE_REFERENCE_EXPIRED" in err_text:
                 raise RuntimeError("FILE_REFERENCE_EXPIRED")
+            now = time.monotonic()
             if resp.status_code in (500, 502, 503, 504):
                 self._consecutive_failures = getattr(self, "_consecutive_failures", 0) + 1
                 if self._consecutive_failures >= 3:
                     if now >= getattr(self, "_circuit_broken_until", 0.0):
-                        self.trip_circuit(5.0)
-                        logger.warning(f"Rust bridge circuit tripped for 5s due to {self._consecutive_failures} consecutive errors ({resp.status_code})")
+                        self.trip_circuit(3.0)
+                        logger.warning(f"Rust bridge circuit tripped for 3s due to {self._consecutive_failures} consecutive errors ({resp.status_code})")
                         asyncio.create_task(self.ensure_sessions_registered())
             logger.warning(f"Rust stream_chunk failed: {resp.status_code} {err_text}")
         except Exception as e:
             if "FILE_REFERENCE_EXPIRED" in str(e):
                 raise
+            now = time.monotonic()
             self._consecutive_failures = getattr(self, "_consecutive_failures", 0) + 1
             if self._consecutive_failures >= 3:
                 if now >= getattr(self, "_circuit_broken_until", 0.0):
-                    self.trip_circuit(5.0)
-                    logger.warning(f"Rust bridge circuit tripped for 5s due to {self._consecutive_failures} consecutive failures ({type(e).__name__})")
+                    self.trip_circuit(3.0)
+                    logger.warning(f"Rust bridge circuit tripped for 3s due to {self._consecutive_failures} consecutive failures ({type(e).__name__})")
                     asyncio.create_task(self.ensure_sessions_registered())
             logger.warning(f"Rust stream_chunk error: {type(e).__name__} ({e or 'timeout'})")
         return None

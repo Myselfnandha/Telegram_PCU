@@ -8,6 +8,7 @@ from telethon.tl.functions.upload import GetFileRequest
 from app.telegram_client import sender_pool
 from app.services.rate_governor import rate_governor
 from app.services.stream_buffer import stream_buffer
+from app.services.stream_cache import stream_cache_service
 
 logger = logging.getLogger("stream_engine")
 
@@ -29,6 +30,7 @@ class StreamEngine:
     def __init__(self):
         self._in_flight_chunks: Dict[Tuple[str, int, int], asyncio.Future] = {}
         self._chunk_lock: Optional[asyncio.Lock] = None
+        self._mtproto_sem: Optional[asyncio.Semaphore] = None
         self._active_stream_wire_tasks: Dict[Tuple[str, int], Set[asyncio.Task]] = {}
         self._active_stop_events: Dict[Tuple[str, int], Set[asyncio.Event]] = {}
 
@@ -36,6 +38,11 @@ class StreamEngine:
         if self._chunk_lock is None:
             self._chunk_lock = asyncio.Lock()
         return self._chunk_lock
+
+    def _get_mtproto_sem(self) -> asyncio.Semaphore:
+        if self._mtproto_sem is None:
+            self._mtproto_sem = asyncio.Semaphore(16)
+        return self._mtproto_sem
 
     def abort_message_stream(self, chat_id: Union[str, int], message_id: int):
         """
@@ -86,8 +93,10 @@ class StreamEngine:
         bytes_sent = 0
         first_chunk_sent = False
         effective_start = start
-        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
-        media_key = (norm_cid, int(message_id))
+        orig_cid = str(chat_id).lstrip("-").replace("100", "", 1)
+        orig_mid = int(message_id)
+        norm_cid = orig_cid
+        media_key = (norm_cid, orig_mid)
         stream_wire_tasks = set()
 
         if media_key not in self._active_stream_wire_tasks:
@@ -123,15 +132,33 @@ class StreamEngine:
         discard_front = effective_start - aligned_offset
         total_chunks = (remaining_length + discard_front + chunk_size - 1) // chunk_size
 
+        from app.telegram_client import TelegramClientManager
+        relay_id = TelegramClientManager.get_relay_channel_id()
+        if relay_id and str(chat_id) != str(relay_id) and get_fresh_message_fn:
+            try:
+                relayed_mid = await TelegramClientManager.forward_to_relay_channel(chat_id, message_id)
+                if relayed_mid:
+                    relay_msg = await get_fresh_message_fn(client, relay_id, relayed_mid)
+                    if relay_msg and hasattr(relay_msg, "media") and relay_msg.media:
+                        message = relay_msg
+                        chat_id = relay_id
+                        message_id = relayed_mid
+                        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
+                        media_key = (norm_cid, int(message_id))
+            except Exception as rfe:
+                logger.debug(f"Streaming relay switch notice: {rfe}")
+
         # Resolve media location and DC ID
-        file_info = utils._get_file_info(message.media) if (message and hasattr(message, "media")) else None
+        try:
+            file_info = utils._get_file_info(message.media) if (message and hasattr(message, "media")) else None
+        except Exception:
+            file_info = None
         file_loc = getattr(file_info, "location", None)
         dc_id = getattr(file_info, "dc_id", None) or getattr(getattr(client, "session", None), "dc_id", 5)
 
         session_dc = getattr(getattr(client, "session", None), "dc_id", None)
         is_foreign = bool(dc_id and session_dc and dc_id != session_dc)
 
-        from app.telegram_client import TelegramClientManager
         try:
             active_clients = await TelegramClientManager.get_active_streaming_clients()
         except Exception:
@@ -144,7 +171,7 @@ class StreamEngine:
             hasattr(client, "session") and str(chat_id) == str(getattr(client.session, "user_id", ""))
         )
 
-        if len(active_clients) > 1 and get_fresh_message_fn:
+        if not is_saved_messages and len(active_clients) > 1 and get_fresh_message_fn:
             valid_active_clients = [client]
             for sec_client in active_clients:
                 if sec_client is client:
@@ -164,6 +191,8 @@ class StreamEngine:
                         f"streaming via primary account only."
                     )
             active_clients = valid_active_clients
+        elif is_saved_messages:
+            active_clients = [client]
 
         logger.info(
             f"STREAM [{clean_name}] Starting range: offset={effective_start:,}, "
@@ -172,7 +201,7 @@ class StreamEngine:
             f"active_accounts={len(active_clients)}"
         )
 
-        queue: asyncio.Queue = asyncio.Queue(maxsize=32 if is_media_player else 128)
+        queue: asyncio.Queue = asyncio.Queue(maxsize=32 if is_media_player else 64)
         stop_event = external_stop_event or asyncio.Event()
         if media_key in self._active_stop_events:
             self._active_stop_events[media_key].add(stop_event)
@@ -182,8 +211,20 @@ class StreamEngine:
             if stop_event.is_set() and not is_head_chunk:
                 raise asyncio.CancelledError("Stream aborted by seek")
             cached_data = stream_buffer.get_slice(norm_cid, message_id, target_offset, target_size)
+            if not cached_data and (orig_cid, orig_mid) != (norm_cid, message_id):
+                cached_data = stream_buffer.get_slice(orig_cid, orig_mid, target_offset, target_size)
             if cached_data and len(cached_data) == target_size:
                 return cached_data
+            disk_data = stream_cache_service.get_slice(norm_cid, message_id, target_offset, target_size)
+            if not disk_data and (orig_cid, orig_mid) != (norm_cid, message_id):
+                disk_data = stream_cache_service.get_slice(orig_cid, orig_mid, target_offset, target_size)
+            if disk_data and len(disk_data) == target_size:
+                stream_buffer.push(norm_cid, message_id, target_offset, disk_data)
+                if (orig_cid, orig_mid) != (norm_cid, message_id):
+                    stream_buffer.push(orig_cid, orig_mid, target_offset, disk_data)
+                if file_size > 0 and target_offset >= (file_size - 4 * 1024 * 1024):
+                    stream_buffer.push_tail(norm_cid, message_id, target_offset, disk_data)
+                return disk_data
 
             target_loc = worker_file_locs.get(id(worker_client), file_loc)
 
@@ -191,29 +232,36 @@ class StreamEngine:
             access_hash = getattr(target_loc, "access_hash", None)
             file_ref = getattr(target_loc, "file_reference", None)
 
+            await rate_governor.acquire_chunk_slot(target_size, is_emergency=is_emergency, is_unlimited=not is_media_player)
+
             if doc_id and access_hash and file_ref:
                 for rust_attempt in range(2):
                     try:
                         from app.services.rust_bridge import rust_bridge
                         if await rust_bridge.is_healthy():
                             target_account = active_clients.index(worker_client) if (worker_client in active_clients and id(worker_client) in worker_file_locs) else 0
-                            rust_data = await rust_bridge.stream_chunk(
-                                dc_id=dc_id,
-                                doc_id=doc_id,
-                                access_hash=access_hash,
-                                file_reference=file_ref,
-                                offset=target_offset,
-                                limit=target_size,
-                                priority="high" if (is_media_player or is_emergency) else "bulk",
-                                account_idx=target_account
+                            rust_timeout = 15.0 if is_media_player else 28.0
+                            rust_data = await asyncio.wait_for(
+                                rust_bridge.stream_chunk(
+                                    dc_id=dc_id,
+                                    doc_id=doc_id,
+                                    access_hash=access_hash,
+                                    file_reference=file_ref,
+                                    offset=target_offset,
+                                    limit=target_size,
+                                    priority="high" if (is_media_player or is_emergency) else "bulk",
+                                    account_idx=target_account
+                                ),
+                                timeout=rust_timeout
                             )
                             if rust_data and len(rust_data) > 0:
                                 stream_buffer.push(norm_cid, message_id, target_offset, rust_data)
                                 if file_size > 0 and target_offset >= (file_size - 4 * 1024 * 1024):
                                     stream_buffer.push_tail(norm_cid, message_id, target_offset, rust_data)
+                                stream_cache_service.put_slice(norm_cid, message_id, target_offset, rust_data)
                                 return rust_data
 
-                            if len(active_clients) > 1:
+                            if len(active_clients) > 1 and not is_saved_messages:
                                 alt_idx = 1 if target_account == 0 else 0
                                 alt_client = active_clients[alt_idx]
                                 alt_loc = worker_file_locs.get(id(alt_client))
@@ -222,18 +270,25 @@ class StreamEngine:
                                     alt_access_hash = getattr(alt_loc, "access_hash", None)
                                     alt_file_ref = getattr(alt_loc, "file_reference", None)
                                     if alt_doc_id and alt_access_hash and alt_file_ref:
-                                        rust_data = await rust_bridge.stream_chunk(
-                                            dc_id=dc_id,
-                                            doc_id=alt_doc_id,
-                                            access_hash=alt_access_hash,
-                                            file_reference=alt_file_ref,
-                                            offset=target_offset,
-                                            limit=target_size,
-                                            priority="high" if (is_media_player or is_emergency) else "bulk",
-                                            account_idx=alt_idx
+                                        rust_data = await asyncio.wait_for(
+                                            rust_bridge.stream_chunk(
+                                                dc_id=dc_id,
+                                                doc_id=alt_doc_id,
+                                                access_hash=alt_access_hash,
+                                                file_reference=alt_file_ref,
+                                                offset=target_offset,
+                                                limit=target_size,
+                                                priority="high" if (is_media_player or is_emergency) else "bulk",
+                                                account_idx=alt_idx
+                                            ),
+                                            timeout=rust_timeout
                                         )
                                         if rust_data and len(rust_data) > 0:
                                             stream_buffer.push(norm_cid, message_id, target_offset, rust_data)
+                                            stream_cache_service.put_slice(norm_cid, message_id, target_offset, rust_data)
+                                            if (orig_cid, orig_mid) != (norm_cid, message_id):
+                                                stream_buffer.push(orig_cid, orig_mid, target_offset, rust_data)
+                                                stream_cache_service.put_slice(orig_cid, orig_mid, target_offset, rust_data)
                                             if file_size > 0 and target_offset >= (file_size - 4 * 1024 * 1024):
                                                 stream_buffer.push_tail(norm_cid, message_id, target_offset, rust_data)
                                             return rust_data
@@ -282,15 +337,15 @@ class StreamEngine:
                     raise asyncio.CancelledError("Stream aborted by seek")
                 try:
                     c_t0 = time.time()
-                    await rate_governor.acquire_chunk_slot(target_size, is_emergency=is_emergency, is_unlimited=not is_media_player)
                     if stop_event.is_set() and not is_head_chunk:
                         raise asyncio.CancelledError("Stream aborted by seek")
-                    chunk_timeout = 12.0 if is_media_player else 20.0
-                    async with sender_pool.borrow(worker_client, dc_id, priority=is_media_player) as s:
-                        res = await asyncio.wait_for(
-                            worker_client._call(s, req, flood_sleep_threshold=0),
-                            timeout=chunk_timeout
-                        )
+                    chunk_timeout = 16.0 if is_media_player else 25.0
+                    async with self._get_mtproto_sem():
+                        async with sender_pool.borrow(worker_client, dc_id, priority=is_media_player) as s:
+                            res = await asyncio.wait_for(
+                                worker_client._call(s, req, flood_sleep_threshold=0),
+                                timeout=chunk_timeout
+                            )
                     c_dt = max(0.001, time.time() - c_t0)
                     if hasattr(res, "bytes"):
                         data = res.bytes
@@ -300,6 +355,10 @@ class StreamEngine:
                         data = b""
 
                     stream_buffer.push(norm_cid, message_id, target_offset, data)
+                    stream_cache_service.put_slice(norm_cid, message_id, target_offset, data)
+                    if (orig_cid, orig_mid) != (norm_cid, message_id):
+                        stream_buffer.push(orig_cid, orig_mid, target_offset, data)
+                        stream_cache_service.put_slice(orig_cid, orig_mid, target_offset, data)
                     if file_size > 0 and target_offset >= (file_size - 4 * 1024 * 1024):
                         stream_buffer.push_tail(norm_cid, message_id, target_offset, data)
 
@@ -433,9 +492,20 @@ class StreamEngine:
             c_offset = aligned_offset + (c_idx * chunk_size)
 
             cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
+            if not cached_data and (orig_cid, orig_mid) != (norm_cid, message_id):
+                cached_data = stream_buffer.get_slice(orig_cid, orig_mid, c_offset, chunk_size)
             if cached_data and len(cached_data) == chunk_size:
                 logger.info(f"STREAM [{clean_name}] Chunk {c_idx+1}/{total_chunks} at {c_offset:,}: RAM buffer hit (0ms)")
                 return c_idx, cached_data
+            disk_data = stream_cache_service.get_slice(norm_cid, message_id, c_offset, chunk_size)
+            if not disk_data and (orig_cid, orig_mid) != (norm_cid, message_id):
+                disk_data = stream_cache_service.get_slice(orig_cid, orig_mid, c_offset, chunk_size)
+            if disk_data and len(disk_data) == chunk_size:
+                stream_buffer.push(norm_cid, message_id, c_offset, disk_data)
+                if (orig_cid, orig_mid) != (norm_cid, message_id):
+                    stream_buffer.push(orig_cid, orig_mid, c_offset, disk_data)
+                logger.info(f"STREAM [{clean_name}] Chunk {c_idx+1}/{total_chunks} at {c_offset:,}: Disk buffer hit (0ms)")
+                return c_idx, disk_data
 
             chunk_key = (norm_cid, int(message_id), c_offset)
             lock = self._get_chunk_lock()
@@ -505,6 +575,10 @@ class StreamEngine:
                 cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
                 if cached_data and len(cached_data) == chunk_size:
                     return c_idx, cached_data
+                disk_data = stream_cache_service.get_slice(norm_cid, message_id, c_offset, chunk_size)
+                if disk_data and len(disk_data) == chunk_size:
+                    stream_buffer.push(norm_cid, message_id, c_offset, disk_data)
+                    return c_idx, disk_data
                 data = await _download_chunk_from_mtproto(
                     c_offset, chunk_size, worker_client, is_emergency, is_head_chunk=(c_idx == 0)
                 )
@@ -513,11 +587,44 @@ class StreamEngine:
         last_progress_log = time.time()
         delivered_chunks = 0
 
+        if file_size > 6 * 1024 * 1024 and remaining_length > 0 and start == 0:
+            async def _prefetch_dual_anchors():
+                try:
+                    await asyncio.sleep(0.5)
+                    if stop_event.is_set():
+                        return
+                    head_anchor = stream_buffer.get_slice(norm_cid, message_id, 0, 1024 * 1024) or stream_cache_service.get_slice(norm_cid, message_id, 0, 1024 * 1024)
+                    tail_offset = max(0, (file_size // 1024 // 1024 - 1) * 1024 * 1024)
+                    tail_anchor = stream_buffer.get_slice(norm_cid, message_id, tail_offset, 1024 * 1024) or stream_cache_service.get_slice(norm_cid, message_id, tail_offset, 1024 * 1024)
+                    anchor_client = active_clients[-1] if len(active_clients) > 1 else active_clients[0]
+                    if not head_anchor and not stop_event.is_set():
+                        h_data = await _download_chunk_from_mtproto(0, 1024 * 1024, anchor_client, is_emergency=False, is_head_chunk=True)
+                        if h_data:
+                            stream_buffer.push(norm_cid, message_id, 0, h_data)
+                            stream_cache_service.put_slice(norm_cid, message_id, 0, h_data)
+                    if not tail_anchor and not stop_event.is_set():
+                        sz = min(1024 * 1024, file_size - tail_offset)
+                        if sz > 0:
+                            t_data = await _download_chunk_from_mtproto(tail_offset, sz, anchor_client, is_emergency=False, is_head_chunk=True)
+                            if t_data:
+                                stream_buffer.push(norm_cid, message_id, tail_offset, t_data)
+                                stream_buffer.push_tail(norm_cid, message_id, tail_offset, t_data)
+                                stream_cache_service.put_slice(norm_cid, message_id, tail_offset, t_data)
+                except Exception as e:
+                    logger.debug(f"Dual-anchor prefetch notice: {e}")
+
+            dual_anchor_task = asyncio.create_task(_prefetch_dual_anchors())
+            stream_wire_tasks.add(dual_anchor_task)
+            dual_anchor_task.add_done_callback(stream_wire_tasks.discard)
+
         producer_task = None
         if remaining_length > 0 and total_chunks > 0:
             async def pipelined_chunk_producer():
                 from collections import defaultdict
                 chunk_retries = defaultdict(int)
+                client_active_chunks = defaultdict(int)
+                client_latencies = {}
+                in_flight_clients = {}
 
                 is_multi_account = len(active_clients) >= 2
                 is_premium_rate = rate_governor.current_rate_limit_mbs > 15.0
@@ -525,8 +632,8 @@ class StreamEngine:
                     max_in_flight = 8 if (is_premium_rate or is_multi_account) else 6
                     max_lookahead = 32 if (is_premium_rate or is_multi_account) else 24
                 else:
-                    max_in_flight = 12 if is_multi_account else 6
-                    max_lookahead = 48 if is_multi_account else 24
+                    max_in_flight = 12 if is_multi_account else 8
+                    max_lookahead = 48 if is_multi_account else 32
 
                 in_flight = {}
                 next_to_fetch = 0
@@ -535,7 +642,6 @@ class StreamEngine:
 
                 try:
                     while next_to_deliver < total_chunks and not stop_event.is_set():
-                        # 1. Drain all sequential ready chunks from buffered into queue
                         while next_to_deliver in buffered and not stop_event.is_set():
                             data = buffered.pop(next_to_deliver)
                             await queue.put(data)
@@ -544,25 +650,23 @@ class StreamEngine:
                         if next_to_deliver >= total_chunks:
                             break
 
-                        # 2. Adaptive Buffer-Aware Concurrency:
                         runway = queue.qsize() + len(buffered)
                         if is_media_player:
                             if next_to_deliver == 0:
-                                # Dedicated focus on seek target chunk(s) for immediate sub-second TTFB
                                 allowed_in_flight = 2 if is_multi_account else 1
-                            elif runway < 8:
-                                allowed_in_flight = max(6, max_in_flight)
-                            elif runway < 16:
-                                allowed_in_flight = max(4, max_in_flight - 1)
+                            elif runway < 6:
+                                allowed_in_flight = 8 if (is_premium_rate or is_multi_account) else 6
+                            elif runway >= 16:
+                                allowed_in_flight = 2
+                                if runway >= 20:
+                                    await asyncio.sleep(0.02)
                             else:
-                                allowed_in_flight = 3
+                                allowed_in_flight = 4
                         else:
                             if next_to_deliver == 0:
-                                allowed_in_flight = min(2, max_in_flight)
-                            elif next_to_deliver == 1:
                                 allowed_in_flight = min(4, max_in_flight)
-                            elif runway >= 16:
-                                allowed_in_flight = max(4, max_in_flight // 2)
+                            elif runway >= max_lookahead - 4:
+                                allowed_in_flight = 2
                             else:
                                 allowed_in_flight = max_in_flight
 
@@ -575,17 +679,44 @@ class StreamEngine:
                             healthy_clients = [c for c in active_clients if not rate_governor.is_client_cooling_down(c)]
                             if not healthy_clients:
                                 healthy_clients = active_clients
-                            assigned_client = healthy_clients[next_to_fetch % len(healthy_clients)]
+
+                            if next_to_fetch == next_to_deliver:
+                                if client in healthy_clients and client_active_chunks[id(client)] == 0:
+                                    assigned_client = client
+                                else:
+                                    assigned_client = min(
+                                        healthy_clients,
+                                        key=lambda c: (client_active_chunks[id(c)], client_latencies.get(id(c), 1.0))
+                                    )
+                            else:
+                                if len(healthy_clients) > 1:
+                                    target_candidate = healthy_clients[next_to_fetch % len(healthy_clients)]
+                                    if client_active_chunks[id(target_candidate)] == 0:
+                                        assigned_client = target_candidate
+                                    else:
+                                        assigned_client = min(healthy_clients, key=lambda c: client_active_chunks[id(c)])
+                                else:
+                                    assigned_client = healthy_clients[0]
+
+                            client_active_chunks[id(assigned_client)] += 1
                             is_emergency = (is_media_player and runway < 4) or (not is_media_player and next_to_deliver == 0)
                             t = asyncio.create_task(fetch_one_chunk(next_to_fetch, assigned_client, is_emergency=is_emergency))
                             in_flight[t] = next_to_fetch
+                            in_flight_clients[t] = (id(assigned_client), time.time())
                             next_to_fetch += 1
 
-                        # 3. If tasks are downloading, wait for at least one to finish
                         if in_flight:
                             done, _ = await asyncio.wait(list(in_flight.keys()), return_when=asyncio.FIRST_COMPLETED)
                             for d in done:
                                 c_idx = in_flight.pop(d, None)
+                                client_info = in_flight_clients.pop(d, None)
+                                if client_info:
+                                    cid, t_start = client_info
+                                    client_active_chunks[cid] = max(0, client_active_chunks[cid] - 1)
+                                    duration = max(0.001, time.time() - t_start)
+                                    old_lat = client_latencies.get(cid, duration)
+                                    client_latencies[cid] = 0.7 * old_lat + 0.3 * duration
+
                                 try:
                                     res = d.result()
                                     if res is None:
@@ -596,6 +727,8 @@ class StreamEngine:
                                     if stop_event.is_set():
                                         break
                                     cached_data = stream_buffer.get_slice(norm_cid, message_id, aligned_offset + (c_idx * chunk_size), chunk_size)
+                                    if not cached_data or len(cached_data) != chunk_size:
+                                        cached_data = stream_cache_service.get_slice(norm_cid, message_id, aligned_offset + (c_idx * chunk_size), chunk_size)
                                     if cached_data and len(cached_data) == chunk_size:
                                         buffered[c_idx] = cached_data
                                         continue
@@ -605,9 +738,11 @@ class StreamEngine:
                                         break
                                     await asyncio.sleep(0.1)
                                     healthy_clients = [c for c in active_clients if not rate_governor.is_client_cooling_down(c)]
-                                    retry_client = healthy_clients[0] if healthy_clients else client
+                                    retry_client = min(healthy_clients, key=lambda c: client_active_chunks[id(c)]) if healthy_clients else client
+                                    client_active_chunks[id(retry_client)] += 1
                                     t = asyncio.create_task(fetch_one_chunk(c_idx, retry_client, is_emergency=True))
                                     in_flight[t] = c_idx
+                                    in_flight_clients[t] = (id(retry_client), time.time())
                                 except Exception as e:
                                     chunk_retries[c_idx] += 1
                                     if chunk_retries[c_idx] >= 6:
@@ -621,17 +756,16 @@ class StreamEngine:
                                     if not stop_event.is_set():
                                         await asyncio.sleep(0.1)
                                         healthy_clients = [c for c in active_clients if not rate_governor.is_client_cooling_down(c)]
-                                        retry_client = healthy_clients[0] if healthy_clients else client
+                                        retry_client = min(healthy_clients, key=lambda c: client_active_chunks[id(c)]) if healthy_clients else client
+                                        client_active_chunks[id(retry_client)] += 1
                                         t = asyncio.create_task(fetch_one_chunk(c_idx, retry_client, is_emergency=True))
                                         in_flight[t] = c_idx
+                                        in_flight_clients[t] = (id(retry_client), time.time())
                         else:
-                            # 4. If no tasks in flight:
                             if next_to_fetch >= total_chunks:
-                                # All chunks fetched from wire; wait until remaining buffered chunks drain
                                 if next_to_deliver not in buffered:
                                     break
                             else:
-                                # Lookahead window is completely full and waiting for player to consume from queue
                                 if next_to_deliver in buffered:
                                     continue
                                 await asyncio.sleep(0.05)
@@ -646,6 +780,8 @@ class StreamEngine:
                         for t in list(in_flight.keys()):
                             if not t.done():
                                 t.cancel()
+                    in_flight_clients.clear()
+                    client_active_chunks.clear()
                     try:
                         queue.put_nowait(None)
                     except Exception:

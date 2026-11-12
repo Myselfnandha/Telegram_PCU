@@ -1,6 +1,7 @@
 import time
 import asyncio
 import logging
+import threading
 from typing import Dict, Tuple, Optional, List, Any, Union
 from telethon import utils
 from telethon.tl.functions.upload import GetFileRequest
@@ -26,100 +27,167 @@ class StreamSlidingBuffer:
     TAIL_SIZE = 16 * 1024 * 1024       # 16MB tail metadata cache (instant cues/moov)
     EVICT_AGE = 300                    # Evict entries idle >300s (5 minutes)
 
+    @staticmethod
+    def _canonical_cid(chat_id: Union[str, int]) -> str:
+        s = str(chat_id)
+        if s.startswith("-100") and len(s) > 4 and s[4:].isdigit() and not s[4:].startswith("0"):
+            return s[4:]
+        if s.startswith("-") and len(s) > 1 and s[1:].isdigit() and not s[1:].startswith("0"):
+            return s[1:]
+        return s
+
+    @classmethod
+    def _cid_candidates(cls, chat_id: Union[str, int]) -> List[str]:
+        s = str(chat_id)
+        canon = cls._canonical_cid(chat_id)
+        cands = [canon]
+        if s not in cands:
+            cands.append(s)
+        if s.isdigit() and not s.startswith("0"):
+            pref = f"-100{s}"
+            if pref not in cands:
+                cands.append(pref)
+        elif s.startswith("-100") and len(s) > 4 and s[4:].isdigit() and not s[4:].startswith("0"):
+            raw = s[4:]
+            if raw not in cands:
+                cands.append(raw)
+        elif s.startswith("-") and len(s) > 1 and s[1:].isdigit() and not s[1:].startswith("0"):
+            raw = s[1:]
+            if raw not in cands:
+                cands.append(raw)
+        return cands
+
     def __init__(self):
+        self._lock = threading.RLock()
         self._buffers: Dict[Tuple[str, int], dict] = {}
         self._segments: Dict[Tuple[str, int], List[dict]] = {}
         self._headers: Dict[Tuple[str, int], bytearray] = {}
         self._tails: Dict[Tuple[str, int], dict] = {}
+        self._last_access: Dict[Tuple[str, int], float] = {}
+
+    def _get_key_last_active(self, k: Tuple[str, int]) -> float:
+        ts = self._last_access.get(k, 0.0)
+        if k in self._buffers and isinstance(self._buffers[k], dict):
+            ts = max(ts, self._buffers[k].get("last_active", 0.0))
+        if k in self._tails and isinstance(self._tails[k], dict):
+            ts = max(ts, self._tails[k].get("last_active", 0.0))
+        if k in self._segments and self._segments[k]:
+            for s in self._segments[k]:
+                if isinstance(s, dict):
+                    ts = max(ts, s.get("last_active", 0.0))
+        return ts
 
     def _get_total_ram_bytes(self) -> int:
-        total_header_bytes = sum(len(b) for b in self._headers.values())
-        total_tail_bytes = sum(len(b.get("data", b"")) for b in self._tails.values())
+        total_header_bytes = sum(len(b) for b in list(self._headers.values()))
+        total_tail_bytes = sum(len(b.get("data", b"")) for b in list(self._tails.values()) if isinstance(b, dict))
         total_seg_bytes = sum(
-            sum(len(seg.get("data", b"")) for seg in segs)
-            for segs in self._segments.values()
+            sum(len(seg.get("data", b"")) for seg in segs if isinstance(seg, dict))
+            for segs in list(self._segments.values())
         )
-        return total_header_bytes + total_tail_bytes + total_seg_bytes
+        total_standalone_buf = sum(
+            len(b.get("data", b"")) for k, b in list(self._buffers.items())
+            if k not in self._segments and isinstance(b, dict)
+        )
+        return total_header_bytes + total_tail_bytes + total_seg_bytes + total_standalone_buf
 
     def _enforce_global_budget(self, current_key=None):
-        """Prune oldest non-active entries/segments when exceeding TOTAL_GLOBAL_RAM_BUDGET."""
         if self._get_total_ram_bytes() <= self.TOTAL_GLOBAL_RAM_BUDGET:
             return
 
+        all_keys = (
+            set(self._buffers.keys())
+            | set(self._segments.keys())
+            | set(self._headers.keys())
+            | set(self._tails.keys())
+            | set(self._last_access.keys())
+        )
         candidate_keys = sorted(
-            [k for k in self._buffers if k != current_key],
-            key=lambda k: self._buffers[k].get("last_active", 0)
+            [k for k in list(all_keys) if k != current_key],
+            key=lambda k: self._get_key_last_active(k)
         )
         for k in candidate_keys:
             self._buffers.pop(k, None)
             self._segments.pop(k, None)
             self._headers.pop(k, None)
             self._tails.pop(k, None)
+            self._last_access.pop(k, None)
             if self._get_total_ram_bytes() <= self.TOTAL_GLOBAL_RAM_BUDGET:
                 return
 
-        if current_key and current_key in self._segments:
-            segments = self._segments[current_key]
-            segments.sort(key=lambda s: s.get("last_active", 0))
-            while segments and self._get_total_ram_bytes() > self.TOTAL_GLOBAL_RAM_BUDGET:
-                segments.pop(0)
+        if current_key:
+            if current_key in self._segments:
+                segments = self._segments[current_key]
+                segments.sort(key=lambda s: s.get("last_active", 0) if isinstance(s, dict) else 0)
+                while segments and self._get_total_ram_bytes() > self.TOTAL_GLOBAL_RAM_BUDGET:
+                    segments.pop(0)
+
+            if self._get_total_ram_bytes() > self.TOTAL_GLOBAL_RAM_BUDGET:
+                self._tails.pop(current_key, None)
+
+            if self._get_total_ram_bytes() > self.TOTAL_GLOBAL_RAM_BUDGET:
+                self._headers.pop(current_key, None)
+
+            if self._get_total_ram_bytes() > self.TOTAL_GLOBAL_RAM_BUDGET:
+                self._buffers.pop(current_key, None)
+                self._segments.pop(current_key, None)
+                self._last_access.pop(current_key, None)
 
     def _evict_stale(self, current_key=None):
-        """Evict idle entries and cap total to MAX_ENTRIES."""
         now = time.time()
+        all_keys = (
+            set(self._buffers.keys())
+            | set(self._segments.keys())
+            | set(self._headers.keys())
+            | set(self._tails.keys())
+            | set(self._last_access.keys())
+        )
         stale = [
-            k for k, v in self._buffers.items()
-            if k != current_key and now - v.get("last_active", 0) > self.EVICT_AGE
+            k for k in list(all_keys)
+            if k != current_key and (now - self._get_key_last_active(k)) > self.EVICT_AGE
         ]
         for k in stale:
             self._buffers.pop(k, None)
             self._segments.pop(k, None)
             self._headers.pop(k, None)
             self._tails.pop(k, None)
+            self._last_access.pop(k, None)
 
         while len(self._buffers) > self.MAX_ENTRIES:
-            oldest_key = min(
-                (k for k in self._buffers if k != current_key),
-                key=lambda k: self._buffers[k].get("last_active", 0),
-                default=None
-            )
-            if oldest_key:
-                self._buffers.pop(oldest_key, None)
-                self._segments.pop(oldest_key, None)
-                self._headers.pop(oldest_key, None)
-                self._tails.pop(oldest_key, None)
-            else:
+            candidate_buf_keys = [k for k in list(self._buffers.keys()) if k != current_key]
+            if not candidate_buf_keys:
                 break
+            oldest_key = min(
+                candidate_buf_keys,
+                key=lambda k: self._buffers[k].get("last_active", 0) if isinstance(self._buffers.get(k), dict) else 0
+            )
+            self._buffers.pop(oldest_key, None)
+            self._segments.pop(oldest_key, None)
+            self._headers.pop(oldest_key, None)
+            self._tails.pop(oldest_key, None)
+            self._last_access.pop(oldest_key, None)
+
         self._enforce_global_budget(current_key)
 
-    def push(self, chat_id: str, message_id: int, offset: int, data: bytes):
-        """Append streamed data to the RAM sliding window, multi-segment cache, and initial header cache."""
+    def push(self, chat_id: Union[str, int], message_id: int, offset: int, data: bytes):
         if not data:
             return
-        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
-        keys = [(str(chat_id), message_id)]
-        if norm_cid != str(chat_id):
-            keys.append((norm_cid, message_id))
-        for key in keys:
+        with self._lock:
+            key = (self._canonical_cid(chat_id), message_id)
             self._push_for_key(key, offset, data)
 
     def _push_for_key(self, key: Tuple[str, int], offset: int, data: bytes):
         now = time.time()
+        self._last_access[key] = now
 
-        # 1. Update initial header cache (0..4MB)
         if offset < self.HEADER_SIZE:
             if key not in self._headers:
                 self._headers[key] = bytearray()
             h = self._headers[key]
-            if offset <= len(h):
-                overlap = len(h) - offset
-                new_data = data[overlap:]
-                if new_data and len(h) < self.HEADER_SIZE:
-                    take = min(len(new_data), self.HEADER_SIZE - len(h))
-                    h.extend(new_data[:take])
-            elif offset == 0:
-                take = min(len(data), self.HEADER_SIZE)
-                self._headers[key] = bytearray(data[:take])
+            needed_len = min(self.HEADER_SIZE, offset + len(data))
+            if len(h) < needed_len:
+                h.extend(b"\x00" * (needed_len - len(h)))
+            copy_len = min(len(data), self.HEADER_SIZE - offset)
+            h[offset : offset + copy_len] = data[:copy_len]
 
         # 2. Update multi-segment scrubbing buffer
         if key not in self._segments:
@@ -217,20 +285,18 @@ class StreamSlidingBuffer:
             }
         self._enforce_global_budget(key)
 
-    def push_tail(self, chat_id: str, message_id: int, offset: int, data: bytes):
-        """Cache container tail metadata (e.g. MKV Cues / MP4 Moov)."""
+    def push_tail(self, chat_id: Union[str, int], message_id: int, offset: int, data: bytes):
         if not data:
             return
-        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
-        keys = [(str(chat_id), message_id)]
-        if norm_cid != str(chat_id):
-            keys.append((norm_cid, message_id))
-        for key in keys:
+        with self._lock:
+            key = (self._canonical_cid(chat_id), message_id)
             self._push_tail_for_key(key, offset, data)
 
     def _push_tail_for_key(self, key: Tuple[str, int], offset: int, data: bytes):
+        now = time.time()
+        self._last_access[key] = now
         if key not in self._tails:
-            self._tails[key] = {"start": offset, "data": bytearray(data)}
+            self._tails[key] = {"start": offset, "data": bytearray(data), "last_active": now}
         else:
             t = self._tails[key]
             t_start = t["start"]
@@ -245,30 +311,28 @@ class StreamSlidingBuffer:
                     trim = len(merged) - self.TAIL_SIZE
                     merged = merged[trim:]
                     min_start += trim
-                self._tails[key] = {"start": min_start, "data": merged}
+                self._tails[key] = {"start": min_start, "data": merged, "last_active": now}
             else:
-                self._tails[key] = {"start": offset, "data": bytearray(data)}
+                self._tails[key] = {"start": offset, "data": bytearray(data), "last_active": now}
         self._enforce_global_budget(key)
 
-    def get_slice(self, chat_id: str, message_id: int, start: int, length: int) -> Optional[bytes]:
-        """
-        Retrieve pre-cached RAM slice (header, tail, or multi-segment scrubbing buffer).
-        Supports seamless contiguous multi-segment assembly across buffer boundaries.
-        """
-        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
-        candidate_keys = [(str(chat_id), message_id)]
-        if norm_cid != str(chat_id):
-            candidate_keys.append((norm_cid, message_id))
-            candidate_keys.append((f"-100{norm_cid}", message_id))
+    def get_slice(self, chat_id: Union[str, int], message_id: int, start: int, length: int) -> Optional[bytes]:
+        with self._lock:
+            candidate_keys = []
+            for cid in self._cid_candidates(chat_id):
+                k = (cid, message_id)
+                if k not in candidate_keys:
+                    candidate_keys.append(k)
 
-        for key in candidate_keys:
-            res = self._get_slice_for_key(key, chat_id, message_id, start, length)
-            if res is not None:
-                return res
-        return None
+            for key in candidate_keys:
+                res = self._get_slice_for_key(key, chat_id, message_id, start, length)
+                if res is not None:
+                    return res
+            return None
 
     def _get_slice_for_key(self, key: Tuple[str, int], chat_id: str, message_id: int, start: int, length: int) -> Optional[bytes]:
         now = time.time()
+        self._last_access[key] = now
 
         # Fast Path 1: Exact / Contained Header Cache Hit (0ms playback start)
         if key in self._headers and start < len(self._headers[key]):
@@ -374,8 +438,6 @@ class StreamSlidingBuffer:
 
         return None
 
-        return None
-
     async def prewarm_tail(self, client: Any, chat_id: Union[str, int], message_id: int, message: Optional[Any], file_size: int):
         """Fetches the container tail (up to last 1MB in parallel) so index probes are instant RAM hits."""
         key = (str(chat_id), message_id)
@@ -422,8 +484,7 @@ class StreamSlidingBuffer:
 
     async def prewarm_media(self, client: Any, chat_id: Union[str, int], message_id: int, file_size: int = 0):
         """Pre-warms initial header (up to 1MB in parallel) and tail (up to 1MB in parallel) into RAM buffer upon media launch."""
-        norm_cid = str(chat_id).lstrip("-").replace("100", "", 1)
-        if (norm_cid, message_id) in self._headers or (str(chat_id), message_id) in self._headers:
+        if any((cid, message_id) in self._headers for cid in self._cid_candidates(chat_id)):
             return
         try:
             from app.services.cinema_catalog import cinema_catalog
@@ -465,36 +526,30 @@ class StreamSlidingBuffer:
             logger.info(f"BUFFER [{chat_id}:{message_id}] Initial header pre-warmed (up to 1MB ready for instant start)")
 
             # Fetch tail if file > 2MB
-            tail_key = (str(chat_id), message_id)
-            if actual_file_size > 2 * 1024 * 1024 and tail_key not in self._tails:
+            if actual_file_size > 2 * 1024 * 1024 and not any((cid, message_id) in self._tails for cid in self._cid_candidates(chat_id)):
                 await self.prewarm_tail(client, chat_id, message_id, msg, actual_file_size)
         except Exception as e:
             logger.debug(f"Media prewarm notice: {e}")
 
     def get_stats(self) -> Dict[str, Any]:
-        """Returns real-time RAM buffer metrics for telemetry and diagnostics."""
-        total_header_bytes = sum(len(b) for b in self._headers.values())
-        total_tail_bytes = sum(len(b) for b in self._tails.values())
-        total_seg_bytes = sum(
-            sum(len(seg.get("data", b"")) for seg in segs)
-            for segs in self._segments.values()
-        )
-        total_bytes = total_header_bytes + total_tail_bytes + total_seg_bytes
-        return {
-            "active_streams_count": len(self._buffers),
-            "total_buffered_bytes": total_bytes,
-            "total_buffered_mb": round(total_bytes / (1024 * 1024), 2),
-            "headers_cached_count": len(self._headers),
-            "tails_cached_count": len(self._tails),
-            "max_buffer_bytes": self.MAX_RING_SIZE
-        }
+        with self._lock:
+            total_bytes = self._get_total_ram_bytes()
+            return {
+                "active_streams_count": len(self._buffers),
+                "total_buffered_bytes": total_bytes,
+                "total_buffered_mb": round(total_bytes / (1024 * 1024), 2),
+                "headers_cached_count": len(self._headers),
+                "tails_cached_count": len(self._tails),
+                "max_buffer_bytes": self.MAX_RING_SIZE
+            }
 
     def clear(self):
-        """Clear all cached entries."""
-        self._buffers.clear()
-        self._segments.clear()
-        self._headers.clear()
-        self._tails.clear()
+        with self._lock:
+            self._buffers.clear()
+            self._segments.clear()
+            self._headers.clear()
+            self._tails.clear()
+            self._last_access.clear()
 
 
 stream_buffer = StreamSlidingBuffer()

@@ -74,11 +74,11 @@ class RateGovernor:
                 f"({self._min_rate:.1f}-{self._max_rate:.1f} MB/s ceiling, target: {self._rate:.1f} MB/s, burst cap: {self._capacity:.1f}MB)."
             )
         elif is_premium:
-            self._rate = 28.0
-            self._min_rate = 14.0
+            self._rate = 32.0
+            self._min_rate = 16.0
             self._max_rate = 36.0
             self._capacity = 16.0
-            logger.info("⚡ RateGovernor: Configured for Telegram Premium tier (28-36 MB/s ceiling, 16MB burst).")
+            logger.info("⚡ RateGovernor: Configured for Telegram Premium tier (32 MB/s ceiling, 16MB burst).")
         else:
             self._rate = 4.5
             self._min_rate = 1.8
