@@ -82,6 +82,48 @@ def test_parse_http_range_malformed():
         assert err.headers.get("Content-Range") == "bytes */1000"
 
 
+def test_parse_http_range_rfc9110_multirange_valid():
+    """RFC 9110 Section 14.2: When multipart/byteranges is unsupported, valid multi-range requests return 200 with full content."""
+    # Two valid ranges -> 200 full content
+    start, end, status, err = parse_http_range("bytes=0-100, 200-300", 1000)
+    assert status == 200
+    assert start == 0
+    assert end == 999
+    assert err is None
+
+    # Suffix and standard range -> 200 full content
+    start, end, status, err = parse_http_range("bytes=-100, 500-600", 1000)
+    assert status == 200
+    assert start == 0
+    assert end == 999
+    assert err is None
+
+    # Open-ended and standard range -> 200 full content
+    start, end, status, err = parse_http_range("bytes=100-200, 800-", 1000)
+    assert status == 200
+    assert start == 0
+    assert end == 999
+    assert err is None
+
+
+def test_parse_http_range_rfc9110_multirange_unsatisfiable():
+    """RFC 9110 Section 14.2: If ALL requested ranges are unsatisfiable, return 416 Range Not Satisfiable."""
+    # All ranges past EOF -> 416
+    start, end, status, err = parse_http_range("bytes=1500-2000, 3000-4000", 1000)
+    assert status == 416
+    assert err is not None
+    assert err.status_code == 416
+    assert err.headers.get("Content-Range") == "bytes */1000"
+
+    # All ranges inverted or invalid -> 416
+    start, end, status, err = parse_http_range("bytes=500-200, 800-700", 1000)
+    assert status == 416
+    assert err is not None
+    assert err.status_code == 416
+    assert err.headers.get("Content-Range") == "bytes */1000"
+
+
+
 def test_playback_tracker_explicit_reset(tmp_path, monkeypatch):
     test_db = tmp_path / "test_reset.db"
     monkeypatch.setattr("app.services.playback_tracker.DB_PATH", test_db)

@@ -1,4 +1,5 @@
 import sys
+import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -6,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest
-from app.services.stream_buffer import StreamSlidingBuffer
+from app.services.stream_buffer import StreamSlidingBuffer, stream_buffer
 
 
 def test_ram_budget_256mb_ceiling():
@@ -181,3 +182,39 @@ def test_edge_case_chat_id_formats():
         buffer.push(cid, 1, 0, data)
         read = buffer.get_slice(cid, 1, 0, len(data))
         assert read == data
+
+
+def test_chunk_retention_and_seek_protection():
+    buffer = StreamSlidingBuffer()
+    cid = "-1001234567890"
+    mid = 777
+
+    chunk_size = 512 * 1024
+    offsets = [0, chunk_size, chunk_size * 2]
+    buffer.retain_chunks(cid, mid, offsets, ttl=2.0)
+
+    assert buffer.is_chunk_retained(cid, mid, 0) is True
+    assert buffer.is_chunk_retained(cid, mid, chunk_size) is True
+    assert buffer.is_chunk_retained(cid, mid, chunk_size * 2) is True
+    assert buffer.is_chunk_retained(cid, mid, chunk_size * 10) is False
+
+    time.sleep(2.1)
+    assert buffer.is_chunk_retained(cid, mid, 0) is False
+
+
+def test_stream_engine_seek_generation_and_retention():
+    from app.services.stream_engine import stream_engine
+    cid = "-100987654321"
+    mid = 888
+    chunk_size = 512 * 1024
+
+    g1 = stream_engine.advance_seek_generation(cid, mid, chunk_size * 10)
+    assert g1 == 1
+
+    g2 = stream_engine.advance_seek_generation(cid, mid, chunk_size * 50)
+    assert g2 == 2
+
+    assert stream_engine.get_seek_generation(cid, mid) == 2
+    assert stream_buffer.is_chunk_retained(cid, mid, chunk_size * 10) is True
+    assert stream_buffer.is_chunk_retained(cid, mid, chunk_size * 9) is True
+

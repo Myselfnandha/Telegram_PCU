@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import sys
 import time
 import asyncio
 import logging
 import os
-from typing import Optional, Dict, Any, Set
+from typing import Optional, Dict, Any, Set, Tuple, List, Union
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import (
@@ -385,6 +387,20 @@ class TelegramClientManager:
             rate_governor.configure_for_tier(is_premium=False, secondary_premium=None)
         sender_pool.set_max_senders(32)
 
+    @staticmethod
+    def _secure_session_permissions():
+        try:
+            if SESSION_DIR.exists():
+                os.chmod(SESSION_DIR, 0o700)
+                for sf in SESSION_DIR.glob("*"):
+                    if sf.is_file() and sf.name != ".gitkeep":
+                        try:
+                            os.chmod(sf, 0o600)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
     @classmethod
     async def get_client(cls) -> TelegramClient:
         """
@@ -398,8 +414,9 @@ class TelegramClientManager:
                         logger.warning("TG_API_ID or TG_API_HASH is not set. Telethon client cannot start.")
                         raise ValueError("TG_API_ID and TG_API_HASH must be configured in environment variables.")
 
-                    logger.info("Initializing Telethon user client with StringSession...")
-                    session_target = StringSession(SESSION_STRING) if SESSION_STRING else str(SESSION_FILE_PATH)
+                    logger.info("Initializing Telethon user client with persistent SQLite session...")
+                    # Always use persistent SQLite session file in SESSION_DIR (protected 0700/0600 POSIX permissions)
+                    session_target = str(SESSION_FILE_PATH)
                     cls._client = TelegramClient(
                         session_target,
                         API_ID,
@@ -437,6 +454,7 @@ class TelegramClientManager:
                         logger.warning(f"MTProto connect error (network may be switching): {conn_err}")
 
                 if cls._client.is_connected():
+                    cls._secure_session_permissions()
                     try:
                         cls._is_ready = await cls._client.is_user_authorized()
                     except SESSION_REVOKED_ERRORS as auth_rev_err:
@@ -810,7 +828,8 @@ class TelegramClientManager:
         if cls._secondary_client is None or not cls._secondary_client.is_connected():
             async with cls._secondary_lock:
                 if cls._secondary_client is None:
-                    session_target = StringSession(sec_session) if sec_session else str(SESSION_FILE_PATH_2)
+                    # Always use persistent SQLite session file for secondary account
+                    session_target = str(SESSION_FILE_PATH_2)
                     cls._secondary_client = TelegramClient(
                         session_target,
                         API_ID,
@@ -831,6 +850,7 @@ class TelegramClientManager:
                         logger.warning(f"Secondary MTProto connect error: {conn_err}")
 
                 if cls._secondary_client.is_connected():
+                    cls._secure_session_permissions()
                     cls._is_secondary_ready = await cls._secondary_client.is_user_authorized()
                     if cls._is_secondary_ready:
                         if isinstance(cls._secondary_client.session, StringSession):

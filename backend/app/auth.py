@@ -38,7 +38,7 @@ def is_authenticated(request: Request) -> bool:
     if req_method in ("GET", "HEAD"):
         path = request.scope.get("path", "") if hasattr(request, "scope") else getattr(request, "path", "")
         parts = path.split("/")
-        if not token_to_check and not ENABLE_API_AUTH and path.startswith(("/dl/", "/stream/")):
+        if not token_to_check and not ENABLE_API_AUTH and is_loopback and path.startswith(("/dl/", "/stream/")):
             return True
         media_identity = None
         if (path.startswith("/dl/") or path.startswith("/stream/")) and len(parts) >= 4 and parts[2] and parts[3].isdigit():

@@ -3,13 +3,15 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.14-blue.svg)
+![Rust](https://img.shields.io/badge/Rust-Tokio%20%7C%20Grammers-orange.svg)
+![React](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite%208-61DAFB.svg)
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)
 ![Telethon](https://img.shields.io/badge/MTProto-Telethon-2481cc.svg)
 ![Socket.IO](https://img.shields.io/badge/RealTime-Socket.IO-010101.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)
+![Docker](https://img.shields.io/badge/Docker-Multi--Stage%20Ready-2496ED.svg)
 
-**High-Performance MTProto Uploader, Channel Media Sniffer & Streaming Proxy with Real-Time Telemetry**
+**High-Performance Hybrid Python/Rust MTProto Media Gateway, Video Streaming Suite & Channel Sniffer**
 
 </div>
 
@@ -17,96 +19,105 @@
 
 ## 📖 Overview
 
-**TG Power Suite** is an enterprise-grade Telegram power tool designed for seamless large file uploads and high-speed media downloading. It combines a turbo MTProto 6-worker upload engine with zero-copy splitting (for files > 2GB) and an intelligent channel sniffer that auto-dispatches incoming media directly to **Free Download Manager (FDM)**, **aria2**, or **NeatDM**.
+**TG Power Suite** is an enterprise-grade Telegram cloud media streaming gateway, uploader, and channel sniffer. It features a **hybrid Python/Rust architecture**:
+- **Python Backend**: FastAPI, Uvicorn, Python-Socket.IO, Telethon MTProto, and SQLite/aiosqlite.
+- **Rust Core Acceleration**: Tokio, Axum, and Grammers MTProto daemon (`tg-rust-core`) providing ultra-low latency chunk retrieval and anti-ban pacing.
+- **Modern Frontend**: React 19, TypeScript 6, Vite 8, Tailwind CSS 4, Radix UI, and ReUI components.
+- **2-Tier Cache Hierarchy**: 256 MB RAM sliding ring-buffer + 10 GB persistent disk block cache with emergency LRU disk guard.
 
 ```mermaid
 graph TD
-    User([🌐 Browser / Web UI]) <-->|WebSocket / HTTP| API[FastAPI & Socket.IO]
+    User([🌐 Browser / Web UI / VLC / MPV]) <-->|HTTP / Range / WebSocket| API[FastAPI Gateway :8088]
     
-    subgraph "Core Backend Engine"
+    subgraph "Hybrid Backend Architecture"
+        API --> Engine[Unified Stream Engine]
         API --> Queue[Upload Queue Manager]
         API --> Sniffer[Channel Media Sniffer]
-        API --> Proxy[HTTP Range Streaming Proxy]
-        API --> Telemetry[System & Bandwidth Telemetry]
+        API --> VlcBridge[VLC / External Player Bridge]
         
-        Queue -->|6 Concurrent Workers| MTProto[Telegram MTProto Client]
-        Sniffer -->|Live Event Listener| MTProto
-        Proxy -->|Chunked Range Reader| MTProto
+        Engine -->|Tier 1 Cache| RamBuf[256MB RAM Sliding Buffer]
+        Engine -->|Tier 2 Cache| DiskCache[10GB Disk Block Cache]
+        Engine -->|High-Speed Wire| RustCore[Rust Core Microservice :8099]
+        Engine -->|Fallback / Senders| PyMTProto[Telethon MTProto Pool]
+        
+        RustCore <-->|Grammers Direct DC| TG([Telegram Cloud])
+        PyMTProto <-->|Encrypted Wire| TG
     end
     
     Sniffer -->|Auto-Dispatch| FDM[Free Download Manager / aria2]
-    MTProto <-->|Encrypted Wire| TG([Telegram Cloud])
 ```
 
 ---
 
 ## ✨ Key Features
 
+### 🎬 High-Performance Video Streaming & Cinema View
+- **Instant Seek Playback**: Episode-aware prefetching and bidirectional seek window caching eliminate player buffering.
+- **2-Tier Hybrid Cache**: Retains recently played byte segments in RAM while persisting frequently accessed blocks to NVMe disk.
+- **External Player Integration**: 1-click launch to **VLC** and **MPV** with scoped capability grants and M3U8/M3U playlist generation.
+- **Subtitle Auto-Discovery**: Automatic extraction, prefetching, and conversion of embedded `.srt` and `.vtt` subtitle tracks.
+- **Playback Resume & Auto-Purge**: Auto-tracks playback position across sessions with automatic cleanup at 98% completion.
+
 ### 📤 Turbo MTProto Uploader
 - **2GB+ Auto-Splitting**: Zero-copy byte range slicing splits massive files into sequence parts (`.part001`, `.part002`) seamlessly.
-- **6-Worker Parallel Pipeline**: Maximizes upload throughput across Telegram MTProto data centers.
-- **Batch Controls**: `Pause All`, `Resume All`, `Clear Done`, and `Cancel All` toolbar actions.
-- **Destination Dialog Picker**: Searchable modal for choosing channels, groups, bots, or Saved Messages.
+- **Parallel Workers**: Maximizes upload throughput across Telegram MTProto data centers with rate-governed congestion avoidance.
+- **Queue Controls**: Pause, resume, schedule, cancel, and clear batch actions with real-time progress broadcasts.
 
-### 📥 Sniffer & FDM Streaming Proxy
-- **Real-Time Channel Monitoring**: Watches 1,400+ dialogs, channels, bots, and contacts for incoming media.
-- **1-Click Auto-Dispatch**: Direct integration with Free Download Manager, aria2, and NeatDM.
-- **HTTP Range Streaming**: Supports multi-threaded parallel downloads and full byte-range seeking.
+### 📥 Channel Sniffer & Download Automation
+- **Real-Time Monitoring**: Listens for media across 1,400+ channels, groups, and chats.
+- **Smart Filtering**: Configurable keyword whitelists, blacklists, and minimum file size filters.
+- **1-Click Auto-Dispatch**: Direct integration with Free Download Manager (FDM), aria2, and NeatDM.
 
-### 📊 Real-Time Bandwidth Telemetry & History
-- **Live Throughput Sparkline**: Smooth 60-second canvas graph tracking network transfer rates.
-- **System Metrics**: Real-time CPU, RAM, active proxy streams, and connection latency meters.
-- **Audit Logs & Export**: Filter transfer history and export to **CSV** or **JSON** with one click.
+### 🔒 Enterprise Security & Hardening
+- **Loopback Enforcement**: Local loopback operates seamlessly without auth; remote/LAN/WAN requests strictly require `API_AUTH_TOKEN` (or scoped playback tokens).
+- **Default Local Binding**: Server defaults to `127.0.0.1` preventing unintended network exposure.
+- **CSRF & CORS Hardened**: Origin and referrer validation on all mutating endpoints; fine-grained CORS origin checks.
+- **Session Protection**: Telegram sessions stored in SQLite `.session` files with `0700`/`0600` POSIX permissions.
 
 ---
 
 ## 🚀 Quick Start
 
-### Option 1: Native Systemd (Recommended for Linux)
+### Option 1: Native Service Runner
 
 ```bash
 # Clone repository
 git clone https://github.com/myselfnandha/TG_TOOL.git
-cd TG_TOOL/TG_WEB
+cd TG_TOOL
 
-# Run automated installer (creates virtualenv, desktop shortcuts, and systemd service)
-./linux/install.sh
-
-# Open Web UI
-xdg-open http://localhost:8088
-```
-
-### Option 2: CLI Server Runner
-
-```bash
-cd TG_WEB
+# Install dependencies and launch
 ./venv/bin/python backend/run.py start
 ```
 
-### Option 3: Docker & Docker Compose
+### Option 2: Docker & Docker Compose (Multi-Stage Build)
 
 ```bash
-cd TG_WEB
 docker compose up -d --build
 ```
 
+The multi-stage build automatically compiles:
+1. React 19 Frontend with Node 22 + Vite 8
+2. Rust Core Accelerator (`tg-rust-core`) with Rust 1.84
+3. Python FastAPI runtime with FFmpeg and media codecs
+
+Access the Web UI at `http://127.0.0.1:8088`.
+
 ---
 
-## 📡 API Reference
+## 📡 Key API Routes
 
-| Endpoint | Method | Description |
+| Route | Method | Description |
 | :--- | :---: | :--- |
-| `/api/system/stats` | `GET` | Real-time CPU, RAM, active bandwidth, and uptime |
-| `/api/upload` | `POST` | Chunked file upload streaming to MTProto queue |
-| `/api/upload/batch/pause` | `POST` | Pauses all active upload tasks |
-| `/api/upload/batch/resume` | `POST` | Resumes all paused upload tasks |
-| `/api/upload/batch/clear` | `POST` | Clears completed tasks from active queue |
-| `/api/chats` | `GET` | Fetches user channels, groups, bots, and address book |
+| `/dl/{chat_id}/{msg_id}/{name}` | `GET` | High-speed byte-range media stream |
+| `/stream/{chat_id}/{msg_id}/{name}` | `GET` | Transmuxed streaming endpoint |
+| `/dl/{chat_id}/{msg_id}/thumb` | `GET` | Multi-stage cached media thumbnail |
+| `/api/media/vlc/play` | `POST` | Launch VLC player with scoped playback grant |
+| `/api/media/continue_watching` | `GET` | Fetch resume history and playback positions |
+| `/api/media/subtitles/{chat}/{msg}/{idx}.vtt` | `GET` | Extracted WebVTT subtitle stream |
+| `/api/upload` | `POST` | Chunked file upload streaming to MTProto |
+| `/api/chats` | `GET` | User dialogs, channels, and groups |
 | `/api/sniffer/status` | `GET` | Active watched channels and detected managers |
-| `/api/sniffer/channels/add` | `POST` | Adds a channel to the sniffer watchlist |
-| `/api/dl/{chat_id}/{msg_id}/{name}` | `GET` | High-speed HTTP range proxy streaming endpoint |
-| `/api/history` | `GET` | Complete transfer audit history |
-| `/api/settings` | `POST` | Updates download manager preferences and speed limits |
+| `/api/system/health` | `GET` | Gateway healthcheck and status |
 
 ---
 

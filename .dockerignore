@@ -1,0 +1,68 @@
+# ==============================================================================
+# TG Power Suite — Docker Build Ignore
+# Eliminates unnecessary context transfer (>250MB -> <100KB)
+# ==============================================================================
+
+# Git & Repository metadata
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.agents
+.agents-local
+
+# Virtual environments & Python cache
+venv
+.venv
+env
+__pycache__
+*.py[cod]
+*$py.class
+.pytest_cache
+.coverage
+htmlcov
+
+# Node & Frontend dependencies/builds
+node_modules
+**/node_modules
+frontend-reui/dist
+frontend/dist
+frontend-legacy
+
+# Submodules and auxiliary directories
+telegram-fdm-proxy
+ZeroGravity
+linux
+windows
+scripts
+
+# Rust build artifacts
+rust_core/target
+**/target
+
+# Local session files, credentials, and databases (never bake into images)
+.env
+.env.*
+backend/.env
+backend/.env.*
+*.session
+*.session*
+backend/sessions
+backend/sessions/*
+backend/data
+backend/data/*
+backend/temp_uploads
+backend/temp_uploads/*
+backend/downloads
+backend/downloads/*
+backend/stream_cache
+backend/stream_cache/*
+docs
+
+# Logs and temporary files
+*.log
+*.log.*
+*.tmp
+.DS_Store
+Thumbs.db

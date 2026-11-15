@@ -591,15 +591,20 @@ class CinemaCatalog:
                     self._message_cache[(chat_id, msg.id)] = (msg, time.time())
                     videos.append(parsed)
 
-            # Background thumbnail prefetch
             async def _prefetch(cid, msgs):
                 try:
                     for m in msgs[:30]:
                         cf = os.path.join(_THUMB_CACHE_DIR, f"{cid}_{m.id}.jpg")
-                        if not os.path.exists(cf):
+                        if not os.path.exists(cf) or os.path.getsize(cf) < 1500:
                             try:
-                                tb = await client.download_media(m.media, thumb=0, file=bytes)
-                                if tb:
+                                doc = getattr(m.media, "document", None) or (m.media if hasattr(m.media, "thumbs") else None)
+                                thumbs = getattr(doc, "thumbs", None) or getattr(m.media, "thumbs", None) or getattr(m.media, "sizes", None) or []
+                                from telethon.tl.types import PhotoSize, PhotoSizeProgressive
+                                photo_sizes = [t for t in thumbs if isinstance(t, (PhotoSize, PhotoSizeProgressive))]
+                                best = max(photo_sizes, key=lambda t: getattr(t, "size", 0) or max(getattr(t, "sizes", [0]))) if photo_sizes else None
+                                target = best if best is not None else -1
+                                tb = await asyncio.wait_for(client.download_media(m.media, thumb=target, file=bytes), timeout=4.0)
+                                if tb and len(tb) >= 1500:
                                     with open(cf, "wb") as f:
                                         f.write(tb)
                             except Exception:

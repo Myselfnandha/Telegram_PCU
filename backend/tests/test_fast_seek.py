@@ -1073,7 +1073,8 @@ async def test_stream_engine_in_flight_chunk_deduplication():
     chat_id = "test_dedup_chat"
     msg_id = 99991
 
-    with patch("app.services.stream_engine.sender_pool.borrow") as mock_borrow:
+    with patch("app.services.stream_engine.sender_pool.borrow") as mock_borrow, \
+         patch("app.services.rust_bridge.rust_bridge.is_healthy", AsyncMock(return_value=False)):
         mock_borrow.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
         mock_borrow.return_value.__aexit__ = AsyncMock(return_value=None)
 

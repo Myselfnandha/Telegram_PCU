@@ -87,3 +87,77 @@ def test_cinema_catalog_serializes_thumb_url_properly():
     assert item["has_thumb"] is True
     assert item["thumb_url"].startswith("/dl/")
     assert item["thumb_url"].endswith("/thumb")
+
+@pytest.mark.asyncio
+async def test_thumbnail_purges_old_micro_preview():
+    from app.routes.proxy import get_media_thumbnail
+    from app.telegram_client import TelegramClientManager
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    cache_dir = Path(_THUMB_CACHE_DIR)
+    micro_file = cache_dir / "999888_123.jpg"
+    micro_file.write_bytes(b"\xff\xd8\xff\xe0" + (b"\x00" * 700))
+
+    mock_client = MagicMock()
+    mock_client.is_connected = MagicMock(return_value=False)
+
+    try:
+        with patch.object(TelegramClientManager, "get_client", AsyncMock(return_value=mock_client)):
+            res = await get_media_thumbnail("999888", 123)
+            assert not micro_file.exists()
+            assert res.status_code == 200
+            assert "image/svg+xml" in res.headers["content-type"]
+    finally:
+        for p in cache_dir.glob("*999888*"):
+            try:
+                p.unlink()
+            except Exception:
+                pass
+
+@pytest.mark.asyncio
+async def test_thumbnail_prefers_photosize_over_stripped():
+    from telethon.tl.types import PhotoSize, PhotoStrippedSize, MessageMediaDocument, Document
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from app.routes.proxy import get_media_thumbnail
+    from app.telegram_client import TelegramClientManager
+
+    p_small = PhotoStrippedSize(type="i", bytes=b"\x01\x14\x14" + (b"\x11" * 64))
+    p_large = PhotoSize(type="m", w=320, h=320, size=18000)
+
+    fake_doc = Document(
+        id=777, access_hash=888, file_reference=b"ref", date=None,
+        mime_type="video/mp4", size=50000000, dc_id=2, attributes=[], thumbs=[p_small, p_large]
+    )
+    fake_msg = MagicMock()
+    fake_msg.media = MessageMediaDocument(document=fake_doc, nopremium=False, spoiler=False, video=True, round=False, voice=False, alt_documents=[])
+    fake_msg.id = 555
+
+    mock_client = MagicMock()
+    mock_client.is_connected = MagicMock(return_value=True)
+    mock_client.download_media = AsyncMock(return_value=b"\xff\xd8\xff\xe0" + (b"\xaa" * 2000))
+
+    from app.services.cinema_catalog import cinema_catalog
+    cinema_catalog._message_cache[("888777", 555)] = (fake_msg, 9999999999)
+
+    cache_dir = Path(_THUMB_CACHE_DIR)
+    for p in cache_dir.glob("*888777*"):
+        try:
+            p.unlink()
+        except Exception:
+            pass
+
+    try:
+        with patch.object(TelegramClientManager, "get_client", AsyncMock(return_value=mock_client)):
+            res = await get_media_thumbnail("888777", 555)
+            assert res.status_code == 200
+            assert res.headers["content-type"] == "image/jpeg"
+            assert len(res.body) > 1500
+            mock_client.download_media.assert_called()
+            call_kwargs = mock_client.download_media.call_args.kwargs
+            assert call_kwargs.get("thumb") == p_large
+    finally:
+        for p in cache_dir.glob("*888777*"):
+            try:
+                p.unlink()
+            except Exception:
+                pass

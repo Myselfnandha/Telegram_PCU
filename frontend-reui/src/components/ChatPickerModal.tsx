@@ -39,7 +39,7 @@ export const ChatPickerModal: React.FC<ChatPickerModalProps> = ({
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'channel' | 'group' | 'user' | 'bot' | 'saved'>('all');
+  const [filter, setFilter] = useState<'all' | 'saved' | 'channel' | 'user' | 'group' | 'bot' | 'contact'>('all');
 
   const loadChats = async (forceRefresh = false) => {
     setLoading(true);
@@ -66,11 +66,16 @@ export const ChatPickerModal: React.FC<ChatPickerModalProps> = ({
 
     if (!matchesSearch) return false;
 
+    if (filter === 'all') {
+      if (search.trim()) return true;
+      return c.type !== 'contact' && !c.is_contact;
+    }
     if (filter === 'saved') return c.type === 'saved_messages';
     if (filter === 'channel') return c.type === 'channel' || c.type === 'supergroup';
-    if (filter === 'group') return c.type === 'group' || c.type === 'supergroup';
     if (filter === 'user') return c.type === 'user';
+    if (filter === 'group') return c.type === 'group' || c.type === 'supergroup';
     if (filter === 'bot') return c.type === 'bot';
+    if (filter === 'contact') return c.type === 'contact' || Boolean(c.is_contact);
 
     return true;
   });
@@ -87,7 +92,9 @@ export const ChatPickerModal: React.FC<ChatPickerModalProps> = ({
       case 'bot':
         return <Bot className="w-4 h-4 text-cyan-400" />;
       case 'user':
-        return <User className="w-4 h-4 text-amber-400" />;
+        return <MessageSquare className="w-4 h-4 text-amber-400" />;
+      case 'contact':
+        return <User className="w-4 h-4 text-blue-400" />;
       default:
         return <MessageSquare className="w-4 h-4 text-muted-foreground" />;
     }
@@ -117,7 +124,7 @@ export const ChatPickerModal: React.FC<ChatPickerModalProps> = ({
           <div className="relative mt-3">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search channels, groups, contacts, bots..."
+              placeholder="Search chats, channels, groups, bots..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 h-9 text-xs"
@@ -131,9 +138,10 @@ export const ChatPickerModal: React.FC<ChatPickerModalProps> = ({
                 { id: 'all', label: 'All' },
                 { id: 'saved', label: 'Saved Messages' },
                 { id: 'channel', label: 'Channels' },
+                { id: 'user', label: 'Chats' },
                 { id: 'group', label: 'Groups' },
-                { id: 'user', label: 'Contacts' },
                 { id: 'bot', label: 'Bots' },
+                { id: 'contact', label: 'Contacts' },
               ] as const
             ).map((tab) => (
               <button
@@ -204,7 +212,7 @@ export const ChatPickerModal: React.FC<ChatPickerModalProps> = ({
                         )}
                       </div>
                       <div className="text-[11px] text-muted-foreground truncate">
-                        {chat.username ? `@${chat.username}` : chat.type.replace('_', ' ')}
+                        {chat.username ? `@${chat.username}` : chat.type === 'user' ? 'Direct Chat' : chat.type === 'contact' ? 'Contact' : chat.type.replace('_', ' ')}
                       </div>
                     </div>
                   </div>

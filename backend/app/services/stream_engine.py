@@ -1,13 +1,14 @@
 import asyncio
 import time
+import uuid
 import logging
-from typing import Optional, Union, AsyncGenerator, Any, Dict, Tuple, Set
+from typing import Optional, Union, AsyncGenerator, Any, Dict, Tuple, Set, List
 from telethon import utils, errors
 from telethon.tl.functions.upload import GetFileRequest
 
 from app.telegram_client import sender_pool
 from app.services.rate_governor import rate_governor
-from app.services.stream_buffer import stream_buffer
+from app.services.stream_buffer import stream_buffer, StreamSlidingBuffer
 from app.services.stream_cache import stream_cache_service
 
 logger = logging.getLogger("stream_engine")
@@ -19,20 +20,94 @@ FILE_REF_ERRORS = (
 )
 
 
-class StreamEngine:
-    """
-    Deep Module for High-Speed MTProto Streaming.
-    Hides all chunk-alignment arithmetic, concurrent lookahead pipelining,
-    multi-socket MTProto sender borrowing, rate governor permit budgeting,
-    RAM prefix handoffs, and error resilience behind a single async generator interface.
-    """
+class SeekEpisode:
+    def __init__(self, episode_id: str, chat_id: str, message_id: int):
+        self.episode_id = episode_id
+        self.chat_id = chat_id
+        self.message_id = message_id
+        self.candidate_windows: Set[int] = set()
+        self.latest_target: int = 0
+        self.created_at: float = time.time()
+        self.last_activity: float = time.time()
+        self.request_count: int = 0
+        self.active_subscribers: Set[str] = set()
 
+    def is_expired(self, ttl: float = 30.0) -> bool:
+        return (time.time() - self.last_activity) > ttl
+
+    def add_target(self, offset: int, window_size: int = 1024 * 1024):
+        self.last_activity = time.time()
+        self.request_count += 1
+        self.latest_target = offset
+        w_start = (offset // window_size) * window_size
+        windows = [
+            max(0, w_start - window_size),
+            w_start,
+            w_start + window_size,
+            w_start + 2 * window_size,
+            w_start + 3 * window_size
+        ]
+        for w in windows:
+            self.candidate_windows.add(w)
+        if len(self.candidate_windows) > 16:
+            sorted_by_dist = sorted(
+                list(self.candidate_windows),
+                key=lambda w: abs(w - self.latest_target)
+            )
+            self.candidate_windows = set(sorted_by_dist[:16])
+        stream_buffer.retain_chunks(self.chat_id, self.message_id, list(self.candidate_windows), ttl=30.0)
+
+
+class SeekEpisodeManager:
+    def __init__(self):
+        self._episodes: Dict[Tuple[str, int], SeekEpisode] = {}
+
+    def observe(self, chat_id: Union[str, int], message_id: int, offset: int, window_size: int = 1024 * 1024) -> SeekEpisode:
+        norm_cid = StreamSlidingBuffer._canonical_cid(chat_id)
+        key = (norm_cid, int(message_id))
+        ep = self._episodes.get(key)
+        if ep is None or ep.is_expired(ttl=30.0):
+            ep_id = f"ep_{uuid.uuid4().hex[:8]}"
+            ep = SeekEpisode(ep_id, norm_cid, int(message_id))
+            self._episodes[key] = ep
+        ep.add_target(offset, window_size)
+        return ep
+
+    def get_episode(self, chat_id: Union[str, int], message_id: int) -> Optional[SeekEpisode]:
+        norm_cid = StreamSlidingBuffer._canonical_cid(chat_id)
+        return self._episodes.get((norm_cid, int(message_id)))
+
+    def is_candidate_window(self, chat_id: Union[str, int], message_id: int, offset: int, window_size: int = 1024 * 1024) -> bool:
+        norm_cid = StreamSlidingBuffer._canonical_cid(chat_id)
+        ep = self._episodes.get((norm_cid, int(message_id)))
+        if not ep or ep.is_expired(ttl=30.0):
+            return False
+        w_start = (offset // window_size) * window_size
+        return w_start in ep.candidate_windows
+
+
+class ChunkTask:
+    def __init__(self, key: Tuple[str, int, int]):
+        self.key = key
+        self.future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self.subscribers: Set[str] = set()
+        self.priority: int = 4
+        self.created_at: float = time.time()
+        self.wire_task: Optional[asyncio.Task] = None
+        self.completed: bool = False
+
+
+class StreamEngine:
     def __init__(self):
         self._in_flight_chunks: Dict[Tuple[str, int, int], asyncio.Future] = {}
+        self._chunk_task_registry: Dict[Tuple[str, int, int], ChunkTask] = {}
+        self.seek_episode_manager = SeekEpisodeManager()
         self._chunk_lock: Optional[asyncio.Lock] = None
         self._mtproto_sem: Optional[asyncio.Semaphore] = None
         self._active_stream_wire_tasks: Dict[Tuple[str, int], Set[asyncio.Task]] = {}
         self._active_stop_events: Dict[Tuple[str, int], Set[asyncio.Event]] = {}
+        self._seek_generations: Dict[Tuple[str, int], int] = {}
+        self._active_read_positions: Dict[Tuple[str, int], int] = {}
 
     def _get_chunk_lock(self) -> asyncio.Lock:
         if self._chunk_lock is None:
@@ -44,12 +119,30 @@ class StreamEngine:
             self._mtproto_sem = asyncio.Semaphore(16)
         return self._mtproto_sem
 
-    def abort_message_stream(self, chat_id: Union[str, int], message_id: int):
-        """
-        Hard aborts all active MTProto chunk downloads, pipelined lookahead tasks,
-        and unfulfilled chunk futures for a specific message stream.
-        Called immediately on seek or fast-forward to release sender sockets and Rust permits.
-        """
+    def get_seek_generation(self, chat_id: Union[str, int], message_id: int) -> int:
+        norm_cid = StreamSlidingBuffer._canonical_cid(chat_id)
+        return self._seek_generations.get((norm_cid, int(message_id)), 0)
+
+    def advance_seek_generation(self, chat_id: Union[str, int], message_id: int, new_offset: int, chunk_size: int = 512 * 1024) -> int:
+        norm_cid = StreamSlidingBuffer._canonical_cid(chat_id)
+        key = (norm_cid, int(message_id))
+        gen = self._seek_generations.get(key, 0) + 1
+        self._seek_generations[key] = gen
+        self.seek_episode_manager.observe(norm_cid, int(message_id), new_offset, chunk_size)
+
+        prev_offset = self._active_read_positions.get(key)
+        if prev_offset is not None and prev_offset != new_offset:
+            retained_offsets = [
+                max(0, prev_offset - chunk_size * 2),
+                max(0, prev_offset - chunk_size),
+                prev_offset,
+            ]
+            stream_buffer.retain_chunks(norm_cid, int(message_id), retained_offsets, ttl=30.0)
+
+        self._active_read_positions[key] = new_offset
+        return gen
+
+    def abort_message_stream(self, chat_id: Union[str, int], message_id: int, cancel_retained: bool = True):
         s_cid = str(chat_id).strip()
         norm_cid = s_cid[4:] if s_cid.startswith("-100") else (s_cid[3:] if s_cid.startswith("100") else s_cid.lstrip("-"))
         candidate_cids = {s_cid, norm_cid, f"-100{norm_cid}", f"-{norm_cid}"}
@@ -62,13 +155,20 @@ class StreamEngine:
             wire_tasks = self._active_stream_wire_tasks.pop(mk, set())
             for task in wire_tasks:
                 if not task.done():
-                    task.cancel()
+                    task_off = getattr(task, "_chunk_offset", None)
+                    if cancel_retained or task_off is None or not stream_buffer.is_chunk_retained(cid, int(message_id), task_off):
+                        task.cancel()
 
         matching_keys = [k for k in list(self._in_flight_chunks.keys()) if str(k[0]) in candidate_cids and k[1] == int(message_id)]
         for k in matching_keys:
-            fut = self._in_flight_chunks.pop(k, None)
-            if fut and not fut.done():
-                fut.cancel()
+            c_offset = k[2] if len(k) > 2 else 0
+            if cancel_retained or not stream_buffer.is_chunk_retained(str(k[0]), int(message_id), c_offset):
+                fut = self._in_flight_chunks.pop(k, None)
+                if fut and not fut.done():
+                    fut.cancel()
+                ct = self._chunk_task_registry.pop(k, None)
+                if ct and not ct.future.done():
+                    ct.future.cancel()
 
     async def stream_media(
         self,
@@ -83,12 +183,9 @@ class StreamEngine:
         cached_prefix: Optional[bytes] = None,
         message: Optional[Any] = None,
         get_fresh_message_fn: Optional[Any] = None,
-        external_stop_event: Optional[asyncio.Event] = None
+        external_stop_event: Optional[asyncio.Event] = None,
+        request_id: Optional[str] = None
     ) -> AsyncGenerator[bytes, None]:
-        """
-        Stream arbitrary byte ranges directly from Telegram MTProto with zero-latency
-        RAM prefix delivery and lookahead pipelining.
-        """
         t0 = time.time()
         bytes_sent = 0
         first_chunk_sent = False
@@ -98,6 +195,9 @@ class StreamEngine:
         norm_cid = orig_cid
         media_key = (norm_cid, orig_mid)
         stream_wire_tasks = set()
+
+        if not request_id:
+            request_id = f"req_{uuid.uuid4().hex[:8]}"
 
         if media_key not in self._active_stream_wire_tasks:
             self._active_stream_wire_tasks[media_key] = set()
@@ -110,7 +210,6 @@ class StreamEngine:
             logger.debug(f"STREAM [{clean_name}] Aborted stream before start (superseded by seek)")
             return
 
-        # 1. Fast Path: Full RAM prefix coverage (e.g. tiny probe or complete cached slice)
         if cached_prefix and len(cached_prefix) >= length:
             logger.info(f"STREAM [{clean_name}] Complete (RAM prefix only): {length:,}B delivered in {time.time() - t0:.3f}s (0ms TTFB)")
             yield cached_prefix[:length]
@@ -120,13 +219,13 @@ class StreamEngine:
         effective_start = start + cached_prefix_len
         remaining_length = length - cached_prefix_len
 
-        # 2. Compute optimal chunk size:
-        # - 128KB for tiny probes / container metadata tails (<= 256KB or within last 4MB)
-        # - 1024KB for continuous media streaming (halves wire request frequency and prevents MTProto RPS flood)
         if length <= 256 * 1024 or (file_size > 0 and effective_start >= (file_size - 4 * 1024 * 1024)):
             chunk_size = 128 * 1024
         else:
             chunk_size = 1024 * 1024
+
+        episode = self.seek_episode_manager.observe(norm_cid, orig_mid, effective_start, chunk_size)
+        episode.active_subscribers.add(request_id)
 
         aligned_offset = (effective_start // chunk_size) * chunk_size
         discard_front = effective_start - aligned_offset
@@ -209,7 +308,10 @@ class StreamEngine:
         async def _download_chunk_from_mtproto(target_offset: int, target_size: int, worker_client: Any, is_emergency: bool, is_head_chunk: bool = False) -> bytes:
             nonlocal file_loc, message, active_clients
             if stop_event.is_set() and not is_head_chunk:
-                raise asyncio.CancelledError("Stream aborted by seek")
+                is_cand = self.seek_episode_manager.is_candidate_window(norm_cid, message_id, target_offset, target_size)
+                is_retained = stream_buffer.is_chunk_retained(norm_cid, message_id, target_offset)
+                if not is_cand and not is_retained:
+                    raise asyncio.CancelledError("Stream aborted by seek")
             cached_data = stream_buffer.get_slice(norm_cid, message_id, target_offset, target_size)
             if not cached_data and (orig_cid, orig_mid) != (norm_cid, message_id):
                 cached_data = stream_buffer.get_slice(orig_cid, orig_mid, target_offset, target_size)
@@ -333,11 +435,11 @@ class StreamEngine:
 
             file_ref_attempts = 0
             for attempt in range(6):
-                if stop_event.is_set() and not is_head_chunk:
+                if stop_event.is_set() and not is_head_chunk and not stream_buffer.is_chunk_retained(norm_cid, message_id, target_offset):
                     raise asyncio.CancelledError("Stream aborted by seek")
                 try:
                     c_t0 = time.time()
-                    if stop_event.is_set() and not is_head_chunk:
+                    if stop_event.is_set() and not is_head_chunk and not stream_buffer.is_chunk_retained(norm_cid, message_id, target_offset):
                         raise asyncio.CancelledError("Stream aborted by seek")
                     chunk_timeout = 16.0 if is_media_player else 25.0
                     async with self._get_mtproto_sem():
@@ -488,7 +590,10 @@ class StreamEngine:
             if worker_client is None:
                 worker_client = client
             if stop_event.is_set():
-                raise asyncio.CancelledError()
+                is_cand = self.seek_episode_manager.is_candidate_window(norm_cid, message_id, aligned_offset + (c_idx * chunk_size), chunk_size)
+                is_retained = stream_buffer.is_chunk_retained(norm_cid, message_id, aligned_offset + (c_idx * chunk_size))
+                if not is_cand and not is_retained:
+                    raise asyncio.CancelledError()
             c_offset = aligned_offset + (c_idx * chunk_size)
 
             cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
@@ -510,26 +615,37 @@ class StreamEngine:
             chunk_key = (norm_cid, int(message_id), c_offset)
             lock = self._get_chunk_lock()
             async with lock:
-                wire_fut = self._in_flight_chunks.get(chunk_key)
-                if wire_fut is None or wire_fut.done():
-                    loop = asyncio.get_running_loop()
-                    wire_fut = loop.create_future()
-                    self._in_flight_chunks[chunk_key] = wire_fut
+                task_obj = self._chunk_task_registry.get(chunk_key)
+                if task_obj is None or task_obj.future.done():
+                    task_obj = ChunkTask(chunk_key)
+                    task_obj.subscribers.add(request_id)
+                    task_obj.priority = 0 if c_idx == 0 else (1 if is_emergency else 3)
+                    self._chunk_task_registry[chunk_key] = task_obj
+                    self._in_flight_chunks[chunk_key] = task_obj.future
                     is_lead = True
                 else:
+                    task_obj.subscribers.add(request_id)
+                    if c_idx == 0:
+                        task_obj.priority = 0
+                    elif is_emergency and task_obj.priority > 1:
+                        task_obj.priority = 1
                     is_lead = False
+                wire_fut = task_obj.future
 
-            wt = None
             if is_lead:
                 async def _background_wire_runner():
                     try:
                         if stop_event.is_set() and c_idx > 0:
-                            if not wire_fut.done():
-                                wire_fut.cancel()
-                            return
+                            is_cand = self.seek_episode_manager.is_candidate_window(norm_cid, message_id, c_offset, chunk_size)
+                            is_retained = stream_buffer.is_chunk_retained(norm_cid, message_id, c_offset)
+                            if not is_cand and not is_retained:
+                                if not wire_fut.done():
+                                    wire_fut.cancel()
+                                return
                         data = await _download_chunk_from_mtproto(
                             c_offset, chunk_size, worker_client, is_emergency, is_head_chunk=(c_idx == 0)
                         )
+                        task_obj.completed = True
                         if not wire_fut.done():
                             wire_fut.set_result(data)
                     except (asyncio.CancelledError, BaseException) as e:
@@ -540,11 +656,15 @@ class StreamEngine:
                                 wire_fut.set_exception(e)
                     finally:
                         async with lock:
+                            if self._chunk_task_registry.get(chunk_key) is task_obj:
+                                self._chunk_task_registry.pop(chunk_key, None)
                             if self._in_flight_chunks.get(chunk_key) is wire_fut:
                                 self._in_flight_chunks.pop(chunk_key, None)
 
                 wt = asyncio.create_task(_background_wire_runner())
                 wt._chunk_idx = c_idx
+                wt._chunk_offset = c_offset
+                task_obj.wire_task = wt
                 stream_wire_tasks.add(wt)
                 if media_key in self._active_stream_wire_tasks:
                     self._active_stream_wire_tasks[media_key].add(wt)
@@ -553,25 +673,37 @@ class StreamEngine:
             else:
                 logger.info(
                     f"STREAM [{clean_name}] Chunk {c_idx+1}/{total_chunks} at {c_offset:,}: "
-                    f"Joined in-flight wire download (0 duplicate MTProto requests)"
+                    f"Joined in-flight wire download (request={request_id}, episode={episode.episode_id}, subscribers={len(task_obj.subscribers)})"
                 )
 
             try:
                 if c_idx == 0:
                     data = await asyncio.shield(wire_fut)
                 else:
-                    data = await asyncio.wait_for(asyncio.shield(wire_fut) if is_lead else wire_fut, timeout=20.0)
+                    data = await asyncio.wait_for(asyncio.shield(wire_fut) if is_lead else wire_fut, timeout=25.0)
                 return c_idx, data
             except asyncio.CancelledError:
-                if getattr(wt, "_chunk_idx", 1) > 0:
-                    if wt and not wt.done():
-                        wt.cancel()
-                    if not wire_fut.done():
-                        wire_fut.cancel()
+                task_obj.subscribers.discard(request_id)
+                if not task_obj.subscribers:
+                    is_cand = self.seek_episode_manager.is_candidate_window(norm_cid, message_id, c_offset, chunk_size)
+                    is_retained = stream_buffer.is_chunk_retained(norm_cid, message_id, c_offset)
+                    if not is_cand and not is_retained and (time.time() - task_obj.created_at) > 10.0:
+                        if task_obj.wire_task and not task_obj.wire_task.done():
+                            task_obj.wire_task.cancel()
+                        if not wire_fut.done():
+                            wire_fut.cancel()
+                    else:
+                        logger.debug(
+                            f"STREAM [{clean_name}] Soft-cancelling reader {request_id} on chunk at {c_offset:,}: "
+                            f"Wire task preserved for episode {episode.episode_id}"
+                        )
                 raise
             except Exception as fut_err:
                 if stop_event.is_set():
-                    raise
+                    is_cand = self.seek_episode_manager.is_candidate_window(norm_cid, message_id, c_offset, chunk_size)
+                    is_retained = stream_buffer.is_chunk_retained(norm_cid, message_id, c_offset)
+                    if not is_cand and not is_retained:
+                        raise
                 cached_data = stream_buffer.get_slice(norm_cid, message_id, c_offset, chunk_size)
                 if cached_data and len(cached_data) == chunk_size:
                     return c_idx, cached_data
@@ -898,6 +1030,7 @@ class StreamEngine:
                     pass
             raise
         finally:
+            episode.active_subscribers.discard(request_id)
             stop_event.set()
             if media_key in self._active_stop_events:
                 self._active_stop_events[media_key].discard(stop_event)
@@ -911,12 +1044,27 @@ class StreamEngine:
                     pass
             for wt in list(stream_wire_tasks):
                 if getattr(wt, "_chunk_idx", 1) > 0 and not wt.done():
-                    wt.cancel()
+                    task_off = getattr(wt, "_chunk_offset", None)
+                    is_cand = self.seek_episode_manager.is_candidate_window(norm_cid, message_id, task_off, chunk_size) if task_off is not None else False
+                    is_retained = stream_buffer.is_chunk_retained(norm_cid, message_id, task_off) if task_off is not None else False
+                    if not is_cand and not is_retained:
+                        wt.cancel()
             if media_key in self._active_stream_wire_tasks:
                 for wt in list(stream_wire_tasks):
                     self._active_stream_wire_tasks[media_key].discard(wt)
                 if not self._active_stream_wire_tasks[media_key]:
                     self._active_stream_wire_tasks.pop(media_key, None)
+
+    async def shutdown(self):
+        """Cleanly aborts and cancels all in-flight streaming tasks and clears runtime state."""
+        for media_key in list(self._active_stream_wire_tasks.keys()):
+            norm_cid, orig_mid = media_key
+            self.abort_message_stream(norm_cid, orig_mid, cancel_retained=True)
+        self._active_stream_wire_tasks.clear()
+        self._active_stop_events.clear()
+        self._seek_generations.clear()
+        self._seek_trackers.clear()
+        self._retained_in_flight.clear()
 
 
 stream_engine = StreamEngine()

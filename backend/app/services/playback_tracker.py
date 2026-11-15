@@ -107,11 +107,12 @@ class PlaybackTracker:
         else:
             progress_percent = 0.0
 
+        if not is_reset and progress_percent >= 98.0:
+            self.remove_progress(chat_id, message_id)
+            return
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            if progress_percent >= 98.0:
-                self.remove_progress(chat_id, message_id)
-                return
             cursor.execute("""
                 INSERT INTO playback_history (
                     id, chat_id, message_id, filename, display_title,
@@ -171,14 +172,14 @@ class PlaybackTracker:
         if total_file_size <= 0:
             return
 
-        if streamed_byte_offset <= 1024 * 1024 or streamed_byte_offset >= (total_file_size - 1024 * 1024):
+        tail_guard = max(32 * 1024 * 1024, int(total_file_size * 0.05))
+        if streamed_byte_offset <= 1024 * 1024 or streamed_byte_offset >= (total_file_size - tail_guard):
             return
 
         chunk_index = streamed_byte_offset // chunk_size
         record_id = f"{chat_id}_{message_id}"
         now = time.time()
 
-        # Calculate inferred seconds & percent from byte ratio
         existing = self.get_playback_progress(chat_id, message_id)
         duration_seconds = (existing.get("duration_seconds") or 0.0) if existing else 0.0
         if duration_seconds <= 0 and total_file_size > 0:
@@ -187,6 +188,15 @@ class PlaybackTracker:
         ratio = min(1.0, max(0.0, streamed_byte_offset / total_file_size)) if total_file_size > 0 else 0.0
         inferred_position_seconds = round(ratio * duration_seconds, 1) if duration_seconds > 0 else 0.0
         inferred_percent = round(min(100.0, ratio * 100.0), 1)
+
+        is_finished = (
+            inferred_percent >= 98.0
+            or (duration_seconds > 300.0 and inferred_position_seconds >= (duration_seconds - 90.0))
+            or (0 < duration_seconds <= 300.0 and inferred_position_seconds >= (duration_seconds - 15.0))
+        )
+        if is_finished:
+            self.remove_progress(chat_id, message_id)
+            return
 
         parsed = subtitle_service.parse_media_title(filename)
         display_title = parsed.get("title", filename)
@@ -375,7 +385,7 @@ class PlaybackTracker:
         else:
             progress_percent = 0.0
 
-        if progress_percent >= 98.0:
+        if not is_reset and progress_percent >= 98.0:
             await self.aremove_progress(chat_id, message_id)
             return
 
@@ -437,7 +447,8 @@ class PlaybackTracker:
         if total_file_size <= 0:
             return
 
-        if streamed_byte_offset <= 1024 * 1024 or streamed_byte_offset >= (total_file_size - 1024 * 1024):
+        tail_guard = max(32 * 1024 * 1024, int(total_file_size * 0.05))
+        if streamed_byte_offset <= 1024 * 1024 or streamed_byte_offset >= (total_file_size - tail_guard):
             return
 
         chunk_index = streamed_byte_offset // chunk_size
@@ -452,6 +463,15 @@ class PlaybackTracker:
         ratio = min(1.0, max(0.0, streamed_byte_offset / total_file_size)) if total_file_size > 0 else 0.0
         inferred_position_seconds = round(ratio * duration_seconds, 1) if duration_seconds > 0 else 0.0
         inferred_percent = round(min(100.0, ratio * 100.0), 1)
+
+        is_finished = (
+            inferred_percent >= 98.0
+            or (duration_seconds > 300.0 and inferred_position_seconds >= (duration_seconds - 90.0))
+            or (0 < duration_seconds <= 300.0 and inferred_position_seconds >= (duration_seconds - 15.0))
+        )
+        if is_finished:
+            await self.aremove_progress(chat_id, message_id)
+            return
 
         parsed = subtitle_service.parse_media_title(filename)
         display_title = parsed.get("title", filename)

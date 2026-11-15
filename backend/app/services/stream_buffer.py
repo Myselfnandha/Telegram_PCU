@@ -64,6 +64,34 @@ class StreamSlidingBuffer:
         self._headers: Dict[Tuple[str, int], bytearray] = {}
         self._tails: Dict[Tuple[str, int], dict] = {}
         self._last_access: Dict[Tuple[str, int], float] = {}
+        self._retained_until: Dict[Tuple[str, int], Dict[int, float]] = {}
+
+    def retain_chunk(self, chat_id: Union[str, int], message_id: int, offset: int, ttl: float = 30.0):
+        with self._lock:
+            key = (self._canonical_cid(chat_id), message_id)
+            if key not in self._retained_until:
+                self._retained_until[key] = {}
+            self._retained_until[key][offset] = time.time() + ttl
+
+    def retain_chunks(self, chat_id: Union[str, int], message_id: int, offsets: List[int], ttl: float = 30.0):
+        with self._lock:
+            key = (self._canonical_cid(chat_id), message_id)
+            if key not in self._retained_until:
+                self._retained_until[key] = {}
+            now = time.time()
+            for off in offsets:
+                self._retained_until[key][off] = now + ttl
+
+    def is_chunk_retained(self, chat_id: Union[str, int], message_id: int, offset: int) -> bool:
+        with self._lock:
+            for cid in self._cid_candidates(chat_id):
+                key = (cid, message_id)
+                m = self._retained_until.get(key)
+                if m:
+                    for off, exp in list(m.items()):
+                        if abs(off - offset) < 512 * 1024 and time.time() < exp:
+                            return True
+            return False
 
     def _get_key_last_active(self, k: Tuple[str, int]) -> float:
         ts = self._last_access.get(k, 0.0)

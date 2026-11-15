@@ -142,7 +142,18 @@ def acquire_pid_lock():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     pid = get_running_pid()
     if pid and pid != os.getpid():
-        return False, pid
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        is_port_bound = sock.connect_ex(("127.0.0.1", PORT)) == 0
+        sock.close()
+        if not is_port_bound:
+            try:
+                PID_FILE.unlink(missing_ok=True)
+            except Exception:
+                pass
+        else:
+            return False, pid
     try:
         PID_FILE.write_text(str(os.getpid()))
         return True, os.getpid()

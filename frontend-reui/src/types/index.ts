@@ -4,11 +4,13 @@ export interface ChatItem {
   id: number | string;
   name: string;
   username?: string | null;
-  type: 'saved_messages' | 'channel' | 'supergroup' | 'group' | 'user' | 'bot';
+  type: 'saved_messages' | 'channel' | 'supergroup' | 'group' | 'user' | 'bot' | 'contact';
   unread_count?: number;
   pinned?: boolean;
   photo_url?: string | null;
   has_avatar?: boolean;
+  last_message_date?: number | null;
+  is_contact?: boolean;
 }
 
 export interface ChatMessageMedia {

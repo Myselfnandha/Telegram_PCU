@@ -85,6 +85,7 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
         )
 
     me = await client.get_me()
+    me_id = me.id
     
     main_task = client.get_dialogs(limit=None)
     arch_task = client.get_dialogs(folder=1, limit=None)
@@ -95,26 +96,29 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
     archived_dialogs = gather_res[1] if isinstance(gather_res[1], list) else []
     contacts_res = gather_res[2] if not isinstance(gather_res[2], BaseException) else None
 
-    seen_ids = {("User", me.id)}
+    seen_ids = {me_id}
     result: List[ChatItem] = []
 
-    # Always add "Saved Messages" as the very first option
+    saved_ts = int(time.time())
     result.append(ChatItem(
-        id=me.id,
+        id=me_id,
         name="Saved Messages (Personal Cloud)",
         username=me.username,
         type="saved_messages",
         unread_count=0,
-        pinned=True
+        pinned=True,
+        last_message_date=saved_ts,
+        is_contact=False
     ))
 
+    dialog_items: List[ChatItem] = []
     for d in list(main_dialogs) + list(archived_dialogs):
         if not d.entity:
             continue
-        ent_key = (type(d.entity).__name__, d.entity.id)
-        if ent_key in seen_ids:
+        ent_id = getattr(d.entity, "id", None) or getattr(d, "id", None)
+        if ent_id is None or ent_id == me_id or ent_id in seen_ids:
             continue
-        seen_ids.add(ent_key)
+        seen_ids.add(ent_id)
 
         username = getattr(d.entity, "username", None)
         entity_type = "user"
@@ -129,24 +133,35 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
 
         name = d.name or "Unknown Chat"
         has_photo = bool(getattr(d.entity, "photo", None))
-        result.append(ChatItem(
-            id=d.entity.id,
+
+        msg_date = getattr(d, "date", None)
+        ts = int(msg_date.timestamp()) if hasattr(msg_date, "timestamp") else 0
+
+        dialog_items.append(ChatItem(
+            id=ent_id,
             name=name,
             username=username,
             type=entity_type,
-            unread_count=d.unread_count,
+            unread_count=d.unread_count or 0,
             pinned=bool(d.pinned),
-            photo_url=f"/api/chats/{d.entity.id}/avatar" if has_photo else None,
-            has_avatar=has_photo
+            photo_url=f"/api/chats/{ent_id}/avatar" if has_photo else None,
+            has_avatar=has_photo,
+            last_message_date=ts,
+            is_contact=False
         ))
 
-    # 2. Fetch all Telegram Contacts from user address book
+    pinned_items = [item for item in dialog_items if item.pinned]
+    unpinned_items = [item for item in dialog_items if not item.pinned]
+    unpinned_items.sort(key=lambda x: x.last_message_date or 0, reverse=True)
+    result.extend(pinned_items)
+    result.extend(unpinned_items)
+
     try:
         if contacts_res and hasattr(contacts_res, "users"):
             for u in contacts_res.users:
-                if not u or ("User", u.id) in seen_ids:
+                if not u or not getattr(u, "id", None) or u.id == me_id or u.id in seen_ids:
                     continue
-                seen_ids.add(("User", u.id))
+                seen_ids.add(u.id)
                 full_name = f"{u.first_name or ''} {u.last_name or ''}".strip()
                 if not full_name:
                     full_name = u.username or f"Contact {u.id}"
@@ -156,11 +171,13 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
                     id=u.id,
                     name=full_name,
                     username=u.username,
-                    type="bot" if is_bot else "user",
+                    type="contact",
                     unread_count=0,
                     pinned=False,
                     photo_url=f"/api/chats/{u.id}/avatar" if has_u_photo else None,
-                    has_avatar=has_u_photo
+                    has_avatar=has_u_photo,
+                    last_message_date=0,
+                    is_contact=True
                 ))
     except Exception as contact_err:
         logger.debug(f"Could not fetch contacts list: {contact_err}")
@@ -172,11 +189,6 @@ async def fetch_dialogs_from_telegram() -> List[ChatItem]:
 
 
 def update_dialog_on_message(chat_id: Union[int, str], msg: Any) -> None:
-    """
-    Updates the in-memory dialogs cache when a new live message arrives.
-    Bumps the target chat towards the top of the dialogs list and updates unread counts.
-    Emits a 'chats:dialog_updated' event via Socket.IO so docked channel lists update in real-time.
-    """
     global _chats_cache, _cache_time
     if not _chats_cache:
         return
@@ -198,12 +210,16 @@ def update_dialog_on_message(chat_id: Union[int, str], msg: Any) -> None:
 
     if found_idx != -1:
         target_chat = _chats_cache.pop(found_idx)
-        # Increment unread count if message is inbound
         is_out = getattr(msg, "out", False)
         if not is_out and not is_saved:
             target_chat.unread_count = (target_chat.unread_count or 0) + 1
 
-        # Position after pinned chats
+        msg_date = getattr(msg, "date", None)
+        target_chat.last_message_date = int(msg_date.timestamp()) if hasattr(msg_date, "timestamp") else int(time.time())
+        if target_chat.type == "contact":
+            target_chat.type = "user"
+            target_chat.is_contact = False
+
         insert_idx = 0
         if not target_chat.pinned:
             for idx, c in enumerate(_chats_cache):

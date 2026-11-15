@@ -22,11 +22,13 @@ class ChatItem(BaseModel):
     id: Union[int, str]
     name: str
     username: Optional[str] = None
-    type: str  # "user", "group", "supergroup", "channel", "saved_messages"
+    type: str
     unread_count: int = 0
     pinned: bool = False
     photo_url: Optional[str] = None
     has_avatar: bool = False
+    last_message_date: Optional[int] = None
+    is_contact: bool = False
 
 class UploadHistoryItem(BaseModel):
     id: str

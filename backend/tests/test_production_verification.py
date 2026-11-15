@@ -230,6 +230,16 @@ def test_check2_byte_range_semantics_and_edge_cases():
         s, e, status, err = parse_http_range(bad, 5000)
         assert status == 416 and err is not None
 
+    # 13. RFC 9110 Section 14.2: Valid multi-range ignores Range and returns full 200 OK
+    s, e, status, err = parse_http_range("bytes=0-100, 200-300", 5000)
+    assert status == 200 and s == 0 and e == 4999 and err is None
+
+    # 14. RFC 9110 Section 14.2: Multi-range where ALL ranges unsatisfiable -> 416
+    s, e, status, err = parse_http_range("bytes=6000-7000, 8000-9000", 5000)
+    assert status == 416 and err.status_code == 416
+    assert err.headers.get("Content-Range") == "bytes */5000"
+
+
 
 # ============================================================================
 # 3. CANCELLATION, RETRY BOUNDS & FAILURE PROPAGATION

@@ -265,6 +265,12 @@ async def lifespan(app: FastAPI):
         pass
 
     try:
+        from app.services.stream_engine import stream_engine
+        await stream_engine.shutdown()
+    except Exception as e:
+        logger.debug(f"Stream engine shutdown error: {e}")
+
+    try:
         from app.services.fast_stream_engine import fast_stream_engine
         await fast_stream_engine.shutdown()
     except Exception as e:
@@ -453,7 +459,26 @@ class GlobalAuthEnforcementMiddleware:
             is_loopback = is_loopback_request(req)
 
             method = scope.get("method", "GET")
-            if not token and not enable_auth and method in ("GET", "HEAD") and path.startswith(("/dl/", "/stream/")):
+
+            # CSRF protection on state-mutating requests
+            origin = req.headers.get("origin")
+            if origin and method in ("POST", "PUT", "DELETE", "PATCH"):
+                from app.config import CORS_ORIGINS
+                is_origin_allowed = (
+                    origin in CORS_ORIGINS
+                    or origin.startswith("http://localhost:")
+                    or origin.startswith("http://127.0.0.1:")
+                )
+                if not is_origin_allowed:
+                    response = Response(
+                        content='{"detail":"CSRF validation failed: Cross-origin request not permitted."}',
+                        status_code=403,
+                        media_type="application/json"
+                    )
+                    await response(scope, receive, send)
+                    return
+
+            if is_loopback and not token and not enable_auth and method in ("GET", "HEAD") and path.startswith(("/dl/", "/stream/")):
                 await self.app(scope, receive, send)
                 return
 

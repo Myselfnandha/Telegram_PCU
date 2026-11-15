@@ -48,22 +48,129 @@ export interface MovieDraftOptions {
 /**
  * Extracts the canonical franchise root title, release year, and sequel part from a movie title.
  */
+export function getMovieQualityScore(video: CinemaVideo): number {
+  const fn = (video.filename || '').toLowerCase();
+  const res = (video.resolution || '').toLowerCase();
+  const sz = video.size || video.file_size || 0;
+  let score = 0;
+  if (fn.includes('2160p') || fn.includes('4k') || res.includes('4k')) {
+    score += 50000;
+  } else if (fn.includes('1440p') || fn.includes('2k') || res.includes('1440p')) {
+    score += 40000;
+  } else if (fn.includes('1080p') || res.includes('1080p')) {
+    score += 30000;
+  } else if (fn.includes('720p') || res.includes('720p')) {
+    score += 20000;
+  } else if (fn.includes('480p') || res.includes('480p')) {
+    score += 10000;
+  }
+  if (fn.includes('bluray') || fn.includes('remux')) {
+    score += 5000;
+  } else if (fn.includes('web-dl') || fn.includes('webrip')) {
+    score += 3000;
+  } else if (fn.includes('hdrip')) {
+    score += 2000;
+  }
+  score += sz / (1024 * 1024);
+  return score;
+}
+
+export function cleanCanonicalMovieTitle(filename: string): { displayTitle: string; groupKey: string; year?: number } {
+  const spamKeywords = [
+    'moviebox\\s*studios',
+    'cszmovies',
+    'trending\\s*tamizhaas',
+    'sklink(?:\\s*files)?',
+    'prakytv',
+    'vip\\s*linkzz?',
+    'onlyhd4u',
+    'secl4u',
+    'movieemanhd',
+    'tamilhq',
+    'tamilmv',
+    'tamilblasters',
+    'hq',
+    'hs\\s*\\d*',
+    'tr',
+    'hd',
+    'web\\-dl',
+    'webrip',
+    'bdrip',
+    'hdrip',
+    'bluray',
+    'x264',
+    'x265',
+    'hevc',
+    'aac\\d*',
+    'ddp',
+    'atmos',
+    'esub',
+    'combined',
+    'true\\s*w',
+    '[0-9]+(?:\\.[0-9]+)?\\s*(?:gb|mb)',
+    'mkv',
+    'mp4',
+    'avi',
+    'webm',
+    'amzn',
+    'ds4k',
+    'v2',
+    'nf',
+    'hi',
+    'imax',
+    'prehd',
+    'yts',
+    'tam',
+    'tel',
+    'hin',
+    'eng',
+    'clean',
+    'x26samar',
+  ];
+
+  let clean = filename.replace(/\.(mkv|mp4|mov|avi|webm|flv|m4v|ts)$/i, '').replace(/_/g, ' ');
+  for (const sp of spamKeywords) {
+    clean = clean.replace(new RegExp(`\\b@?${sp}\\b`, 'gi'), ' ');
+  }
+  clean = clean.replace(/^@[a-zA-Z0-9_]{3,30}\s*/, ' ');
+  clean = clean.replace(/[~@#*➥➠🪫━`]+/g, ' ');
+
+  let year: number | undefined;
+  const ym = clean.match(/(?:^|\D)(19\d{2}|20\d{2})(?:\D|$)/);
+  if (ym) {
+    year = parseInt(ym[1], 10);
+  }
+
+  let titlePart = ym && ym.index !== undefined ? clean.substring(0, ym.index) : clean;
+  titlePart = titlePart.replace(/[()[\]\-_:.]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  if (!titlePart || titlePart.length < 2) {
+    titlePart = clean.replace(/[()[\]\-_:.]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  const words = titlePart.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  titlePart = words.join(' ');
+
+  const displayTitle = year ? `${titlePart} (${year})` : titlePart;
+  const groupKey = `${titlePart.toLowerCase()}__${year || 'na'}`;
+  return { displayTitle, groupKey, year };
+}
+
 export function extractMovieMetadata(filename: string): {
   cleanTitle: string;
   franchiseTitle: string;
   year?: number;
   partNumber?: number;
 } {
-  const clean = cleanFileName(filename) || filename;
-
-  // 1. Extract 4-digit Year (1900 - 2099)
   let year: number | undefined;
-  const yearMatch = clean.match(/(?:[([{])?\b(19\d{2}|20\d{2})\b(?:[)\]}])?/);
+  const rawClean = filename.replace(/\.(mkv|mp4|mov|avi|webm|flv|m4v|ts)$/i, '').replace(/_/g, ' ');
+  const yearMatch = rawClean.match(/(?:^|\D)(19\d{2}|20\d{2})(?:\D|$)/);
   if (yearMatch) {
     year = parseInt(yearMatch[1], 10);
   }
 
-  // 2. Extract Sequel / Part Number: Part 1, Part 2, Chapter 3, Part II, Part III, Part IV, 2, 3
+  const clean = cleanFileName(filename) || filename;
+
   let partNumber: number | undefined;
   const partMatch = clean.match(/\b(?:part|chapter|vol(?:ume)?|pt)\s*[:.\-_]?\s*(\d{1,2}|[ivx]+)\b/i);
   if (partMatch) {
@@ -76,8 +183,6 @@ export function extractMovieMetadata(filename: string): {
     }
   }
 
-  // 3. Derive Canonical Franchise Root Title
-  // Strip year, resolution, tags, and sequel markers
   let working = clean
     .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
     .replace(/\b(2160p|4k|1080p|720p|480p|uhd|fhd|hd|hdr|remux|bluray|web-dl|webrip|x264|x265|hevc|ddp|atmos|esub)\b/gi, ' ')
@@ -86,7 +191,6 @@ export function extractMovieMetadata(filename: string): {
     .replace(/^(?:org|com|net|tv|hd|link|linkzz|official|tamilmv|tamilblasters)\s+/i, '')
     .trim();
 
-  // Strip subtitle trailing after colon or dash (e.g. "Avatar: The Way of Water" -> "Avatar", "John Wick: Chapter 4" -> "John Wick")
   let franchise = working;
   const colonIdx = working.indexOf(':');
   if (colonIdx > 2) {
@@ -98,7 +202,6 @@ export function extractMovieMetadata(filename: string): {
     }
   }
 
-  // Strip trailing standalone number (e.g. "Deadpool 2" -> "Deadpool", "Iron Man 3" -> "Iron Man")
   const trailingNumMatch = franchise.match(/^(.*?)\s+(\d{1,2})$/);
   if (trailingNumMatch && trailingNumMatch[1].length >= 3) {
     franchise = trailingNumMatch[1].trim();
@@ -107,7 +210,6 @@ export function extractMovieMetadata(filename: string): {
     }
   }
 
-  // Fallback: cleanup extra spaces
   franchise = franchise.replace(/\s+/g, ' ').trim() || clean;
 
   return {
@@ -288,36 +390,38 @@ export function draftMoviesByFranchiseAndYear(
 
   const titleMap = new Map<string, MovieDraftItem[]>();
   movieItems.forEach((m) => {
-    const rawKey = `${m.franchiseTitle.toLowerCase()}__${m.year || 'na'}`;
-    if (!titleMap.has(rawKey)) {
-      titleMap.set(rawKey, []);
+    const parsed = cleanCanonicalMovieTitle(m.video.filename);
+    const key = parsed.groupKey;
+    if (!titleMap.has(key)) {
+      titleMap.set(key, []);
     }
-    titleMap.get(rawKey)!.push(m);
+    titleMap.get(key)!.push(m);
   });
 
   const movieTitleGroups: MovieCollectionDraft[] = [];
   titleMap.forEach((items, tKey) => {
     items.sort((a, b) => {
-      if (a.partNumber && b.partNumber) return a.partNumber - b.partNumber;
+      const qA = getMovieQualityScore(a.video);
+      const qB = getMovieQualityScore(b.video);
+      if (qB !== qA) return qB - qA;
       return b.releaseDate - a.releaseDate;
     });
 
     const lead = items[0];
+    const parsed = cleanCanonicalMovieTitle(lead.video.filename);
     const totalBytes = items.reduce((acc, m) => acc + (m.video.size || m.video.file_size || 0), 0);
     const dates = items.map((m) => m.releaseDate).filter((d) => d > 0);
     const latestDate = dates.length > 0 ? Math.max(...dates) : 0;
     const earliestDate = dates.length > 0 ? Math.min(...dates) : 0;
-    const firstItem = items[0];
     const leadThumb =
       items.find((m) => m.video.thumb_url)?.video.thumb_url ||
-      (firstItem?.video
-        ? `/stream/${encodeURIComponent(String(firstItem.video.chat_id))}/${firstItem.video.message_id}/thumb`
+      (lead?.video
+        ? `/stream/${encodeURIComponent(String(lead.video.chat_id))}/${lead.video.message_id}/thumb`
         : undefined);
-    const displayTitle = lead.year ? `${lead.franchiseTitle} (${lead.year})` : lead.franchiseTitle;
 
     movieTitleGroups.push({
       id: `movie_${tKey.replace(/[^a-z0-9]/g, '_')}`,
-      collectionTitle: displayTitle,
+      collectionTitle: parsed.displayTitle,
       type: 'franchise',
       totalMovies: items.length,
       totalBytes,

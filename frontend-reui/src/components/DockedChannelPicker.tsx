@@ -33,7 +33,7 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'channel' | 'group' | 'user' | 'bot' | 'saved'>('all');
+  const [filter, setFilter] = useState<'all' | 'channel' | 'user' | 'group' | 'bot' | 'saved' | 'contact'>('all');
 
   const loadChats = async (forceRefresh = false) => {
     setLoading(true);
@@ -70,11 +70,16 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
 
     if (!matchesSearch) return false;
 
+    if (filter === 'all') {
+      if (search.trim()) return true;
+      return c.type !== 'contact' && !c.is_contact;
+    }
     if (filter === 'saved') return c.type === 'saved_messages';
     if (filter === 'channel') return c.type === 'channel' || c.type === 'supergroup';
-    if (filter === 'group') return c.type === 'group' || c.type === 'supergroup';
     if (filter === 'user') return c.type === 'user';
+    if (filter === 'group') return c.type === 'group' || c.type === 'supergroup';
     if (filter === 'bot') return c.type === 'bot';
+    if (filter === 'contact') return c.type === 'contact' || Boolean(c.is_contact);
 
     return true;
   });
@@ -91,7 +96,9 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
       case 'bot':
         return <Bot className="w-3.5 h-3.5 text-cyan-400" />;
       case 'user':
-        return <User className="w-3.5 h-3.5 text-amber-400" />;
+        return <MessageSquare className="w-3.5 h-3.5 text-amber-400" />;
+      case 'contact':
+        return <User className="w-3.5 h-3.5 text-blue-400" />;
       default:
         return <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />;
     }
@@ -108,7 +115,7 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
         />
       )}
 
-      <aside className="fixed inset-y-0 left-0 z-50 w-64 max-w-[80vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[18%] lg:min-w-[190px] lg:max-w-[260px] w-[18%] min-w-[190px] max-w-[260px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-left-3 duration-200">
+      <aside className="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[18%] lg:min-w-[190px] lg:max-w-[260px] w-[18%] min-w-[190px] max-w-[260px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-left-3 duration-200">
         <div className="h-full flex flex-col min-h-0 p-2 rounded-xl border border-border/70 bg-card/85 backdrop-blur-xl shadow-xs space-y-1.5">
           {/* Header Bar */}
           <div className="flex items-center justify-between pb-1.5 border-b border-border/50 shrink-0 px-0.5">
@@ -116,7 +123,7 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
               <MessageSquare className="w-3.5 h-3.5 text-primary shrink-0" />
               <h3 className="text-xs font-semibold text-foreground truncate">Channels & Chats</h3>
               <Badge variant="outline" className="text-[9px] h-3.5 px-1 border-primary/30 text-primary bg-primary/10 font-mono shrink-0">
-                {chats.length}
+                {filteredChats.length}
               </Badge>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
@@ -143,27 +150,26 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
             </div>
           </div>
 
-          {/* Search Input */}
           <div className="relative shrink-0">
             <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search channels..."
+              placeholder="Search chats & channels..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-7 h-7 text-xs bg-background/60"
             />
           </div>
 
-          {/* Category Filter Pills */}
           <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
             {(
               [
                 { id: 'all', label: 'All' },
                 { id: 'channel', label: 'Channels' },
-                { id: 'saved', label: 'Saved' },
+                { id: 'user', label: 'Chats' },
                 { id: 'group', label: 'Groups' },
-                { id: 'user', label: 'Contacts' },
                 { id: 'bot', label: 'Bots' },
+                { id: 'saved', label: 'Saved' },
+                { id: 'contact', label: 'Contacts' },
               ] as const
             ).map((tab) => (
               <button
@@ -180,7 +186,6 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
             ))}
           </div>
 
-          {/* Dialogs List with Independent Scroll */}
           <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
             {loading && chats.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground">
@@ -235,7 +240,7 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
                           )}
                         </div>
                         <div className="text-[10px] text-muted-foreground truncate">
-                          {chat.username ? `@${chat.username}` : chat.type.replace('_', ' ')}
+                          {chat.username ? `@${chat.username}` : chat.type === 'user' ? 'Direct Chat' : chat.type === 'contact' ? 'Contact' : chat.type.replace('_', ' ')}
                         </div>
                       </div>
                     </div>

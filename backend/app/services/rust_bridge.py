@@ -130,6 +130,7 @@ class RustBridge:
                 except Exception:
                     try:
                         self._process.kill()
+                        await asyncio.to_thread(self._process.wait, 2)
                     except Exception:
                         pass
                 self._process = None

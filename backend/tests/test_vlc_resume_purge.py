@@ -113,6 +113,11 @@ async def test_vlc_byte_stream_progress_derivation():
     assert prog["percent"] == 70.0
     await playback_tracker.aremove_progress(chat_id, msg_id)
 
+    tail_offset = file_size - 10 * 1024 * 1024
+    await playback_tracker.aupdate_byte_progress(chat_id, 905, "TailProbe.mkv", tail_offset, file_size)
+    tail_prog = await playback_tracker.aget_playback_progress(chat_id, 905)
+    assert tail_prog is None
+
 def test_vlc_progress_bar_color_classification():
     def classify(pct: float) -> str:
         if pct >= 70.0:

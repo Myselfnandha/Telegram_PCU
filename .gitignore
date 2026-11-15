@@ -59,6 +59,10 @@ backend/downloads/*
 backend/data/stream_cache/*
 !backend/data/stream_cache/.gitkeep
 
+# Legacy Frontend (Archived / Non-canonical)
+frontend-legacy/
+
+
 # Operating System & IDE Files
 .DS_Store
 Thumbs.db

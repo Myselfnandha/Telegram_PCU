@@ -144,7 +144,7 @@ async def test_launch_desktop_vlc_flags(monkeypatch):
         assert res["success"] is True
         assert "--http-continuous" not in spawned_args
         assert "--no-spdif" in spawned_args
-        assert "--network-caching=2000" in spawned_args
+        assert "--network-caching=1000" in spawned_args
         assert "env" in spawned_kwargs
         assert "DISPLAY" in spawned_kwargs["env"]
 

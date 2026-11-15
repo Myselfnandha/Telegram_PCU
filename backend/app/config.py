@@ -31,6 +31,16 @@ if not ASSETS_DIR.exists():
 # Ensure runtime directories exist
 TEMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 SESSION_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    os.chmod(SESSION_DIR, 0o700)
+    for sfile in SESSION_DIR.glob("*"):
+        if sfile.is_file() and sfile.name != ".gitkeep":
+            try:
+                os.chmod(sfile, 0o600)
+            except Exception:
+                pass
+except Exception:
+    pass
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -53,11 +63,11 @@ except ValueError:
 API_HASH = os.getenv("TG_API_HASH", os.getenv("API_HASH", "")).strip()
 PHONE_NUMBER = os.getenv("TG_PHONE", os.getenv("PHONE_NUMBER", "")).strip()
 BOT_TOKEN = os.getenv("TG_BOT_TOKEN", os.getenv("BOT_TOKEN", "")).strip()
-SESSION_NAME = os.getenv("TG_SESSION_NAME", "tg_suite_user_session").strip()
+SESSION_NAME = (os.getenv("TG_SESSION_NAME", "").strip()) or "tg_suite_user_session"
 SESSION_FILE_PATH = SESSION_DIR / SESSION_NAME
 SESSION_STRING = os.getenv("TG_SESSION_STRING", "").strip()
 
-SESSION_NAME_2 = os.getenv("TG_SESSION_NAME_2", "tg_suite_secondary_session").strip()
+SESSION_NAME_2 = (os.getenv("TG_SESSION_NAME_2", "").strip()) or "tg_suite_secondary_session"
 SESSION_FILE_PATH_2 = SESSION_DIR / SESSION_NAME_2
 SESSION_STRING_2 = os.getenv("TG_SESSION_STRING_2", "").strip()
 ENABLE_MULTI_ACCOUNT_TURBO = os.getenv("ENABLE_MULTI_ACCOUNT_TURBO", "true").lower() in ("1", "true", "yes")
@@ -89,7 +99,15 @@ def get_env_dict() -> Dict[str, str]:
 
 
 def save_env_dict(updates: Dict[str, Any]) -> None:
-    """Updates key-value pairs in the .env file."""
+    """Updates key-value pairs in the .env file. Never writes plaintext session credentials."""
+    # Security: Never persist plaintext Telegram session credentials into .env
+    filtered_updates = {
+        k: v for k, v in updates.items()
+        if k not in ("TG_SESSION_STRING", "TG_SESSION_STRING_2") and not k.endswith("_SESSION_STRING")
+    }
+    if not filtered_updates:
+        return
+
     target = ROOT_DIR / ".env"
     if not target.exists():
         target = BACKEND_DIR / ".env"
@@ -106,13 +124,13 @@ def save_env_dict(updates: Dict[str, Any]) -> None:
         stripped = line.strip()
         if stripped and not stripped.startswith("#") and "=" in stripped:
             key = stripped.split("=", 1)[0].strip()
-            if key in updates:
-                new_lines.append(f"{key}={updates[key]}\n")
+            if key in filtered_updates:
+                new_lines.append(f"{key}={filtered_updates[key]}\n")
                 keys_written.add(key)
                 continue
         new_lines.append(line)
 
-    for k, v in updates.items():
+    for k, v in filtered_updates.items():
         if k not in keys_written:
             new_lines.append(f"{k}={v}\n")
 
@@ -135,19 +153,106 @@ DEFAULT_SUBTITLE_LANG = os.getenv("DEFAULT_SUBTITLE_LANG", "eng,tam,hin").strip(
 
 
 def update_session_string_in_env(session_string: str) -> None:
-    """Updates TG_SESSION_STRING in backend/.env file and in runtime environment."""
+    """Updates in-memory session string for compatibility; NEVER persists plaintext credentials to .env."""
     global SESSION_STRING
     SESSION_STRING = session_string
     os.environ["TG_SESSION_STRING"] = session_string
-    save_env_dict({"TG_SESSION_STRING": session_string})
 
 
 def update_secondary_session_string_in_env(session_string: str) -> None:
-    """Updates TG_SESSION_STRING_2 in backend/.env file and in runtime environment."""
+    """Updates in-memory session string for compatibility; NEVER persists plaintext credentials to .env."""
     global SESSION_STRING_2
     SESSION_STRING_2 = session_string
     os.environ["TG_SESSION_STRING_2"] = session_string
-    save_env_dict({"TG_SESSION_STRING_2": session_string})
+
+
+def migrate_and_purge_env_sessions() -> None:
+    """
+    Safely migrates legacy StringSession strings from .env into SQLite .session files
+    (with 0600 file permissions and 0700 directory permissions), then purges plaintext
+    session credentials from .env.
+    """
+    from telethon.sessions import StringSession, SQLiteSession
+
+    SESSION_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(SESSION_DIR, 0o700)
+    except Exception:
+        pass
+
+    primary_target = SESSION_FILE_PATH.with_suffix(".session") if not str(SESSION_FILE_PATH).endswith(".session") else SESSION_FILE_PATH
+    if SESSION_STRING:
+        if not primary_target.exists():
+            try:
+                src = StringSession(SESSION_STRING)
+                if src.auth_key:
+                    dst = SQLiteSession(str(SESSION_FILE_PATH))
+                    dst.set_dc(src.dc_id, src.server_address, src.port)
+                    dst.auth_key = src.auth_key
+                    dst.save()
+                    dst.close()
+                    try:
+                        os.chmod(primary_target, 0o600)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+    sec_target = SESSION_FILE_PATH_2.with_suffix(".session") if not str(SESSION_FILE_PATH_2).endswith(".session") else SESSION_FILE_PATH_2
+    if SESSION_STRING_2:
+        if not sec_target.exists():
+            try:
+                src2 = StringSession(SESSION_STRING_2)
+                if src2.auth_key:
+                    dst2 = SQLiteSession(str(SESSION_FILE_PATH_2))
+                    dst2.set_dc(src2.dc_id, src2.server_address, src2.port)
+                    dst2.auth_key = src2.auth_key
+                    dst2.save()
+                    dst2.close()
+                    try:
+                        os.chmod(sec_target, 0o600)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+    # Ensure all session files have 0600 permissions
+    for sf in SESSION_DIR.glob("*.session"):
+        try:
+            os.chmod(sf, 0o600)
+        except Exception:
+            pass
+
+    # Once SQLite session is confirmed valid on disk, purge plaintext string from .env files
+    if primary_target.exists() and primary_target.stat().st_size > 0:
+        for env_path in (BACKEND_DIR / ".env", ROOT_DIR / ".env"):
+            if env_path.exists():
+                try:
+                    with open(env_path, "r", encoding="utf-8", errors="replace") as f:
+                        lines = f.readlines()
+                    purged_lines = []
+                    changed = False
+                    for line in lines:
+                        sline = line.strip()
+                        if sline.startswith("TG_SESSION_STRING=") and not sline.startswith("TG_SESSION_STRING_2="):
+                            purged_lines.append("TG_SESSION_STRING=\n")
+                            changed = True
+                        elif sline.startswith("TG_SESSION_STRING_2="):
+                            purged_lines.append("TG_SESSION_STRING_2=\n")
+                            changed = True
+                        else:
+                            purged_lines.append(line)
+                    if changed:
+                        with open(env_path, "w", encoding="utf-8") as f:
+                            f.writelines(purged_lines)
+                except Exception:
+                    pass
+
+# Auto-execute migration and purge of legacy plaintext session strings
+try:
+    migrate_and_purge_env_sessions()
+except Exception:
+    pass
 
 
 def update_relay_channel_id_in_env(channel_id: int) -> None:
@@ -181,7 +286,7 @@ ENABLE_NOTIFICATIONS = os.getenv("ENABLE_NOTIFICATIONS", "true").strip().lower()
 NOTIFICATION_MODE = os.getenv("NOTIFICATION_MODE", "downloads_only").strip().lower()
 
 # Server Config
-HOST = os.getenv("HOST", "0.0.0.0")
+HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8088"))
 SECRET_KEY = os.getenv("SECRET_KEY", "tg-power-suite-secret-key")
 CORS_ORIGINS = [
