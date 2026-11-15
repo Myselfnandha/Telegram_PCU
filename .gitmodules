@@ -1,3 +1,3 @@
 [submodule "telegram-fdm-proxy"]
 	path = telegram-fdm-proxy
-	url = ./telegram-fdm-proxy
+	url = https://github.com/myselfnandha/telegram-fdm-proxy.git
