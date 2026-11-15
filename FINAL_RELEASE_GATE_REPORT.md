@@ -17,7 +17,7 @@ The engineering remediation process for **TG Power Suite v2.0.0** is complete. A
 
 | Verification Area | Requirement / Standard | Measured Result | Production Status |
 | :--- | :--- | :---: | :---: |
-| **Python Test Suite** | 100% pass across all categories | **423 / 423 PASSED** (162.96s) | 🟢 **PASS** |
+| **Python Test Suite** | 100% pass across all categories | **423 / 423 PASSED** (162.96s gate domain sum; 121.77s–134.38s runs) | 🟢 **PASS** |
 | **Rust Accelerator** | 100% pass on MTProto core tests | **4 / 4 PASSED** (2.10s) | 🟢 **PASS** |
 | **Frontend Type Safety** | Zero TypeScript compilation errors | **0 Errors** (`tsc -b` clean) | 🟢 **PASS** |
 | **Frontend Production Build** | Clean Vite production distribution | **Clean Bundle** (built in 2.00s) | 🟢 **PASS** |
@@ -113,9 +113,9 @@ Following the required verification sequence:
 ## 7. Automated Test Suites & Regression Verification
 
 ### Exact Test Distribution (423 Tests Across 45 Test Files)
-- **100% Pass Rate**: 423 passed in **162.96 seconds**.
-- **Rust MTProto Core**: 4 passed in 2.10s.
-- **TypeScript**: 0 type errors across 120+ source files.
+- **100% Pass Rate**: 423 passed in **162.96 seconds** (Full Gate Verification domain breakdown; subsequent clean runs: 121.77s and 134.38s).
+- **Rust MTProto Core**: 4 passed in 2.11s.
+- **TypeScript**: 0 type errors across 120+ source files (`tsc -b`).
 - **Historical Comparison**: Baseline Audit: 416 passed in 188.48s; Milestone 1: 418 passed in 185.62s; Release Gate: 423 passed in 162.96s.
 
 ---
@@ -125,7 +125,8 @@ Following the required verification sequence:
 - **Repository**: `TG_TOOL` / `TG_WEB`
 - **Release Version**: `v2.0.0`
 - **Release Tag**: `v2.0.0`
-- **Target Tag Commit SHA**: `c4f7314eace92c190752a7b2d3b0f34bff6e614f` (verified via `git rev-parse v2.0.0^{commit}`).
+- **Target Tag Commit SHA**: `fb7ee481e125f85ab7599d661c779fd6f9cfc206` (verified via `git rev-parse v2.0.0^{commit}`).
+- **Tag Discrepancy Resolution**: Annotated release tag `v2.0.0` remains strictly affixed to `fb7ee481e125f85ab7599d661c779fd6f9cfc206` (not moved artificially). Intermediate pre-amend commit object `c4f7314eace92c190752a7b2d3b0f34bff6e614f` was superseded in Git reflog when reports were amended into `fb7ee481e125f85ab7599d661c779fd6f9cfc206`.
 - **Working Tree**: Clean working tree; zero secrets, credentials, or session databases tracked.
-- **Submodule State**: `telegram-fdm-proxy` cleanly tracked at commit `6ce7d1a`.
+- **Submodule State**: `.gitmodules` created for `telegram-fdm-proxy` (tracking commit `6ce7d1a87154da3597d487881c2d36ee03e931b6`), gitignored `ZeroGravity` gitlink cleanly untracked from index; `git submodule status` exits cleanly with code 0 (`-6ce7d1a87154da3597d487881c2d36ee03e931b6 telegram-fdm-proxy`).
 - **Final Release Verdict**: **PRODUCTION CANDIDATE — CERTIFIED PENDING ONE-TIME INTERACTIVE USER LOGIN**

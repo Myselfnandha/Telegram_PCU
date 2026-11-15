@@ -4,7 +4,7 @@
 **Date**: November 15, 2026  
 **Test Suite**: Complete Repository Automated Regression & Verification Tests  
 **Result**: **423 PASSED, 0 FAILED (100% SUCCESS RATE)**  
-**Duration**: **121.77 seconds** (Final Release Verification Run; historical runs: Release Gate 1: 162.96s; Milestone 1: 418 in 185.62s; Baseline: 416 in 188.48s)
+**Duration**: **162.96 seconds** (Full Gate Verification Run with domain breakdown below; subsequent runs: 121.77s and 134.38s wall-clock; historical baseline: 416 in 188.48s; Milestone 1: 418 in 185.62s)
 
 ---
 
@@ -24,7 +24,7 @@
 | **Rust Bridge & Core Accelerator Interop** | 8 | 8 | 0 | **100%** | 1.30s |
 | **Network Monitor, Resilience & Adversarial** | 20 | 20 | 0 | **100%** | 6.80s |
 | **Multi-Account, MTProto Pool & Lifecycle** | 54 | 54 | 0 | **100%** | 22.39s |
-| **TOTAL** | **423** | **423** | **0** | **100%** | **162.96s** |
+| **TOTAL** | **423** | **423** | **0** | **100%** | **162.96s** (Domain Sum) |
 
 ---
 

@@ -53,7 +53,7 @@ The system has satisfied all production criteria across security hardening, stre
 ## 3. Quantitative Production Verification Metrics
 
 ### Quality & Regression Verification
-- **Python Backend Unit Tests**: **423 / 423 PASSED** (0 failures, 100% pass rate in 162.96 seconds; historical runs: Baseline 416 in 188.48s; Milestone 1: 418 in 185.62s).
+- **Python Backend Unit Tests**: **423 / 423 PASSED** (0 failures, 100% pass rate; Gate Verification domain sum 162.96 seconds; verification runs 121.77s and 134.38s; historical: Baseline 416 in 188.48s; Milestone 1: 418 in 185.62s).
 - **Rust Core Accelerator Tests**: **4 / 4 PASSED** (0 failures, 100% pass rate in 2.11 seconds).
 - **Frontend Type Safety**: **0 TypeScript compilation errors** (`tsc -b` clean).
 - **Frontend Production Build**: **Clean Vite 8 bundle** generated in `frontend-reui/dist/` in 1.46s.
