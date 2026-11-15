@@ -3,7 +3,7 @@
 ## Executive Summary
 Prior to this remediation, Telegram user authorization strings were stored as plaintext strings under the environment variable `TG_SESSION_STRING` inside `backend/.env`. Even though restrictive POSIX permissions were established on SQLite session files, the configuration manager (`backend/app/config.py`) continued to persist updated session strings to disk upon user login and settings updates.
 
-This document certifies the complete, permanent elimination of plaintext session storage (SEC-02 / ISSUE-04). All Telegram sessions have been migrated to protected SQLite session storage strictly contained within `backend/sessions/` with restrictive POSIX permissions (`0700` directory, `0600` file permissions), and `.env` persistence functions have been modified to prevent session strings from ever being written to disk again. Both primary (`tg_uploader.session` / `tg_suite_user_session.session`) and secondary account sessions (`tg_suite_secondary_session.session`) operate exclusively through this protected filesystem mechanism.
+This document certifies the complete, permanent elimination of plaintext session storage (SEC-02 / ISSUE-04). All Telegram sessions have been migrated to protected SQLite session storage strictly contained within `backend/sessions/` with restrictive POSIX permissions (`0700` directory, `0600` file permissions), and `.env` persistence functions have been modified to prevent session strings from ever being written to disk again. The canonical primary account session is `tg_suite_user_session.session` (with `tg_uploader.session` recognized as a legacy backward-compatible alias), and the secondary account session is `tg_suite_secondary_session.session`. Both operate exclusively through this protected filesystem mechanism.
 
 ---
 
@@ -58,9 +58,9 @@ In `backend/app/config.py`:
 3. **Automated Migration & Purge (`migrate_and_purge_env_sessions`)**:
    An automated migration utility was implemented and executed:
    - Reads existing session strings from `.env` or memory.
-   - If `backend/sessions/tg_uploader.session` does not exist or is empty, creates and populates the SQLite session with the active auth key.
-   - Sets strict POSIX permissions `chmod 0600` on the SQLite database and `chmod 0700` on `backend/sessions/`.
-   - Cleans the `TG_SESSION_STRING` value from `backend/.env`.
+   - If `backend/sessions/tg_suite_user_session.session` (or configured `SESSION_FILE_PATH`) does not exist, populates the SQLite session with the active auth key.
+   - Sets strict POSIX permissions `chmod 0600` on all SQLite session databases and `chmod 0700` on `backend/sessions/`.
+   - Cleans all `TG_SESSION_STRING` values from `backend/.env`.
 
 ---
 
@@ -69,14 +69,16 @@ In `backend/app/config.py`:
 ### File System Permissions Audit
 ```bash
 $ ls -ld backend/sessions
-drwx------ 2 nandha nandha 4096 Nov 15 13:00 backend/sessions
+drwx------ 2 nandha nandha 4096 Nov 15 19:04 backend/sessions
 
-$ ls -la backend/sessions/tg_uploader.session
--rw------- 1 nandha nandha 28672 Nov 15 13:02 backend/sessions/tg_uploader.session
+$ ls -la backend/sessions/tg_suite_user_session.session
+-rw------- 1 nandha nandha 28672 Nov 15 18:58 backend/sessions/tg_suite_user_session.session
 ```
 - Directory permissions: `0700` (`drwx------`) — accessible only by owner.
 - Session file permissions: `0600` (`-rw-------`) — readable/writable only by owner.
-- File type: `SQLite 3.x database` (valid Telethon auth key for DC 5).
+- Primary canonical file: `backend/sessions/tg_suite_user_session.session`.
+- Secondary canonical file: `backend/sessions/tg_suite_secondary_session.session`.
+- Legacy fallback alias: `backend/sessions/tg_uploader.session`.
 
 ### `.env` File Cleanliness Audit
 ```bash

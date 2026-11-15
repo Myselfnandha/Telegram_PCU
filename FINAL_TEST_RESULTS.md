@@ -11,7 +11,7 @@ All **423 Python tests** pass with zero failures. All **4 Rust accelerator tests
 
 | Component | Test Suite | Tests Total | Passed | Failed | Skipped | Duration | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Python Backend** | `backend/tests/` | 423 | 423 | 0 | 0 | 162.96s (Historical: M1 418 in 185.62s; Baseline 416 in 188.48s) | **100% PASS** |
+| **Python Backend** | `backend/tests/` | 423 | 423 | 0 | 0 | 121.77s (Historical: Gate 1 162.96s; M1 418 in 185.62s; Baseline 416 in 188.48s) | **100% PASS** |
 | **Rust Accelerator** | `rust_core/` (`cargo test`) | 4 | 4 | 0 | 0 | 2.10s | **100% PASS** |
 | **Frontend ReUI** | TypeScript (`tsc -b`) | 120+ files | 120+ | 0 | 0 | 1.80s | **100% PASS** |
 | **Frontend Build** | Vite 8 (`npm run build`) | Production | Success | 0 | 0 | 2.00s | **100% PASS** |

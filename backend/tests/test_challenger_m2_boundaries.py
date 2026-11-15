@@ -368,7 +368,9 @@ async def test_logout_and_logout_secondary_tier_sync():
     assert rate_governor.current_rate_limit_mbs == 48.0
 
     with patch("app.telegram_client.update_session_string_in_env"), \
-         patch("app.telegram_client.update_session_string_2_in_env"):
+         patch("app.telegram_client.update_session_string_2_in_env"), \
+         patch("app.telegram_client.SESSION_FILE_PATH", Path("/tmp/__test_dummy_session_p")), \
+         patch("app.telegram_client.SESSION_FILE_PATH_2", Path("/tmp/__test_dummy_session_s")):
         await TelegramClientManager.logout_secondary()
         assert TelegramClientManager._secondary_client is None
         assert TelegramClientManager._is_secondary_ready is False

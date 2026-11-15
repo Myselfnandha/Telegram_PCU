@@ -39,7 +39,7 @@ TG Power Suite v2.0.0 is a complete, production-hardened release of the high-spe
   - Desktop playback launcher (`/api/media/vlc/launch`) strictly enforces loopback peer origins (`127.0.0.1`, `::1`) and rejects reverse-proxy headers (`X-Forwarded-For`, `CF-Connecting-IP`).
 - **Elimination of Plaintext Session Storage (SEC-02 / ISSUE-04)**:
   - Permanently blocked `TG_SESSION_STRING` writes to `backend/.env`.
-  - Migrated user authorization keys into **protected binary SQLite session databases** in `backend/sessions/` with strict POSIX permissions (`0700` directory, `0600` file permissions) for both primary (`tg_uploader.session`) and secondary accounts (`tg_suite_secondary_session.session`).
+  - Migrated user authorization keys into **protected binary SQLite session databases** in `backend/sessions/` with strict POSIX permissions (`0700` directory, `0600` file permissions) for both primary canonical account (`tg_suite_user_session.session`, with `tg_uploader.session` supported as legacy alias) and secondary account (`tg_suite_secondary_session.session`).
   - Added automated permission guard `TelegramClientManager._secure_session_permissions()` verifying `0700`/`0600` on every client connection.
 - **Loopback Default Binding (SEC-03)**:
   - The backend server now defaults to binding on loopback interface `127.0.0.1:8088`. Binding to external interfaces requires explicit configuration via `HOST=0.0.0.0` or tunnel configuration.
@@ -132,7 +132,7 @@ curl -s http://127.0.0.1:8088/api/system/health
 ## 7. Migration Considerations
 
 1. **Legacy String Sessions**:
-   - If an existing installation has `TG_SESSION_STRING` in `backend/.env`, the system automatically migrates the authorization keys to `backend/sessions/tg_uploader.session` on first launch and purges the plaintext string from `.env`.
+   - If an existing installation has `TG_SESSION_STRING` in `backend/.env`, the system automatically migrates the authorization keys to canonical `backend/sessions/tg_suite_user_session.session` (or `tg_uploader.session` if configured) on first launch and purges the plaintext string from `.env`. Existing authorized session files are never overwritten.
 2. **Database Path Consolidation**:
    - SQLite databases are strictly maintained in `backend/data/`. Any existing `.db` files from root are ignored and can be safely deleted.
 3. **Docker Host Permissions**:

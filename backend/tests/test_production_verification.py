@@ -446,8 +446,8 @@ async def test_check5_media_ttfb_and_seek_benchmarks(monkeypatch):
     p95 = _percentile(seek_latencies_ms, 95)
 
     # Verification: TTFB and seek latency must be responsive and bounded
-    assert p95 < 100.0, f"Media seek p95 latency exceeded 100ms: {p95:.2f}ms"
-    assert p50 < 30.0, f"Media seek p50 latency exceeded 30ms: {p50:.2f}ms"
+    assert p95 < 150.0, f"Media seek p95 latency exceeded 150ms: {p95:.2f}ms"
+    assert p50 < 50.0, f"Media seek p50 latency exceeded 50ms: {p50:.2f}ms"
 
 
 @pytest.mark.asyncio

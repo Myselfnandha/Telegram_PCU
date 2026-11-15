@@ -63,7 +63,19 @@ except ValueError:
 API_HASH = os.getenv("TG_API_HASH", os.getenv("API_HASH", "")).strip()
 PHONE_NUMBER = os.getenv("TG_PHONE", os.getenv("PHONE_NUMBER", "")).strip()
 BOT_TOKEN = os.getenv("TG_BOT_TOKEN", os.getenv("BOT_TOKEN", "")).strip()
-SESSION_NAME = (os.getenv("TG_SESSION_NAME", "").strip()) or "tg_suite_user_session"
+# Canonical primary session name is 'tg_suite_user_session'.
+# Supported override: TG_SESSION_NAME in environment.
+# Legacy fallback: 'tg_uploader' if legacy session file exists and canonical does not.
+_env_session_name = os.getenv("TG_SESSION_NAME", "").strip()
+if _env_session_name:
+    SESSION_NAME = _env_session_name
+else:
+    _canonical_file = SESSION_DIR / "tg_suite_user_session.session"
+    _legacy_file = SESSION_DIR / "tg_uploader.session"
+    if not _canonical_file.exists() and _legacy_file.exists():
+        SESSION_NAME = "tg_uploader"
+    else:
+        SESSION_NAME = "tg_suite_user_session"
 SESSION_FILE_PATH = SESSION_DIR / SESSION_NAME
 SESSION_STRING = os.getenv("TG_SESSION_STRING", "").strip()
 
