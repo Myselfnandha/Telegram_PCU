@@ -120,19 +120,20 @@ Following the required verification sequence:
 
 ---
 
-## 8. Exact Git Release Tag & Submodule Verification
+## 8. Exact Git Release Tag & Companion Decoupling Verification
 
 - **Repository**: `TG_TOOL` / `TG_WEB`
 - **Primary Branch**: `main`
 - **Initial Release Tag**: `v2.0.0` pointing to `fb7ee481e125f85ab7599d661c779fd6f9cfc206` (verified via `git rev-parse v2.0.0^{commit}`).
-- **Release Candidate Tag**: `v2.0.0-rc2` pointing to current HEAD (contains initialized `.gitmodules` and full release documentation).
-- **Tag Policy Compliance**: In accordance with immutable release policies, tag `v2.0.0` was not force-moved. All application source code (`backend/`, `rust_core/`, `frontend-reui/`, `Dockerfile`) is identical between `v2.0.0` and HEAD.
+- **Intermediate Release Candidate**: `v2.0.0-rc2` pointing to `31962dbc96bf1615d8314c7446ffb6419982d592`.
+- **Final Release Candidate**: `v2.0.0-rc3` pointing to current HEAD (contains decoupled companion proxy configuration, zero submodule blockers, verified fresh-clone reproducibility, and full release documentation).
+- **Tag Policy Compliance**: In accordance with immutable release policies, historical release tags were not force-moved. All application source code (`backend/`, `rust_core/`, `frontend-reui/`, `Dockerfile`) is identical between `v2.0.0` and HEAD.
 - **Working Tree**: Clean working tree; zero secrets, credentials, or session databases tracked.
-- **Submodule State (`telegram-fdm-proxy`)**:
-  - Submodule Configuration: `.gitmodules` points to reproducible upstream repository `https://github.com/myselfnandha/telegram-fdm-proxy.git`.
-  - Initialized Status: Initialized via `git submodule update --init --recursive`.
-  - Status Output: ` 6ce7d1a87154da3597d487881c2d36ee03e931b6 telegram-fdm-proxy (heads/main)` (no leading minus; exit code 0).
-  - Checked-out Commit: `6ce7d1a87154da3597d487881c2d36ee03e931b6`, matching parent gitlink exactly.
-  - Submodule Optionality: `telegram-fdm-proxy` is an optional companion download proxy. Its upstream remote is archived on GitHub, while TG Power Suite operates its own native streaming engine and proxy.
-  - Stale Link Purge: `ZeroGravity` gitlink untracked and removed from Git index; ignores verified in `.gitignore`.
+- **Companion Repository Decoupling (`telegram-fdm-proxy` — Option C)**:
+  - Resolution Directive: Executed Option C to decouple `telegram-fdm-proxy` as an optional standalone utility.
+  - Submodule Dependency Removed: Removed `.gitmodules` and untracked `telegram-fdm-proxy` from the Git index.
+  - Filesystem Integrity: Added `telegram-fdm-proxy/` to `.gitignore` so local files remain intact on the developer workstation without polluting version control.
+  - Upstream Blocker Eliminated: Completely eliminates fresh-clone failures caused by archived/read-only upstream commits on GitHub.
+  - Submodule Status: `git submodule status` exits cleanly with code 0 (0 active submodules).
+  - Fresh Clone Reproducibility: Fully verified; any recursive clone completes instantly with exit code 0.
 - **Final Release Verdict**: **PRODUCTION CANDIDATE — CERTIFIED PENDING ONE-TIME INTERACTIVE USER LOGIN**

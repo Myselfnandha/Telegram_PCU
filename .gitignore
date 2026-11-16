@@ -71,3 +71,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Optional Companion Repositories (Decoupled from Core Suite)
+telegram-fdm-proxy/
