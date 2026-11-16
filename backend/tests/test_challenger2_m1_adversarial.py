@@ -34,6 +34,7 @@ def test_dock_breakpoint_boundary_1023_vs_1024(browser_context):
     assert data_1023["pos"] == "fixed"
 
     page.set_viewport_size({"width": 1024, "height": 900})
+    page.wait_for_selector('aside.slide-in-from-right-3', timeout=5000)
     page.wait_for_timeout(200)
 
     data_1024 = page.evaluate("""() => {
