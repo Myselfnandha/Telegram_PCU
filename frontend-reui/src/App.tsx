@@ -8,6 +8,7 @@ import { DeviceAuthGateModal } from '@/components/DeviceAuthGateModal';
 import { ToastContainer } from '@/components/ToastContainer';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/services/api';
+import { socketService } from '@/services/socket';
 
 const ManagementDashboardView = React.lazy(() =>
   import('@/views/ManagementDashboardView').then((m) => ({ default: m.ManagementDashboardView }))
@@ -35,9 +36,24 @@ const MainLayout: React.FC = () => {
   const [isDeviceGateOpen, setIsDeviceGateOpen] = useState(false);
 
   useEffect(() => {
-    // 1. Check device auth on initial mount
+    // 1. Check device auth on initial mount with automatic silent session recovery
     const checkDeviceAuth = async () => {
       try {
+        const storedToken = api.getStoredToken();
+        if (storedToken) {
+          try {
+            const loginRes = await api.deviceLogin(storedToken);
+            if (loginRes.success) {
+              socketService.reconnectWithToken(storedToken);
+              setIsDeviceGateOpen(false);
+              return;
+            }
+          } catch {
+            // Stored token was rejected by server, clear and prompt
+            api.setStoredToken('');
+          }
+        }
+
         const status = await api.getDeviceAuthStatus();
         if (status.auth_required && !status.authenticated) {
           setIsDeviceGateOpen(true);

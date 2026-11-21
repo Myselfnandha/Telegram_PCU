@@ -28,18 +28,41 @@ class ApiService {
 
   public getStoredToken(): string {
     try {
-      return localStorage.getItem('tg_api_auth_token') || '';
-    } catch {
-      return '';
-    }
+      const local = localStorage.getItem('tg_api_auth_token');
+      if (local) return local.trim();
+    } catch {}
+
+    try {
+      const session = sessionStorage.getItem('tg_api_auth_token');
+      if (session) return session.trim();
+    } catch {}
+
+    // Fallback: parse client-accessible cookie if mobile storage partitioned
+    try {
+      if (typeof document !== 'undefined' && document.cookie) {
+        const match = document.cookie.match(/(?:^|;\s*)tg_device_token=([^;]+)/);
+        if (match && match[1]) return decodeURIComponent(match[1]).trim();
+      }
+    } catch {}
+
+    return '';
   }
 
   public setStoredToken(token: string) {
+    const clean = token.trim();
     try {
-      if (token) {
-        localStorage.setItem('tg_api_auth_token', token);
+      if (clean) {
+        localStorage.setItem('tg_api_auth_token', clean);
+        sessionStorage.setItem('tg_api_auth_token', clean);
+        if (typeof document !== 'undefined') {
+          document.cookie = `tg_device_token=${encodeURIComponent(clean)}; path=/; max-age=31536000; SameSite=Lax`;
+        }
       } else {
         localStorage.removeItem('tg_api_auth_token');
+        sessionStorage.removeItem('tg_api_auth_token');
+        if (typeof document !== 'undefined') {
+          document.cookie = `tg_device_token=; path=/; max-age=0; SameSite=Lax`;
+        }
       }
     } catch {}
   }
@@ -50,7 +73,10 @@ class ApiService {
       const urlParams = new URLSearchParams(window.location.search);
       const urlToken = urlParams.get('token') || urlParams.get('key');
       if (urlToken) {
-        this.setStoredToken(urlToken);
+        const cleanToken = urlToken.trim();
+        this.setStoredToken(cleanToken);
+        // Automatically establish authorized session cookie with backend
+        this.deviceLogin(cleanToken).catch(() => {});
         urlParams.delete('token');
         urlParams.delete('key');
         const newSearch = urlParams.toString();

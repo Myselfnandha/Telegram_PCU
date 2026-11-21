@@ -1,5 +1,7 @@
 import asyncio
+import hmac
 import logging
+import time
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 from app.models import AuthStatus
@@ -8,6 +10,20 @@ from app.telegram_client import TelegramClientManager
 logger = logging.getLogger("auth_route")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# In-memory IP tracking to prevent brute-force / dictionary / credential-stuffing attacks
+_failed_attempts: dict[str, list[float]] = {}
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_WINDOW_SECS = 60.0
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extracts client IP, respecting trusted proxy headers."""
+    for header in ("cf-connecting-ip", "x-real-ip", "x-forwarded-for"):
+        val = request.headers.get(header)
+        if val:
+            return val.split(",")[0].strip()
+    return getattr(request.client, "host", "unknown") if request.client else "unknown"
 
 
 class DeviceLoginRequest(BaseModel):
@@ -30,24 +46,55 @@ async def get_device_auth_status(request: Request):
 
 
 @router.post("/device/login")
-async def device_login(body: DeviceLoginRequest, response: Response):
-    """Validates device security token against server API_AUTH_TOKEN and issues an authorized session cookie."""
+async def device_login(body: DeviceLoginRequest, request: Request, response: Response):
+    """
+    Validates device security token against server API_AUTH_TOKEN and issues an authorized session cookie.
+    Enforces constant-time comparison (prevents timing side-channel attacks) and IP rate limiting (prevents brute-force).
+    """
     from app.auth import API_AUTH_TOKEN
+    client_ip = _get_client_ip(request)
+    now = time.time()
+
+    # Clean old failure entries for this IP
+    attempts = [t for t in _failed_attempts.get(client_ip, []) if now - t < LOCKOUT_WINDOW_SECS]
+    _failed_attempts[client_ip] = attempts
+
+    if len(attempts) >= MAX_FAILED_ATTEMPTS:
+        retry_after = int(LOCKOUT_WINDOW_SECS - (now - attempts[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed authentication attempts. Access locked for {max(1, retry_after)} seconds."
+        )
+
     client_token = (body.token or "").strip()
     if not API_AUTH_TOKEN:
         return {"success": True, "message": "No server authentication required.", "token": client_token}
 
-    if client_token != API_AUTH_TOKEN:
+    # Constant-time comparison defeats character-by-character timing leak attacks
+    if not hmac.compare_digest(client_token, API_AUTH_TOKEN):
+        _failed_attempts[client_ip].append(now)
+        # 250ms anti-brute-force throttling sleep
+        await asyncio.sleep(0.25)
         raise HTTPException(status_code=401, detail="Invalid API authentication token.")
 
-    # Issue persistent session cookie (1 year)
+    # Successful login: reset failed attempts for this IP
+    _failed_attempts.pop(client_ip, None)
+
+    # Determine HTTPS context
+    is_https = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto", "").lower() == "https"
+    )
+
+    # Issue persistent session cookie (1 year) across entire domain
     response.set_cookie(
         key="tg_api_token",
         value=client_token,
         max_age=31536000,
+        path="/",
         httponly=True,
         samesite="lax",
-        secure=True
+        secure=is_https
     )
     return {"success": True, "message": "Device authenticated successfully.", "token": client_token}
 

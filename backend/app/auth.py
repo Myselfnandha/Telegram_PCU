@@ -1,4 +1,5 @@
 import os
+import hmac
 from fastapi import Request, HTTPException
 from typing import Optional
 
@@ -62,26 +63,26 @@ def is_authenticated(request: Request) -> bool:
         # Non-loopback request or auth enabled, but server has no secret token configured
         return False
 
-    # 1. Bearer Header
+    # 1. Bearer Header (constant-time check against character-by-character timing leak)
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         client_token = auth_header[7:].strip()
-        if client_token == token_to_check:
+        if hmac.compare_digest(client_token, token_to_check):
             return True
 
     # 2. X-API-Key Header
     api_key_header = request.headers.get("X-API-Key", "").strip()
-    if api_key_header and api_key_header == token_to_check:
+    if api_key_header and hmac.compare_digest(api_key_header, token_to_check):
         return True
 
     # 3. Query Parameter
     query_token = request.query_params.get("token", "").strip()
-    if query_token and query_token == token_to_check:
+    if query_token and hmac.compare_digest(query_token, token_to_check):
         return True
 
     # 4. Cookie tg_api_token
     cookie_token = request.cookies.get("tg_api_token", "").strip()
-    if cookie_token and cookie_token == token_to_check:
+    if cookie_token and hmac.compare_digest(cookie_token, token_to_check):
         return True
 
     return False

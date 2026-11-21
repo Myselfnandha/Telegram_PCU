@@ -42,23 +42,27 @@ def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
         return False
 
     # 1. Socket.IO auth dict
+    import hmac
     if isinstance(auth, dict):
-        if auth.get("token") == API_AUTH_TOKEN or auth.get("apiKey") == API_AUTH_TOKEN:
+        tok = str(auth.get("token") or auth.get("apiKey") or "")
+        if tok and hmac.compare_digest(tok, API_AUTH_TOKEN):
             return True
 
     # 2. Query parameter
     from urllib.parse import parse_qs
     qs = parse_qs(environ.get("QUERY_STRING", ""))
     tokens = qs.get("token", [])
-    if API_AUTH_TOKEN in tokens:
-        return True
+    for tok in tokens:
+        if hmac.compare_digest(tok, API_AUTH_TOKEN):
+            return True
 
     # 3. HTTP headers
     auth_header = environ.get("HTTP_AUTHORIZATION", "")
     if auth_header.startswith("Bearer "):
-        if auth_header[7:].strip() == API_AUTH_TOKEN:
+        if hmac.compare_digest(auth_header[7:].strip(), API_AUTH_TOKEN):
             return True
-    if environ.get("HTTP_X_API_KEY", "").strip() == API_AUTH_TOKEN:
+    x_key = environ.get("HTTP_X_API_KEY", "").strip()
+    if x_key and hmac.compare_digest(x_key, API_AUTH_TOKEN):
         return True
 
     # 4. HTTP Cookie
@@ -68,7 +72,7 @@ def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
         try:
             cookie = SimpleCookie()
             cookie.load(cookie_str)
-            if "tg_api_token" in cookie and cookie["tg_api_token"].value == API_AUTH_TOKEN:
+            if "tg_api_token" in cookie and hmac.compare_digest(cookie["tg_api_token"].value, API_AUTH_TOKEN):
                 return True
         except Exception:
             pass

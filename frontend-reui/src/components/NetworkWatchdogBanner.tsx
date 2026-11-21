@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Wifi, WifiOff, RefreshCw, Radio } from 'lucide-react';
 import { socketService } from '@/services/socket';
+import { api } from '@/services/api';
 import { useApp } from '@/context/AppContext';
 
 export const NetworkWatchdogBanner: React.FC = () => {
@@ -77,8 +78,8 @@ export const NetworkWatchdogBanner: React.FC = () => {
   const probeConnection = async () => {
     setIsReconnecting(true);
     try {
-      const res = await fetch('/api/auth/status', { cache: 'no-store' });
-      if (res.ok) {
+      const status = await api.getAuthStatus();
+      if (status) {
         setIsOnline(true);
         setIsReconnecting(false);
         setJustReconnected(true);
