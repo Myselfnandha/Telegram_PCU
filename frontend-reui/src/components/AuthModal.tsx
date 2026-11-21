@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
+  AlertTriangle,
   KeyRound,
   Lock,
   LogOut,
@@ -33,6 +34,7 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // QR Code State
   const [qrImage, setQrImage] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export const AuthModal: React.FC = () => {
     setPhoneCodeHash('');
     setPassword('');
     setError(null);
+    setShowLogoutConfirm(false);
     setQrImage(null);
     setQrExpired(false);
     setQrError(null);
@@ -294,15 +297,56 @@ export const AuthModal: React.FC = () => {
               )}
             </div>
 
-            <Button
-              variant="destructive"
-              className="w-full gap-2 cursor-pointer"
-              onClick={handleLogout}
-              disabled={loading}
-            >
-              <LogOut className="w-4 h-4" />
-              <span>{loading ? 'Logging out...' : 'Log Out from Telegram'}</span>
-            </Button>
+            {!showLogoutConfirm ? (
+              <Button
+                variant="outline"
+                className="w-full gap-2 cursor-pointer text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                onClick={() => setShowLogoutConfirm(true)}
+                disabled={loading}
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Log Out from Telegram</span>
+              </Button>
+            ) : (
+              <div className="p-3.5 rounded-xl border border-destructive/40 bg-destructive/10 space-y-3 animate-in fade-in-50">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-destructive">
+                      Revoke Telegram Authorization?
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      This will disconnect your local MTProto session. You will need to sign in again via QR code or phone OTP to stream media.
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/80 leading-relaxed">
+                      <strong>Note:</strong> Your saved videos, channels, and cached media on disk remain completely safe in your Telegram account — this only revokes local authentication. Any active playback or streaming will stop.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="flex-1 gap-1.5 cursor-pointer"
+                    onClick={handleLogout}
+                    disabled={loading}
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>{loading ? 'Revoking Session...' : 'Confirm Disconnect'}</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowLogoutConfirm(false)}
+                    disabled={loading}
+                    className="cursor-pointer text-xs"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="py-2 space-y-4">

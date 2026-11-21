@@ -51,6 +51,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const triggerElementRef = useRef<HTMLElement | null>(null);
   const isDraggingTimeline = useRef(false);
 
   // Playback state
@@ -402,6 +403,62 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }
   };
 
+  const handleTimelineKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (duration <= 0) return;
+    let targetTime: number | null = null;
+    switch (e.key) {
+      case 'Home':
+        e.preventDefault();
+        e.stopPropagation();
+        targetTime = 0;
+        break;
+      case 'End':
+        e.preventDefault();
+        e.stopPropagation();
+        targetTime = duration;
+        break;
+      case 'PageUp':
+        e.preventDefault();
+        e.stopPropagation();
+        targetTime = Math.min(duration, currentTimeSec + 60);
+        break;
+      case 'PageDown':
+        e.preventDefault();
+        e.stopPropagation();
+        targetTime = Math.max(0, currentTimeSec - 60);
+        break;
+      case 'ArrowRight':
+      case 'ArrowUp':
+        e.preventDefault();
+        e.stopPropagation();
+        targetTime = Math.min(duration, currentTimeSec + (e.shiftKey ? 15 : 5));
+        break;
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        e.preventDefault();
+        e.stopPropagation();
+        targetTime = Math.max(0, currentTimeSec - (e.shiftKey ? 15 : 5));
+        break;
+    }
+    if (targetTime !== null) {
+      handleSeek(targetTime, true);
+    }
+  };
+
+  // Focus restoration when modal opens/closes
+  useEffect(() => {
+    if (open) {
+      triggerElementRef.current = (document.activeElement as HTMLElement) || null;
+    } else {
+      if (triggerElementRef.current && typeof triggerElementRef.current.focus === 'function') {
+        const el = triggerElementRef.current;
+        setTimeout(() => {
+          el?.focus();
+        }, 50);
+      }
+    }
+  }, [open]);
+
   // Keyboard navigation shortcuts
   useEffect(() => {
     if (!open) return;
@@ -413,6 +470,18 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       if (e.code === 'Space' || e.key.toLowerCase() === 'k') {
         e.preventDefault();
         togglePlayPause();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        handleSeek(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        if (duration > 0) handleSeek(duration);
+      } else if (e.key === 'PageUp') {
+        e.preventDefault();
+        handleSeekDelta(60);
+      } else if (e.key === 'PageDown') {
+        e.preventDefault();
+        handleSeekDelta(-60);
       } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'j') {
         e.preventDefault();
         handleSeekDelta(e.shiftKey ? -30 : -10);
@@ -671,15 +740,17 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             role="slider"
             tabIndex={0}
             aria-label="Video scrubber timeline"
+            aria-orientation="horizontal"
             aria-valuemin={0}
             aria-valuemax={duration > 0 ? duration : 0}
             aria-valuenow={currentTimeSec}
             aria-valuetext={`${formatDuration(currentTimeSec)} of ${formatDuration(duration)}`}
+            onKeyDown={handleTimelineKeyDown}
             onMouseDown={handleTimelineMouseDown}
             onMouseMove={handleTimelineMouseMove}
             onMouseLeave={handleTimelineMouseLeave}
             onTouchStart={handleTouchStart}
-            className="group/timeline relative w-full h-3 flex items-center cursor-pointer"
+            className="group/timeline relative w-full h-3 flex items-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 rounded-sm"
           >
             {/* Timeline Hover Timestamp Tooltip */}
             {hoverTime !== null && hoverPct !== null && (

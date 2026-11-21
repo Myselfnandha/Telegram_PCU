@@ -108,6 +108,7 @@ class StreamEngine:
         self._active_stop_events: Dict[Tuple[str, int], Set[asyncio.Event]] = {}
         self._seek_generations: Dict[Tuple[str, int], int] = {}
         self._active_read_positions: Dict[Tuple[str, int], int] = {}
+        self._retained_cleanup_tasks: Set[asyncio.Task] = set()
 
     def _get_chunk_lock(self) -> asyncio.Lock:
         if self._chunk_lock is None:
@@ -431,6 +432,8 @@ class StreamEngine:
                         logger.debug(f"Rust stream chunk fallback notice: {r_err}")
                         break
 
+            from app.services.rust_bridge import rust_bridge
+            rust_bridge.python_fallback_chunks += 1
             req = GetFileRequest(target_loc, offset=target_offset, limit=target_size)
 
             file_ref_attempts = 0
@@ -717,6 +720,8 @@ class StreamEngine:
                 return c_idx, data
 
         last_progress_log = time.time()
+        last_interval_time = last_progress_log
+        last_interval_bytes = 0
         delivered_chunks = 0
 
         if file_size > 6 * 1024 * 1024 and remaining_length > 0 and start == 0:
@@ -771,12 +776,30 @@ class StreamEngine:
                 next_to_fetch = 0
                 next_to_deliver = 0
                 buffered = {}
+                wire_speed_mb_s = 5.0
+                wire_bytes_window = 0
+                last_wire_calc_time = time.time()
+
+                async def _put_chunk(item):
+                    """Puts chunk into queue without blocking forever if consumer exits or stop_event is set."""
+                    while not stop_event.is_set():
+                        try:
+                            queue.put_nowait(item)
+                            return True
+                        except asyncio.QueueFull:
+                            try:
+                                await asyncio.wait_for(stop_event.wait(), timeout=0.04)
+                                return False
+                            except asyncio.TimeoutError:
+                                continue
+                    return False
 
                 try:
                     while next_to_deliver < total_chunks and not stop_event.is_set():
                         while next_to_deliver in buffered and not stop_event.is_set():
                             data = buffered.pop(next_to_deliver)
-                            await queue.put(data)
+                            if not await _put_chunk(data):
+                                break
                             next_to_deliver += 1
 
                         if next_to_deliver >= total_chunks:
@@ -785,12 +808,12 @@ class StreamEngine:
                         runway = queue.qsize() + len(buffered)
                         if is_media_player:
                             if next_to_deliver == 0:
-                                allowed_in_flight = 2 if is_multi_account else 1
-                            elif runway < 6:
-                                allowed_in_flight = 8 if (is_premium_rate or is_multi_account) else 6
-                            elif runway >= 16:
                                 allowed_in_flight = 2
-                                if runway >= 20:
+                            elif runway < 12 or wire_speed_mb_s <= 1.5:
+                                allowed_in_flight = 8 if (is_premium_rate or is_multi_account) else 6
+                            elif runway >= 20:
+                                allowed_in_flight = 3
+                                if runway >= 24:
                                     await asyncio.sleep(0.02)
                             else:
                                 allowed_in_flight = 4
@@ -798,7 +821,7 @@ class StreamEngine:
                             if next_to_deliver == 0:
                                 allowed_in_flight = min(4, max_in_flight)
                             elif runway >= max_lookahead - 4:
-                                allowed_in_flight = 2
+                                allowed_in_flight = 3
                             else:
                                 allowed_in_flight = max_in_flight
 
@@ -855,6 +878,14 @@ class StreamEngine:
                                         raise RuntimeError(f"fetch_one_chunk({c_idx}) returned None")
                                     _, data = res
                                     buffered[c_idx] = data
+                                    wire_bytes_window += len(data)
+                                    now_w = time.time()
+                                    w_elapsed = now_w - last_wire_calc_time
+                                    if w_elapsed >= 2.0:
+                                        measured_speed = (wire_bytes_window / (1024 * 1024)) / w_elapsed
+                                        wire_speed_mb_s = 0.6 * wire_speed_mb_s + 0.4 * measured_speed
+                                        wire_bytes_window = 0
+                                        last_wire_calc_time = now_w
                                 except asyncio.CancelledError:
                                     if stop_event.is_set():
                                         break
@@ -902,7 +933,8 @@ class StreamEngine:
                                     continue
                                 await asyncio.sleep(0.05)
 
-                    await queue.put(None)
+                    if not stop_event.is_set():
+                        await _put_chunk(None)
                 except asyncio.CancelledError:
                     logger.debug(f"STREAM [{clean_name}] Pipelined producer cancelled")
                 except Exception as e:
@@ -914,10 +946,11 @@ class StreamEngine:
                                 t.cancel()
                     in_flight_clients.clear()
                     client_active_chunks.clear()
-                    try:
-                        queue.put_nowait(None)
-                    except Exception:
-                        pass
+                    if not stop_event.is_set():
+                        try:
+                            queue.put_nowait(None)
+                        except Exception:
+                            pass
 
             producer_task = asyncio.create_task(pipelined_chunk_producer())
 
@@ -968,12 +1001,22 @@ class StreamEngine:
                     last_progress_log = now
                     elapsed = max(0.01, now - t0)
                     playback_speed = (bytes_sent / (1024 * 1024)) / elapsed
+                    interval_elapsed = max(0.01, now - last_interval_time)
+                    interval_bytes = bytes_sent - last_interval_bytes
+                    window_player_speed = (interval_bytes / (1024 * 1024)) / interval_elapsed
+                    last_interval_time = now
+                    last_interval_bytes = bytes_sent
                     pct = (bytes_sent * 100.0 / length) if length > 0 else 0
                     q_len = queue.qsize()
                     buffered_mb = (q_len * chunk_size) / (1024 * 1024)
+                    from app.services.rust_bridge import rust_bridge
+                    wire_telemetry = rust_bridge.get_telemetry()
                     logger.info(
-                        f"STREAM [{clean_name}] Progress: {bytes_sent:,}/{length:,}B "
-                        f"({pct:.1f}%) | Player Rate: {playback_speed:.2f} MB/s | Buffer Runway: ~{buffered_mb:.1f}MB ({q_len} chunks in RAM) | {delivered_chunks} delivered"
+                        f"STREAM [{clean_name}] Progress: {bytes_sent:,}/{length:,}B ({pct:.1f}%) "
+                        f"| Player: {window_player_speed:.2f} MB/s (cum {playback_speed:.2f} MB/s) "
+                        f"| Buffer: ~{buffered_mb:.1f}MB ({q_len} chunks) | Del: {delivered_chunks} "
+                        f"| Wire: Rust={wire_telemetry['chunks_served']} ({wire_telemetry['bytes_delivered_mb']}MB, avg {wire_telemetry['avg_latency_ms']}ms) "
+                        f"/ PyFallback={wire_telemetry['python_fallback_chunks']}"
                     )
                     if is_media_player and bytes_sent >= 2 * 1024 * 1024:
                         try:
@@ -1039,9 +1082,23 @@ class StreamEngine:
             if producer_task and not producer_task.done():
                 producer_task.cancel()
                 try:
-                    await asyncio.wait_for(producer_task, timeout=0.8)
+                    await asyncio.wait_for(asyncio.shield(producer_task), timeout=2.0)
                 except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
                     pass
+                if not producer_task.done():
+                    # Retain supervisor reference so GC never collects it pending (RC-002)
+                    self._retained_cleanup_tasks.add(producer_task)
+                    def _cleanup_done(t):
+                        self._retained_cleanup_tasks.discard(t)
+                        if not t.cancelled():
+                            exc = t.exception()
+                            if exc:
+                                logger.debug(f"STREAM [{clean_name}] Supervised producer ended with: {exc}")
+                    producer_task.add_done_callback(_cleanup_done)
+                elif not producer_task.cancelled():
+                    p_exc = producer_task.exception()
+                    if p_exc:
+                        logger.debug(f"STREAM [{clean_name}] Producer task error: {p_exc}")
             for wt in list(stream_wire_tasks):
                 if getattr(wt, "_chunk_idx", 1) > 0 and not wt.done():
                     task_off = getattr(wt, "_chunk_offset", None)
@@ -1060,11 +1117,16 @@ class StreamEngine:
         for media_key in list(self._active_stream_wire_tasks.keys()):
             norm_cid, orig_mid = media_key
             self.abort_message_stream(norm_cid, orig_mid, cancel_retained=True)
+        for t in list(self._retained_cleanup_tasks):
+            if not t.done():
+                t.cancel()
+        self._retained_cleanup_tasks.clear()
         self._active_stream_wire_tasks.clear()
         self._active_stop_events.clear()
         self._seek_generations.clear()
-        self._seek_trackers.clear()
-        self._retained_in_flight.clear()
+        self._active_read_positions.clear()
+        self._in_flight_chunks.clear()
+        self._chunk_task_registry.clear()
 
 
 stream_engine = StreamEngine()

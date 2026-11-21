@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: tg-power-suite
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /api/system/health
+    envVars:
+      - key: PORT
+        value: 8088
+      - key: HOST
+        value: 0.0.0.0
+      - key: ENABLE_API_AUTH
+        value: "true"
+      - key: API_AUTH_TOKEN
+        generateValue: true
+      - key: TG_API_ID
+        sync: false
+      - key: TG_API_HASH
+        sync: false
+      - key: TG_SESSION_STRING
+        sync: false

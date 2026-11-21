@@ -52,13 +52,30 @@ _STREAM_PROBE_CACHE: Dict[Tuple[Any, int], Dict[str, Any]] = {}
 
 class StreamIteratorHandle:
     """Atomic cancellation handle for pipelined MTProto streamer & fallback iterators."""
-    def __init__(self, stop_event: asyncio.Event, task: Optional[asyncio.Task] = None, it: Optional[Any] = None):
+    def __init__(
+        self,
+        stop_event: asyncio.Event,
+        task: Optional[asyncio.Task] = None,
+        it: Optional[Any] = None,
+        req_id: str = "",
+        start: int = 0,
+        length: int = 0,
+        is_playback_stream: bool = False,
+        is_probe: bool = False
+    ):
         self.stop_event = stop_event
         self.task = task
         self.it = it
+        self.req_id = req_id
+        self.start = start
+        self.length = length
+        self.is_playback_stream = is_playback_stream
+        self.is_probe = is_probe
 
     async def close(self):
         self.stop_event.set()
+        if self.task and not self.task.done():
+            self.task.cancel()
 
 
 def parse_http_range(range_header: str, file_size: int) -> Tuple[int, int, int, Optional[Response]]:
@@ -528,7 +545,11 @@ async def handle_proxy_download(
                     logger.info(f"STREAM [{clean_name}] Direct tail RAM hit: {len(probe_slice):,}B at offset {start:,} (0ms TTFB)")
                     return Response(content=probe_slice, status_code=status_code, headers=headers)
 
-    is_probe_request = (length <= 512 * 1024)
+    is_tail_probe = (file_size > 0 and start >= max(0, file_size - 4 * 1024 * 1024))
+    is_head_element_probe = (start > 0 and start < 1024 * 1024)
+    is_bounded_probe = (length <= 2 * 1024 * 1024)
+    is_probe_request = is_bounded_probe or is_tail_probe or is_head_element_probe
+    is_playback_stream = not is_probe_request
 
     if is_probe_request and length <= 512 * 1024:
         chunk_size = 512 * 1024
@@ -611,43 +632,59 @@ async def handle_proxy_download(
 
     req_id = f"req_{uuid.uuid4().hex[:8]}"
     curr_task = asyncio.current_task()
-    session_key = (norm_chat_id, message_id, client_tag, norm_client_host, id(curr_task)) if is_media_player else (norm_chat_id, message_id, f"dl_{id(curr_task)}_{start}", norm_client_host)
+    session_key = (norm_chat_id, message_id, client_tag, norm_client_host, req_id)
 
     stop_event = asyncio.Event()
-    handle = StreamIteratorHandle(stop_event=stop_event)
+    handle = StreamIteratorHandle(
+        stop_event=stop_event,
+        req_id=req_id,
+        start=start,
+        length=length,
+        is_playback_stream=is_playback_stream,
+        is_probe=is_probe_request
+    )
 
-    if curr_task and is_media_player:
-        host_player_keys = [
-            k for k in list(_ACTIVE_STREAM_ITERS.keys())
-            if len(k) >= 4 and k[3] == norm_client_host and (k[2] == client_tag or (k[0] == norm_chat_id and k[1] == message_id)) and (len(k) < 5 or k[4] != id(curr_task))
-        ]
-        for sk in host_player_keys:
-            old_h = _ACTIVE_STREAM_ITERS.pop(sk, None)
-            if old_h:
-                old_h.stop_event.set()
-            old_task_tuple = _ACTIVE_STREAM_TASKS.pop(sk, None)
-            if old_task_tuple:
-                old_t, _ = old_task_tuple
-                if old_t and not old_t.done() and old_t is not curr_task:
-                    old_t.cancel()
-            old_cid, old_mid = sk[0], sk[1]
-            stream_engine.advance_seek_generation(old_cid, old_mid, start)
-            _ACTIVE_MEDIA_CONNS.pop((old_cid, old_mid), None)
+    if curr_task and is_media_player and is_playback_stream:
+        # RC-001: Only cancel genuinely superseded PLAYBACK streams.
+        # Concurrent metadata probes (head elements, tail cues) must coexist independently.
+        for sk, old_h in list(_ACTIVE_STREAM_ITERS.items()):
+            if (
+                len(sk) >= 5
+                and sk[0] == norm_chat_id
+                and sk[1] == message_id
+                and sk[2] == client_tag
+                and sk[3] == norm_client_host
+                and sk[4] != req_id
+            ):
+                if getattr(old_h, "is_playback_stream", False) and getattr(old_h, "start", 0) != start:
+                    logger.info(
+                        f"STREAM [{clean_name}] Cancelling superseded playback stream at offset {getattr(old_h, 'start', 0):,} "
+                        f"(superseded by seek to {start:,}, req={req_id})"
+                    )
+                    _ACTIVE_STREAM_ITERS.pop(sk, None)
+                    old_h.stop_event.set()
+                    if old_h.task and not old_h.task.done():
+                        old_h.task.cancel()
+                    _ACTIVE_STREAM_TASKS.pop(sk, None)
+                    stream_engine.advance_seek_generation(norm_chat_id, message_id, start)
         if start > 0:
             stream_engine.advance_seek_generation(norm_chat_id, message_id, start)
 
-    if curr_task and not is_probe_request:
-        if is_media_player:
-            pref_t = _ACTIVE_PREFETCH_TASKS.pop(media_key, None)
-            if pref_t and not pref_t.done():
-                pref_t.cancel()
+    if is_playback_stream:
+        pref_t = _ACTIVE_PREFETCH_TASKS.pop(media_key, None)
+        if pref_t and not pref_t.done():
+            pref_t.cancel()
 
-        _ACTIVE_STREAM_TASKS[session_key] = (curr_task, start)
-        _ACTIVE_MEDIA_CONNS[media_key].add(curr_task)
-        _ACTIVE_STREAM_ITERS[session_key] = handle
+    _ACTIVE_STREAM_ITERS[session_key] = handle
 
     async def stream_wrapper():
-        handle.task = asyncio.current_task()
+        # RC-007: Store actual StreamingResponse iteration task, NOT the exited route handler task
+        streaming_task = asyncio.current_task()
+        handle.task = streaming_task
+        if is_playback_stream:
+            _ACTIVE_STREAM_TASKS[session_key] = (streaming_task, start)
+        _ACTIVE_MEDIA_CONNS[media_key].add(streaming_task)
+
         if stop_event.is_set():
             return
 
@@ -667,13 +704,11 @@ async def handle_proxy_download(
             request_id=req_id
         )
         handle.it = gen
-        if not is_probe_request:
-            _ACTIVE_STREAM_ITERS[session_key] = handle
 
         try:
             async for chunk in gen:
                 if stop_event.is_set():
-                    return
+                    break
                 yield chunk
         except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError, ClientDisconnect):
             return
@@ -681,21 +716,29 @@ async def handle_proxy_download(
             logger.debug(f"Stream wrapper notice for {clean_name}: {e}")
             return
         finally:
+            # RC-004 Safe & Complete Teardown:
+            # - AGEN_CREATED: instantiated but never entered
+            # - AGEN_SUSPENDED: suspended at yield (e.g. after loop break or external task cancellation)
+            # Both must be explicitly aclosed to run the generator's finally blocks immediately.
+            # Never aclose if AGEN_RUNNING to avoid concurrent invocation collisions.
+            import inspect
             if hasattr(gen, "aclose"):
                 try:
-                    await gen.aclose()
-                except (RuntimeError, Exception, asyncio.CancelledError):
-                    pass
-            if not is_probe_request:
-                entry = _ACTIVE_STREAM_TASKS.get(session_key)
-                if entry and entry[0] is curr_task:
-                    _ACTIVE_STREAM_TASKS.pop(session_key, None)
-                if _ACTIVE_STREAM_ITERS.get(session_key) is handle:
-                    _ACTIVE_STREAM_ITERS.pop(session_key, None)
-                if curr_task:
-                    _ACTIVE_MEDIA_CONNS[media_key].discard(curr_task)
-                if not _ACTIVE_MEDIA_CONNS[media_key]:
-                    _ACTIVE_MEDIA_CONNS.pop(media_key, None)
+                    state = inspect.getasyncgenstate(gen)
+                    if state in (inspect.AGEN_CREATED, inspect.AGEN_SUSPENDED):
+                        await gen.aclose()
+                except Exception as ce:
+                    logger.debug(f"Generator aclose notice for {clean_name}: {ce}")
+
+            if _ACTIVE_STREAM_ITERS.get(session_key) is handle:
+                _ACTIVE_STREAM_ITERS.pop(session_key, None)
+            entry = _ACTIVE_STREAM_TASKS.get(session_key)
+            if entry and entry[0] is streaming_task:
+                _ACTIVE_STREAM_TASKS.pop(session_key, None)
+            if streaming_task:
+                _ACTIVE_MEDIA_CONNS[media_key].discard(streaming_task)
+            if not _ACTIVE_MEDIA_CONNS[media_key]:
+                _ACTIVE_MEDIA_CONNS.pop(media_key, None)
 
     return StreamingResponse(
         stream_wrapper(),

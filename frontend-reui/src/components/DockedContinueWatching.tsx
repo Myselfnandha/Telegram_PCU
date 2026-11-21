@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { ContinueWatchingItem } from '@/types';
 import { cleanFileName, formatDuration, parseMediaInfo } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
@@ -21,16 +21,92 @@ export const DockedContinueWatching: React.FC<DockedContinueWatchingProps> = ({
   onRemove,
   onClose,
 }) => {
+  const asideRef = useRef<HTMLElement | null>(null);
+  const triggerElementRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // Only engage focus trapping/restoration when rendered as mobile/tablet overlay (< 1024px)
+    const isMobileOverlay = typeof window !== 'undefined' && window.innerWidth < 1024 && Boolean(onClose);
+    if (!isMobileOverlay) return;
+
+    triggerElementRef.current = (document.activeElement && document.activeElement !== document.body)
+      ? (document.activeElement as HTMLElement)
+      : document.querySelector<HTMLElement>('button[aria-label="Open Continue Watching"]');
+
+    // Focus initial element inside drawer (close button or first resume item)
+    const timer = setTimeout(() => {
+      if (asideRef.current) {
+        const firstFocusable = asideRef.current.querySelector<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        firstFocusable?.focus();
+      }
+    }, 50);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && asideRef.current) {
+        const focusable = Array.from(asideRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter((el) => el.offsetParent !== null || el.getClientRects().length > 0);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (!asideRef.current.contains(document.activeElement)) {
+          e.preventDefault();
+          first.focus();
+          return;
+        }
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handleKeyDown);
+      setTimeout(() => {
+        const btn = (triggerElementRef.current && triggerElementRef.current.isConnected)
+          ? triggerElementRef.current
+          : document.querySelector<HTMLElement>('button[aria-label="Open Continue Watching"]');
+        btn?.focus();
+      }, 80);
+    };
+  }, [onClose]);
+
   return (
     <>
       {/* Mobile/Tablet Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      <aside className="fixed inset-y-0 right-0 z-50 w-64 max-w-[80vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[18%] lg:min-w-[190px] lg:max-w-[260px] w-[18%] min-w-[190px] max-w-[260px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-right-3 duration-200">
+      <aside
+        ref={asideRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Continue Watching Drawer"
+        className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[20%] lg:min-w-[210px] lg:max-w-[280px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-right-3 duration-200"
+      >
         <div className="h-full flex flex-col min-h-0 p-2 rounded-xl border border-border/70 bg-card/85 backdrop-blur-xl shadow-xs space-y-1.5">
           {/* Header Bar */}
           <div className="flex items-center justify-between pb-1.5 border-b border-border/50 shrink-0 px-0.5">
@@ -39,18 +115,18 @@ export const DockedContinueWatching: React.FC<DockedContinueWatchingProps> = ({
               <h3 className="text-xs font-semibold text-foreground truncate">Continue Watching</h3>
               <Badge
                 variant="outline"
-                className="text-[9px] h-3.5 px-1 border-amber-500/30 text-amber-400 bg-amber-500/10 font-mono shrink-0"
+                className="text-[10px] h-4 px-1.5 border-amber-500/30 text-amber-400 bg-amber-500/10 font-mono shrink-0"
               >
                 {items.length}
               </Badge>
             </div>
             <button
               onClick={onClose}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer shrink-0"
+              className="p-1.5 min-w-[36px] min-h-[36px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer shrink-0"
               title="Collapse continue watching sidebar"
               aria-label="Close continue watching"
             >
-              <ChevronRight className="w-3.5 h-3.5" />
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
@@ -126,17 +202,17 @@ export const DockedContinueWatching: React.FC<DockedContinueWatchingProps> = ({
                       </div>
                     </div>
 
-                    {/* Dismiss Button on Hover */}
+                    {/* Dismiss Button (Visible on Touch, Large Tap Area) */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onRemove(item);
                       }}
-                      className="w-5 h-5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shrink-0 cursor-pointer"
+                      className="w-8 h-8 sm:w-6 sm:h-6 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-all opacity-80 sm:opacity-0 sm:group-hover:opacity-100 shrink-0 cursor-pointer"
                       title="Dismiss from history"
                       aria-label="Dismiss from history"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                     </button>
                   </div>
                 );

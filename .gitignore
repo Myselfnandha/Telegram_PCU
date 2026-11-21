@@ -38,6 +38,7 @@ backend/data/*.db-shm
 backend/data/*.log*
 backend/data/*.pid
 backend/data/*.json
+backend/data/.*token*
 backend/data/subtitles/*
 !backend/data/subtitles/.gitkeep
 backend/data/bin/*

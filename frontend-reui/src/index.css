@@ -113,7 +113,7 @@
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
+    --muted-foreground: oklch(0.78 0 0);
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
@@ -156,7 +156,7 @@
     --secondary: oklch(0.20 0.04 220);
     --secondary-foreground: oklch(0.92 0.05 160);
     --muted: oklch(0.18 0.025 235);
-    --muted-foreground: oklch(0.68 0.03 195);
+    --muted-foreground: oklch(0.78 0.025 195);
     --accent: oklch(0.24 0.05 175 / 50%);
     --accent-foreground: oklch(0.95 0.04 160);
     --destructive: oklch(0.704 0.191 22.216);
@@ -190,7 +190,7 @@
     --secondary: oklch(0.22 0.05 320);
     --secondary-foreground: oklch(0.94 0.04 350);
     --muted: oklch(0.19 0.03 335);
-    --muted-foreground: oklch(0.70 0.04 320);
+    --muted-foreground: oklch(0.78 0.035 320);
     --accent: oklch(0.26 0.08 18 / 45%);
     --accent-foreground: oklch(0.98 0.03 350);
     --destructive: oklch(0.65 0.24 25);
@@ -255,4 +255,63 @@
   content-visibility: auto;
   contain-intrinsic-size: 100% 48px;
   contain: layout style paint;
+}
+
+/* Continuous Row-Major Cross-Date Panels Flow */
+.cinema-date-panels-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.cinema-date-panel {
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease-in-out;
+}
+
+@media (max-width: 640px) {
+  .cinema-date-panel {
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+}
+
+/* Single Continuous Row-Major Cross-Date Media Grid */
+.cinema-cross-date-grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* Date container: participates in parent grid via display:contents */
+.cinema-date-container {
+  display: contents;
+}
+
+.cinema-cross-date-grid-fit {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+}
+
+.cinema-cross-date-grid-dense {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+}
+
+.cinema-cross-date-grid-large {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+}
+
+.cinema-media-card {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }

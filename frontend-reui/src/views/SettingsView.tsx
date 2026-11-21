@@ -11,6 +11,7 @@ import {
   HardDrive,
   Languages,
   Moon,
+  RotateCcw,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -47,6 +48,8 @@ export const SettingsView: React.FC = () => {
   const [secondaryStatus, setSecondaryStatus] = useState<SecondaryAuthStatus | null>(null);
   const [secondaryModalOpen, setSecondaryModalOpen] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
+  const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
+  const [showResetSettingsConfirm, setShowResetSettingsConfirm] = useState(false);
   const [pinging, setPinging] = useState(false);
   const [pingResult, setPingResult] = useState<number | null>(null);
 
@@ -166,6 +169,26 @@ export const SettingsView: React.FC = () => {
     } finally {
       setClearingCache(false);
     }
+  };
+
+  const handleResetSettings = () => {
+    setShowResetSettingsConfirm(false);
+    setPreferredPlayer('vlc');
+    localStorage.setItem('tg_player_pref', 'vlc');
+    setBufferSizeMb(4);
+    localStorage.setItem('tg_buffer_mb', '4');
+    setNetworkCachingMs(1000);
+    localStorage.setItem('tg_network_caching', '1000');
+    setSubLanguage('eng,tam,hin,all');
+    localStorage.setItem('tg_sub_lang', 'eng,tam,hin,all');
+    setAudioLanguage('tam,eng,hin,tel,mal,kan,all');
+    localStorage.setItem('tg_audio_lang', 'tam,eng,hin,tel,mal,kan,all');
+    setTheme('cyber-emerald');
+    addToast({
+      type: 'success',
+      title: 'Settings Reset',
+      message: 'All client preferences have been restored to default values.',
+    });
   };
 
   const handleTestPing = async () => {
@@ -411,7 +434,7 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Bypass Telegram's per-account rate limits (~1.5–4.5 MB/s) by concurrently downloading alternate chunks across two separate MTProto accounts.
+            Distribute media chunk downloads across two independent MTProto sessions to avoid single-connection bandwidth throttling.
           </p>
 
           {secondaryStatus?.authenticated && secondaryStatus.user ? (
@@ -452,7 +475,7 @@ export const SettingsView: React.FC = () => {
           ) : (
             <div className="space-y-3 pt-1">
               <div className="text-xs text-muted-foreground bg-accent/30 p-3 rounded-lg border border-border leading-relaxed">
-                ⚡ Connect a second Telegram account or paste a Telethon StringSession to achieve <strong>~9–12 MB/s</strong> (up to <strong>48 MB/s</strong> with Premium).
+                ⚡ Connect a second Telegram account to pool chunk downloads across two MTProto sessions. Measured throughput varies by Telegram DC proximity, server allocation, and local network conditions.
               </div>
               <Button
                 variant="default"
@@ -461,7 +484,7 @@ export const SettingsView: React.FC = () => {
                 className="w-full text-xs cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0 shadow-sm"
               >
                 <Zap className="w-3.5 h-3.5 mr-1.5 fill-white" />
-                Connect Secondary Account (2x Boost)
+                Connect Secondary Account (Throughput Pooling)
               </Button>
             </div>
           )}
@@ -614,16 +637,42 @@ export const SettingsView: React.FC = () => {
               <Wifi className={`w-3.5 h-3.5 ${pinging ? 'animate-pulse' : ''}`} />
               <span>{pinging ? 'Testing...' : 'Test Latency'}</span>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearCache}
-              disabled={clearingCache}
-              className="h-8 text-xs gap-1.5 cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-destructive" />
-              <span>{clearingCache ? 'Clearing...' : 'Flush Cache'}</span>
-            </Button>
+            {!showClearCacheConfirm ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowClearCacheConfirm(true)}
+                disabled={clearingCache}
+                className="h-8 text-xs gap-1.5 cursor-pointer text-destructive hover:bg-destructive/10 border-destructive/30"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                <span>{clearingCache ? 'Clearing...' : 'Flush Cache'}</span>
+              </Button>
+            ) : (
+              <div className="flex items-center gap-1 col-span-2 sm:col-span-1">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={async () => {
+                    setShowClearCacheConfirm(false);
+                    await handleClearCache();
+                  }}
+                  disabled={clearingCache}
+                  className="h-8 text-[11px] flex-1 cursor-pointer"
+                >
+                  Confirm Flush
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowClearCacheConfirm(false)}
+                  disabled={clearingCache}
+                  className="h-8 text-[11px] cursor-pointer"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -653,6 +702,52 @@ export const SettingsView: React.FC = () => {
               <div>• Subtitles: <span className="text-emerald-400">Auto-synced .srt tracks side-by-side</span></div>
             </div>
           </div>
+        </div>
+
+        {/* Reset All Settings to Defaults Card */}
+        <div className="p-5 rounded-2xl border border-border/70 bg-card/85 backdrop-blur-md shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-destructive" />
+            <h2 className="text-sm font-semibold text-foreground">Reset Application Settings</h2>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Restore all local playback preferences, stream buffers, language filters, and theme styling back to factory defaults. Your Telegram session and downloaded files will remain intact.
+          </p>
+          {!showResetSettingsConfirm ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowResetSettingsConfirm(true)}
+              className="h-8 text-xs gap-1.5 cursor-pointer text-destructive hover:bg-destructive/10 border-destructive/30"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-destructive" />
+              <span>Reset All Settings to Defaults</span>
+            </Button>
+          ) : (
+            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 space-y-2.5">
+              <p className="text-xs text-foreground font-medium">
+                Are you sure you want to reset all preferences to default values?
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleResetSettings}
+                  className="h-8 text-xs cursor-pointer"
+                >
+                  Confirm Reset
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowResetSettingsConfirm(false)}
+                  className="h-8 text-xs cursor-pointer"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -4,17 +4,17 @@ mod stream;
 mod upload;
 mod download;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use axum::extract::{Json, State};
+use axum::extract::{Json, Request, State};
 use axum::http::StatusCode;
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use base64::engine::general_purpose::STANDARD as BASE64_STD;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use tower_http::cors::CorsLayer;
 
 use crate::safety::AntiBanPacer;
 use crate::session::MultiAccountSessionPool;
@@ -29,6 +29,15 @@ pub struct AppState {
     pub upload_engine: Arc<UploadEngine>,
     pub download_engine: Arc<DownloadEngine>,
     pub request_counter: AtomicUsize,
+    pub auth_token: String,
+    pub chunks_requested: AtomicU64,
+    pub chunks_in_flight: AtomicU64,
+    pub chunks_completed: AtomicU64,
+    pub chunks_cancelled: AtomicU64,
+    pub chunks_timed_out: AtomicU64,
+    pub chunks_failed: AtomicU64,
+    pub bytes_delivered: AtomicU64,
+    pub total_latency_ms: AtomicU64,
 }
 
 #[derive(Serialize)]
@@ -37,6 +46,15 @@ struct HealthResponse {
     engine: &'static str,
     active_accounts: usize,
     rate_limit_mbs: f64,
+    aimd_pacer_rate_mbs: f64,
+    chunks_requested: u64,
+    chunks_in_flight: u64,
+    chunks_completed: u64,
+    chunks_cancelled: u64,
+    chunks_timed_out: u64,
+    chunks_failed: u64,
+    bytes_delivered: u64,
+    avg_chunk_latency_ms: f64,
 }
 
 #[derive(Deserialize)]
@@ -89,12 +107,52 @@ struct ReportFloodRequest {
 }
 
 async fn health_handler(State(state): State<Arc<AppState>>) -> Json<HealthResponse> {
+    let active = state.pool.count().await;
+    let rate = state.pacer.get_throughput_rate();
+    let reqs = state.chunks_requested.load(Ordering::Relaxed);
+    let inflight = state.chunks_in_flight.load(Ordering::Relaxed);
+    let completed = state.chunks_completed.load(Ordering::Relaxed);
+    let cancelled = state.chunks_cancelled.load(Ordering::Relaxed);
+    let timed_out = state.chunks_timed_out.load(Ordering::Relaxed);
+    let failed = state.chunks_failed.load(Ordering::Relaxed);
+    let bytes = state.bytes_delivered.load(Ordering::Relaxed);
+    let total_lat = state.total_latency_ms.load(Ordering::Relaxed);
+    let avg_lat = if completed > 0 {
+        total_lat as f64 / completed as f64
+    } else {
+        0.0
+    };
+
     Json(HealthResponse {
         status: "ok",
         engine: "Rust MTProto (grammers)",
-        active_accounts: state.pool.count().await,
-        rate_limit_mbs: state.pacer.get_throughput_rate(),
+        active_accounts: active,
+        rate_limit_mbs: rate,
+        aimd_pacer_rate_mbs: rate,
+        chunks_requested: reqs,
+        chunks_in_flight: inflight,
+        chunks_completed: completed,
+        chunks_cancelled: cancelled,
+        chunks_timed_out: timed_out,
+        chunks_failed: failed,
+        bytes_delivered: bytes,
+        avg_chunk_latency_ms: (avg_lat * 10.0).round() / 10.0,
     })
+}
+
+struct InFlightGuard<'a> {
+    state: &'a AppState,
+    finished: bool,
+}
+
+impl<'a> Drop for InFlightGuard<'a> {
+    fn drop(&mut self) {
+        self.state.chunks_in_flight.fetch_sub(1, Ordering::Relaxed);
+        if !self.finished {
+            // Task/future was cancelled by client disconnect before completion
+            self.state.chunks_cancelled.fetch_add(1, Ordering::Relaxed);
+        }
+    }
 }
 
 async fn register_session_handler(
@@ -162,7 +220,15 @@ async fn fetch_chunk_handler(
         _ => StreamPriority::Bulk,
     };
 
-    let bytes = state.stream_engine.fetch_chunk(
+    state.chunks_requested.fetch_add(1, Ordering::Relaxed);
+    state.chunks_in_flight.fetch_add(1, Ordering::Relaxed);
+    let mut guard = InFlightGuard {
+        state: &state,
+        finished: false,
+    };
+
+    let t0 = std::time::Instant::now();
+    let res = state.stream_engine.fetch_chunk(
         &client,
         payload.dc_id,
         payload.doc_id,
@@ -172,15 +238,34 @@ async fn fetch_chunk_handler(
         payload.limit,
         prio,
         selected_idx,
-    ).await.map_err(|e| {
-        if e.contains("FLOOD_WAIT") || e.contains("FLOOD_PREMIUM_WAIT") || e.contains("code: 420") {
-            (StatusCode::TOO_MANY_REQUESTS, e)
-        } else if e.contains("FILE_REFERENCE_EXPIRED") {
-            (StatusCode::BAD_REQUEST, e)
-        } else {
-            (StatusCode::BAD_GATEWAY, e)
+    ).await;
+    guard.finished = true;
+
+    let bytes = match res {
+        Ok(b) => {
+            let elapsed_ms = t0.elapsed().as_millis() as u64;
+            state.chunks_completed.fetch_add(1, Ordering::Relaxed);
+            state.bytes_delivered.fetch_add(b.len() as u64, Ordering::Relaxed);
+            state.total_latency_ms.fetch_add(elapsed_ms, Ordering::Relaxed);
+            b
         }
-    })?;
+        Err(e) => {
+            let is_timeout = e.contains("timed out") || e.contains("Timeout");
+            if is_timeout {
+                state.chunks_timed_out.fetch_add(1, Ordering::Relaxed);
+            } else {
+                state.chunks_failed.fetch_add(1, Ordering::Relaxed);
+            }
+            let status = if e.contains("FLOOD_WAIT") || e.contains("FLOOD_PREMIUM_WAIT") || e.contains("code: 420") {
+                StatusCode::TOO_MANY_REQUESTS
+            } else if e.contains("FILE_REFERENCE_EXPIRED") {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::BAD_GATEWAY
+            };
+            return Err((status, e));
+        }
+    };
 
     let resp = Response::builder()
         .status(StatusCode::OK)
@@ -270,9 +355,29 @@ async fn report_flood_handler(
     StatusCode::OK
 }
 
+async fn auth_middleware(
+    State(state): State<Arc<AppState>>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let auth_header = req.headers().get("Authorization").and_then(|h| h.to_str().ok());
+    let expected_bearer = format!("Bearer {}", state.auth_token);
+    if auth_header != Some(&expected_bearer) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(next.run(req).await)
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+
+    let auth_token_raw = std::env::var("TG_RUST_CORE_AUTH_TOKEN")
+        .expect("FATAL: TG_RUST_CORE_AUTH_TOKEN environment variable must be set");
+    let auth_token = auth_token_raw.trim().to_string();
+    if auth_token.is_empty() {
+        panic!("FATAL: TG_RUST_CORE_AUTH_TOKEN cannot be empty");
+    }
 
     let pacer = Arc::new(AntiBanPacer::new(24.0, 48.0));
     let stream_engine = Arc::new(StreamEngine::new(Arc::clone(&pacer), 32));
@@ -286,16 +391,28 @@ async fn main() {
         upload_engine,
         download_engine,
         request_counter: AtomicUsize::new(0),
+        auth_token,
+        chunks_requested: AtomicU64::new(0),
+        chunks_in_flight: AtomicU64::new(0),
+        chunks_completed: AtomicU64::new(0),
+        chunks_cancelled: AtomicU64::new(0),
+        chunks_timed_out: AtomicU64::new(0),
+        chunks_failed: AtomicU64::new(0),
+        bytes_delivered: AtomicU64::new(0),
+        total_latency_ms: AtomicU64::new(0),
     });
+
+    let api_routes = Router::new()
+        .route("/session/register", post(register_session_handler))
+        .route("/stream/chunk", post(fetch_chunk_handler))
+        .route("/stream/prewarm", post(prewarm_handler))
+        .route("/upload/part", post(upload_part_handler))
+        .route("/safety/report_flood", post(report_flood_handler))
+        .route_layer(middleware::from_fn_with_state(Arc::clone(&app_state), auth_middleware));
 
     let app = Router::new()
         .route("/health", get(health_handler))
-        .route("/api/session/register", post(register_session_handler))
-        .route("/api/stream/chunk", post(fetch_chunk_handler))
-        .route("/api/stream/prewarm", post(prewarm_handler))
-        .route("/api/upload/part", post(upload_part_handler))
-        .route("/api/safety/report_flood", post(report_flood_handler))
-        .layer(CorsLayer::permissive())
+        .nest("/api", api_routes)
         .with_state(app_state);
 
     let addr = "127.0.0.1:8099";

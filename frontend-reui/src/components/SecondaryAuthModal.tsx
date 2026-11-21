@@ -300,13 +300,13 @@ export const SecondaryAuthModal: React.FC<SecondaryAuthModalProps> = ({
             </div>
             <div>
               <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
-                Multi-Account Turbo (2x Speed)
+                Multi-Account Throughput Pooling
                 <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/20">
-                  Speed Booster
+                  Dual Session
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Pool two Telegram MTProto accounts to bypass per-account limits and double your throughput.
+                Pool two Telegram MTProto accounts to parallelize chunk downloads and prevent single-connection throttling.
               </DialogDescription>
             </div>
           </div>
@@ -329,7 +329,7 @@ export const SecondaryAuthModal: React.FC<SecondaryAuthModalProps> = ({
               )}
               {status.user.is_premium && (
                 <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                  <Sparkles className="w-3 h-3 mr-1" /> Telegram Premium (Up to 48 MB/s Combined)
+                  <Sparkles className="w-3 h-3 mr-1" /> Telegram Premium (High-Speed Session)
                 </Badge>
               )}
             </div>
@@ -477,7 +477,7 @@ export const SecondaryAuthModal: React.FC<SecondaryAuthModalProps> = ({
                   <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside pl-1 leading-relaxed">
                     <li>Open <strong>Telegram</strong> on your secondary device</li>
                     <li>Go to <strong>Settings → Devices → Link Desktop Device</strong></li>
-                    <li>Scan this code to enable <strong>2x Multi-Account Turbo</strong></li>
+                    <li>Scan this code to enable <strong>Multi-Account Parallel Streaming</strong></li>
                   </ol>
                 </div>
               </div>
@@ -599,7 +599,7 @@ export const SecondaryAuthModal: React.FC<SecondaryAuthModalProps> = ({
                     disabled={loading}
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Paste an authorized Telethon StringSession string from any tool or bot.
+                    Paste an authorized Telethon StringSession string. Session data is transmitted securely over local loopback and is never stored in plaintext environment files.
                   </p>
                 </div>
 

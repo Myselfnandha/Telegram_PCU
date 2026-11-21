@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import type { ChatItem } from '@/types';
 import { api } from '@/services/api';
 import { socketService } from '@/services/socket';
@@ -34,6 +34,78 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'channel' | 'user' | 'group' | 'bot' | 'saved' | 'contact'>('all');
+  const asideRef = useRef<HTMLElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const triggerElementRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // Only engage focus trapping/restoration when rendered as mobile/tablet overlay (< 1024px)
+    const isMobileOverlay = typeof window !== 'undefined' && window.innerWidth < 1024 && Boolean(onClose);
+    if (!isMobileOverlay) return;
+
+    triggerElementRef.current = (document.activeElement && document.activeElement !== document.body)
+      ? (document.activeElement as HTMLElement)
+      : document.querySelector<HTMLElement>('button[aria-label="Open Channels & Chats Sidebar"]');
+
+    // Focus initial element inside drawer
+    const timer = setTimeout(() => {
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+      } else if (asideRef.current) {
+        const firstFocusable = asideRef.current.querySelector<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        firstFocusable?.focus();
+      }
+    }, 50);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose?.();
+        return;
+      }
+
+      if (e.key === 'Tab' && asideRef.current) {
+        const focusable = Array.from(asideRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter((el) => el.offsetParent !== null || el.getClientRects().length > 0);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (!asideRef.current.contains(document.activeElement)) {
+          e.preventDefault();
+          first.focus();
+          return;
+        }
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handleKeyDown);
+      setTimeout(() => {
+        const btn = (triggerElementRef.current && triggerElementRef.current.isConnected)
+          ? triggerElementRef.current
+          : document.querySelector<HTMLElement>('button[aria-label="Open Channels & Chats Sidebar"]');
+        btn?.focus();
+      }, 80);
+    };
+  }, [onClose]);
 
   const loadChats = async (forceRefresh = false) => {
     setLoading(true);
@@ -109,20 +181,26 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
       {/* Mobile/Tablet Backdrop */}
       {onClose && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
-      <aside className="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[18%] lg:min-w-[190px] lg:max-w-[260px] w-[18%] min-w-[190px] max-w-[260px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-left-3 duration-200">
+      <aside
+        ref={asideRef}
+        role={onClose ? 'dialog' : undefined}
+        aria-modal={onClose ? 'true' : undefined}
+        aria-label="Channels & Chats Drawer"
+        className="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[20%] lg:min-w-[210px] lg:max-w-[280px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-left-3 duration-200"
+      >
         <div className="h-full flex flex-col min-h-0 p-2 rounded-xl border border-border/70 bg-card/85 backdrop-blur-xl shadow-xs space-y-1.5">
           {/* Header Bar */}
           <div className="flex items-center justify-between pb-1.5 border-b border-border/50 shrink-0 px-0.5">
             <div className="flex items-center gap-1.5 min-w-0">
               <MessageSquare className="w-3.5 h-3.5 text-primary shrink-0" />
               <h3 className="text-xs font-semibold text-foreground truncate">Channels & Chats</h3>
-              <Badge variant="outline" className="text-[9px] h-3.5 px-1 border-primary/30 text-primary bg-primary/10 font-mono shrink-0">
+              <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-primary/30 text-primary bg-primary/10 font-mono shrink-0">
                 {filteredChats.length}
               </Badge>
             </div>
@@ -132,19 +210,19 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
                 size="sm"
                 onClick={() => loadChats(true)}
                 disabled={loading}
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
                 title="Refresh dialogs"
               >
-                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               {onClose && (
                 <button
                   onClick={onClose}
-                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+                  className="p-1.5 min-w-[36px] min-h-[36px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
                   title="Collapse channels sidebar"
                   aria-label="Close channels sidebar"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -153,6 +231,7 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
           <div className="relative shrink-0">
             <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               placeholder="Search chats & channels..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -175,10 +254,10 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setFilter(tab.id)}
-                className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap transition-colors cursor-pointer ${
+                className={`text-xs px-3 py-1.5 min-h-[36px] rounded-full whitespace-nowrap transition-colors cursor-pointer flex items-center justify-center ${
                   filter === tab.id
-                    ? 'bg-primary text-primary-foreground font-medium'
-                    : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted'
+                    ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                    : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted font-medium'
                 }`}
               >
                 {tab.label}
@@ -213,18 +292,17 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="relative w-6 h-6 rounded-full bg-accent flex items-center justify-center shrink-0 overflow-hidden">
-                        {chat.photo_url ? (
+                      <div className="relative w-7 h-7 rounded-full bg-accent flex items-center justify-center shrink-0 overflow-hidden">
+                        {getChatIcon(chat.type)}
+                        {chat.photo_url && (
                           <img
                             src={chat.photo_url}
                             alt=""
-                            className="w-full h-full object-cover"
+                            className="absolute inset-0 w-full h-full object-cover"
                             onError={(e) => {
                               (e.currentTarget as HTMLElement).style.display = 'none';
                             }}
                           />
-                        ) : (
-                          getChatIcon(chat.type)
                         )}
                       </div>
                       <div className="min-w-0">
@@ -234,12 +312,12 @@ export const DockedChannelPicker: React.FC<DockedChannelPickerProps> = ({
                           </span>
                           {chat.pinned && <Pin className="w-2.5 h-2.5 text-muted-foreground rotate-45 shrink-0" />}
                           {chat.type === 'bot' && (
-                            <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 border-cyan-500/40 text-cyan-400 bg-cyan-500/10 font-semibold tracking-wide">
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-3.5 border-cyan-500/40 text-cyan-400 bg-cyan-500/10 font-semibold tracking-wide">
                               BOT
                             </Badge>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground truncate">
+                        <div className="text-[11px] text-muted-foreground truncate">
                           {chat.username ? `@${chat.username}` : chat.type === 'user' ? 'Direct Chat' : chat.type === 'contact' ? 'Contact' : chat.type.replace('_', ' ')}
                         </div>
                       </div>

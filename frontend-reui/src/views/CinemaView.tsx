@@ -39,6 +39,7 @@ import {
   Hash,
   LayoutGrid,
   List,
+  Loader2,
   Maximize,
   Maximize2,
   MessageSquare,
@@ -134,13 +135,33 @@ export const CinemaView: React.FC = () => {
     return 'dense';
   });
   const [isContinueWatchingOpen, setContinueWatchingOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) return false;
     const saved = localStorage.getItem('cinema_resume_dock_open');
     return saved !== 'false';
   });
   const [isChannelDockOpen, setChannelDockOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) return false;
     const saved = localStorage.getItem('cinema_channel_dock_open');
     return saved !== 'false';
   });
+
+  const isMobileDrawerActive = typeof window !== 'undefined' && window.innerWidth < 1024 && (isChannelDockOpen || isContinueWatchingOpen);
+
+  const handleOpenChannelDock = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setContinueWatchingOpen(false);
+    }
+    setChannelDockOpen(true);
+    localStorage.setItem('cinema_channel_dock_open', 'true');
+  };
+
+  const handleOpenContinueWatching = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setChannelDockOpen(false);
+    }
+    setContinueWatchingOpen(true);
+    localStorage.setItem('cinema_resume_dock_open', 'true');
+  };
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
   const prevDockStateRef = useRef<{ channel: boolean; resume: boolean }>({
     channel: true,
@@ -152,7 +173,22 @@ export const CinemaView: React.FC = () => {
       setIsBrowserFullscreen(Boolean(document.fullscreenElement));
     };
     document.addEventListener('fullscreenchange', handleFsChange);
-    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+
+    let prevWidth = typeof window !== 'undefined' ? window.innerWidth : 1440;
+    const handleResize = () => {
+      const currentWidth = window.innerWidth;
+      if (currentWidth < 1024 && prevWidth >= 1024) {
+        setChannelDockOpen(false);
+        setContinueWatchingOpen(false);
+      }
+      prevWidth = currentWidth;
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const isFitScreen = !isChannelDockOpen && !isContinueWatchingOpen;
@@ -841,6 +877,30 @@ export const CinemaView: React.FC = () => {
     return filteredVideos.slice(0, visibleCount);
   }, [filteredVideos, visibleCount]);
 
+  const flattenedMediaItems = useMemo(() => {
+    const items: Array<{
+      video: CinemaVideo;
+      group: (typeof visibleDateGroups)[0];
+      isFirstOfGroup: boolean;
+      groupIndex: number;
+      indexInGroup: number;
+    }> = [];
+
+    visibleDateGroups.forEach((group, gIdx) => {
+      group.videos.forEach((video, vIdx) => {
+        items.push({
+          video,
+          group,
+          isFirstOfGroup: vIdx === 0,
+          groupIndex: gIdx,
+          indexInGroup: vIdx,
+        });
+      });
+    });
+
+    return items;
+  }, [visibleDateGroups]);
+
   const hasContinueWatching = continueWatching.length > 0;
 
   const watchProgressMap = useMemo(() => {
@@ -942,7 +1002,11 @@ export const CinemaView: React.FC = () => {
   return (
     <div id="cinema-view-container" className="w-full h-full p-2 sm:p-2.5 flex flex-col gap-2 min-h-0 overflow-hidden animate-in fade-in duration-300">
       {/* Top Header & Archive Controls */}
-      <div className="shrink-0 px-2.5 py-1.5 rounded-xl border border-border/60 bg-card/75 backdrop-blur-md shadow-xs flex items-center justify-between gap-2 min-h-[42px] overflow-x-auto scrollbar-none flex-nowrap">
+      <div
+        inert={isMobileDrawerActive ? true : undefined}
+        aria-hidden={isMobileDrawerActive ? true : undefined}
+        className="shrink-0 px-2.5 py-1.5 rounded-xl border border-border/60 bg-card/75 backdrop-blur-md shadow-xs flex items-center justify-between gap-2 min-h-[42px] overflow-x-auto scrollbar-none flex-nowrap"
+      >
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center gap-1.5 shrink-0">
             <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-inner">
@@ -960,11 +1024,10 @@ export const CinemaView: React.FC = () => {
           <button
             onClick={() => {
               if (!isChannelDockOpen) {
-                setChannelDockOpen(true);
-                localStorage.setItem('cinema_channel_dock_open', 'true');
+                handleOpenChannelDock();
               }
             }}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border/80 bg-muted/40 hover:bg-muted/70 hover:border-primary/50 transition-all text-xs font-semibold text-foreground shadow-2xs cursor-pointer max-w-[160px] sm:max-w-[220px] lg:max-w-[280px] group shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-full border border-border/80 bg-muted/40 hover:bg-muted/70 hover:border-primary/50 transition-all text-xs font-semibold text-foreground shadow-2xs cursor-pointer max-w-[160px] sm:max-w-[220px] lg:max-w-[280px] group shrink-0"
             title="Click to view channels & chats"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
@@ -1006,7 +1069,7 @@ export const CinemaView: React.FC = () => {
                     }
                     setFilter(tab.id);
                   }}
-                  className={`text-[11px] px-2.5 py-0.5 rounded-full transition-all shrink-0 select-none cursor-pointer ${
+                  className={`text-xs px-3.5 py-1.5 min-h-[36px] flex items-center justify-center rounded-full transition-all shrink-0 select-none cursor-pointer ${
                     isActive
                       ? 'bg-foreground text-background font-bold shadow-xs'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium'
@@ -1025,57 +1088,57 @@ export const CinemaView: React.FC = () => {
               onClick={() => handleSetViewMode('large')}
               aria-label="Switch to large grid layout"
               aria-pressed={viewMode === 'large'}
-              className={`p-1 rounded-md transition-all cursor-pointer ${
+              className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
                 viewMode === 'large'
                   ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               title="Large Poster Grid"
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
+              <LayoutGrid className="w-4 h-4" />
             </button>
             <button
               onClick={() => handleSetViewMode('dense')}
               aria-label="Switch to dense grid layout"
               aria-pressed={viewMode === 'dense'}
-              className={`p-1 rounded-md transition-all cursor-pointer ${
+              className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
                 viewMode === 'dense'
                   ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               title="Dense Media Grid"
             >
-              <Grid3x3 className="w-3.5 h-3.5" />
+              <Grid3x3 className="w-4 h-4" />
             </button>
             <button
               onClick={() => handleSetViewMode('fit')}
               aria-label="Switch to screen-fit compact grid"
               aria-pressed={viewMode === 'fit'}
-              className={`p-1 rounded-md transition-all cursor-pointer ${
+              className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
                 viewMode === 'fit'
                   ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               title="Fit Screen (Compact View)"
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
+              <LayoutGrid className="w-4 h-4" />
             </button>
             <button
               onClick={() => handleSetViewMode('files')}
               aria-label="Switch to files table layout"
               aria-pressed={viewMode === 'files'}
-              className={`p-1 rounded-md transition-all cursor-pointer ${
+              className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
                 viewMode === 'files'
                   ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               title="Files Explorer Table"
             >
-              <List className="w-3.5 h-3.5" />
+              <List className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex items-center gap-1 px-2 h-7 rounded-lg border border-border bg-background text-xs">
+          <div className="flex items-center gap-1.5 px-2.5 h-9 rounded-lg border border-border bg-background text-xs">
             <ArrowDownUp className="w-3 h-3 text-muted-foreground" />
             <select
               value={sortBy}
@@ -1172,10 +1235,7 @@ export const CinemaView: React.FC = () => {
         ) : (
           <div className="shrink-0 flex items-center h-full">
             <button
-              onClick={() => {
-                setChannelDockOpen(true);
-                localStorage.setItem('cinema_channel_dock_open', 'true');
-              }}
+              onClick={handleOpenChannelDock}
               className="h-28 w-5 sm:w-6 flex flex-col items-center justify-center rounded-r-xl border border-l-0 border-border/70 bg-card/90 hover:bg-card hover:border-primary/50 text-muted-foreground hover:text-foreground shadow-md transition-all cursor-pointer group z-20"
               title="Open Channels & Chats Sidebar"
               aria-label="Open Channels & Chats Sidebar"
@@ -1189,6 +1249,8 @@ export const CinemaView: React.FC = () => {
         <div
           ref={catalogScrollRef}
           id="cinema-files-catalog"
+          inert={isMobileDrawerActive ? true : undefined}
+          aria-hidden={isMobileDrawerActive ? true : undefined}
           className="flex-1 min-w-0 h-full overflow-y-auto space-y-2.5 pr-1 scrollbar-thin"
           onScroll={(e) => {
             const el = e.currentTarget;
@@ -1561,11 +1623,15 @@ export const CinemaView: React.FC = () => {
                                       <Button
                                         size="sm"
                                         variant="secondary"
+                                        disabled={launchingVlcId === `${movieVideo.chat_id}_${movieVideo.message_id}`}
                                         onClick={() => void handlePlayInVlc(movieVideo)}
                                         className="h-6 px-2 text-[10px] gap-1 cursor-pointer text-orange-400 hover:text-orange-300"
                                         title="Play in VLC"
                                       >
-                                        <span>VLC</span>
+                                        {launchingVlcId === `${movieVideo.chat_id}_${movieVideo.message_id}` ? (
+                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                        ) : null}
+                                        <span>{launchingVlcId === `${movieVideo.chat_id}_${movieVideo.message_id}` ? 'Opening...' : 'VLC'}</span>
                                       </Button>
                                       <button
                                         onClick={() => handleCopyStreamLink(movieVideo)}
@@ -1713,11 +1779,15 @@ export const CinemaView: React.FC = () => {
                               <Button
                                 size="sm"
                                 variant="secondary"
+                                disabled={launchingVlcId === `${movieVideo.chat_id}_${movieVideo.message_id}`}
                                 onClick={() => void handlePlayInVlc(movieVideo)}
                                 className="h-7 px-2.5 text-xs gap-1 cursor-pointer text-orange-400 hover:text-orange-300 font-medium"
                                 title="Play highest quality release in VLC"
                               >
-                                <span>VLC</span>
+                                {launchingVlcId === `${movieVideo.chat_id}_${movieVideo.message_id}` ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : null}
+                                <span>{launchingVlcId === `${movieVideo.chat_id}_${movieVideo.message_id}` ? 'Opening...' : 'VLC'}</span>
                               </Button>
                               <button
                                 onClick={() => handleCopyStreamLink(movieVideo)}
@@ -2443,68 +2513,49 @@ export const CinemaView: React.FC = () => {
                 </p>
               </div>
             ) : viewMode !== 'files' ? (
-            <div className="flex flex-wrap items-start gap-4">
-              {visibleDateGroups.map((group) => {
+            <div id="cinema-media-grid" className="w-full cinema-date-panels-flow">
+              {visibleDateGroups.map((group, gIdx) => {
                 const groupSelected = group.videos.length > 0 && group.videos.every((v) => selectedIds.has(v.message_id));
                 const count = group.videos.length;
-                const hasBothDocks = isChannelDockOpen && isContinueWatchingOpen && hasContinueWatching;
-
-                let widthClass = 'w-full sm:w-[280px]';
-                let gridClass = 'grid-cols-1';
-
-                if (viewMode === 'fit') {
-                  if (count === 1) {
-                    widthClass = 'w-full sm:w-[210px]';
-                    gridClass = 'grid-cols-1';
-                  } else if (count === 2) {
-                    widthClass = 'w-full sm:w-[410px]';
-                    gridClass = 'grid-cols-1 sm:grid-cols-2';
-                  } else if (count === 3) {
-                    widthClass = hasBothDocks ? 'w-full sm:w-[410px]' : 'w-full sm:w-[410px] xl:w-[610px]';
-                    gridClass = hasBothDocks ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3';
-                  } else {
-                    widthClass = hasBothDocks ? 'w-full sm:w-[410px] xl:w-[610px]' : 'w-full sm:w-[410px] lg:w-[610px] xl:w-[810px]';
-                    gridClass = hasBothDocks ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
-                  }
-                } else if (viewMode === 'dense') {
-                  if (count === 1) {
-                    widthClass = 'w-full sm:w-[245px]';
-                    gridClass = 'grid-cols-1';
-                  } else if (count === 2) {
-                    widthClass = 'w-full sm:w-[480px]';
-                    gridClass = 'grid-cols-1 sm:grid-cols-2';
-                  } else {
-                    widthClass = hasBothDocks ? 'w-full sm:w-[480px]' : 'w-full sm:w-[480px] xl:w-[715px]';
-                    gridClass = hasBothDocks ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3';
-                  }
-                } else {
-                  if (count === 1) {
-                    widthClass = 'w-full sm:w-[280px]';
-                    gridClass = 'grid-cols-1';
-                  } else if (count === 2) {
-                    widthClass = 'w-full sm:w-[550px]';
-                    gridClass = 'grid-cols-1 sm:grid-cols-2';
-                  } else {
-                    widthClass = hasBothDocks ? 'w-full sm:w-[550px]' : 'w-full sm:w-[550px] 2xl:w-[820px]';
-                    gridClass = hasBothDocks ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3';
-                  }
-                }
+                const panelFlexStyle =
+                  count === 1
+                    ? { flex: '1 1 240px', maxWidth: '360px' }
+                    : count === 2
+                    ? { flex: '2 2 460px', maxWidth: '660px' }
+                    : count === 3
+                    ? { flex: '3 3 660px', maxWidth: '940px' }
+                    : { flex: '1 1 100%', width: '100%' };
 
                 return (
                   <div
                     key={group.key}
-                    className={`rounded-2xl border border-border/70 bg-card/60 backdrop-blur-md p-3.5 shadow-sm transition-all hover:border-border flex flex-col gap-3 shrink-0 ${widthClass}`}
+                    data-date-container={group.key}
+                    data-date-count={group.videos.length}
+                    style={panelFlexStyle}
+                    className="cinema-date-panel rounded-2xl border border-border/60 bg-card/60 backdrop-blur-md overflow-hidden shadow-sm flex flex-col"
                   >
-                    <div className="flex items-center justify-between pb-2 border-b border-border/50 gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                        <span className="text-xs font-bold text-foreground whitespace-nowrap">
+                    {/* Date Container Header */}
+                    <div
+                      data-date-marker={group.key}
+                      className="cinema-date-header px-4 py-2.5 bg-gradient-to-r from-emerald-950/60 via-card/80 to-card/60 border-b border-emerald-500/25 flex items-center justify-between gap-2 select-none"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 shadow-xs shadow-emerald-400/50" />
+                        <span className="text-sm font-bold text-foreground truncate" title={group.label}>
                           {group.label}
                         </span>
-                        <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/30 text-primary font-semibold shrink-0">
-                          {count} {count === 1 ? 'file' : 'files'}
+                        {group.subLabel && (
+                          <span className="text-xs text-muted-foreground/70 font-mono hidden sm:inline">
+                            {group.subLabel}
+                          </span>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] h-5 px-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold shrink-0"
+                        >
+                          {group.videos.length} {group.videos.length === 1 ? 'file' : 'files'}
                         </Badge>
-                        <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">
+                        <span className="text-xs text-muted-foreground font-mono truncate hidden sm:inline" title={formatBytes(group.totalSize)}>
                           • {formatBytes(group.totalSize)}
                         </span>
                       </div>
@@ -2512,11 +2563,13 @@ export const CinemaView: React.FC = () => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           const vIds = group.videos.map((v) => v.message_id);
+                          const allSel = vIds.every((id) => selectedIds.has(id));
                           setSelectedIds((prev) => {
                             const next = new Set(prev);
-                            if (groupSelected) {
+                            if (allSel) {
                               vIds.forEach((id) => next.delete(id));
                             } else {
                               vIds.forEach((id) => next.add(id));
@@ -2524,17 +2577,30 @@ export const CinemaView: React.FC = () => {
                             return next;
                           });
                         }}
-                        className={`h-5 px-1.5 text-[9px] gap-1 cursor-pointer font-medium shrink-0 ${
-                          groupSelected ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                        title={groupSelected ? `Deselect all in ${group.label}` : `Select all in ${group.label}`}
+                        aria-label={groupSelected ? `Deselect all ${group.videos.length} files in ${group.label}` : `Select all ${group.videos.length} files in ${group.label}`}
+                        className={`h-6 px-2 text-[10px] font-semibold gap-1.5 shrink-0 rounded-lg cursor-pointer transition-colors ${
+                          groupSelected
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted border border-border/50'
                         }`}
                       >
-                        <CheckSquare className="w-2.5 h-2.5" />
+                        <CheckSquare className="w-3.5 h-3.5 shrink-0" />
                         <span>{groupSelected ? 'Deselect' : 'Select'}</span>
                       </Button>
                     </div>
 
-                    <div className={`grid ${gridClass} gap-2.5`}>
-                      {group.videos.map((video) => {
+                    {/* Cards Grid Inside Date Container */}
+                    <div
+                      className={`p-3 ${
+                        viewMode === 'fit'
+                          ? 'cinema-cross-date-grid cinema-cross-date-grid-fit'
+                          : viewMode === 'large'
+                          ? 'cinema-cross-date-grid cinema-cross-date-grid-large'
+                          : 'cinema-cross-date-grid cinema-cross-date-grid-dense'
+                      }`}
+                    >
+                      {group.videos.map((video, vIdx) => {
                         const media = parseMediaInfo(video.filename);
                         const thumbUrl = `/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/thumb`;
                         const isSelected = selectedIds.has(video.message_id);
@@ -2556,210 +2622,221 @@ export const CinemaView: React.FC = () => {
                         return (
                           <div
                             key={`${video.chat_id}_${video.message_id}`}
-                            style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
-                            className={`group relative rounded-2xl border bg-card/85 backdrop-blur-md overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col justify-between ${
+                            data-date-group={group.key}
+                            style={{ contentVisibility: 'auto', containIntrinsicSize: '0 320px' }}
+                            className={`group relative rounded-2xl border bg-card/85 backdrop-blur-md overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col justify-between cinema-media-card ${
                               isSelected
                                 ? 'border-primary ring-2 ring-primary/40 bg-card'
                                 : 'border-border/70 hover:border-primary/50'
                             }`}
                           >
+                    <div
+                      className="relative aspect-video bg-zinc-950/90 overflow-hidden flex items-center justify-center cursor-pointer shrink-0"
+                      onClick={() => void handlePlayInVlc(video)}
+                    >
+                      <img
+                        src={thumbUrl}
+                        alt={`Poster frame for ${media.cleanTitle}`}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 z-10"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = 'none';
+                        }}
+                      />
+
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 pointer-events-none z-0">
+                        <Clapperboard className="w-8 h-8 mb-2 text-primary/30" />
+                        <span className="text-xs font-semibold text-zinc-300 line-clamp-2 px-2">
+                          {media.cleanTitle}
+                        </span>
+                      </div>
+
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none z-10" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20" />
+
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-40">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {resolution && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-500/90 text-white shadow-xs backdrop-blur-md tracking-wider">
+                              {resolution}
+                            </span>
+                          )}
+                          {ext && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-black/60 text-zinc-300 border border-white/10 backdrop-blur-md">
+                              {ext}
+                            </span>
+                          )}
+                          {media.audio && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-black/60 text-emerald-400 border border-emerald-500/30 backdrop-blur-md">
+                              {media.audio}
+                            </span>
+                          )}
+                          {media.year && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-black/60 text-white/90 border border-white/10 backdrop-blur-md">
+                              {media.year}
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectVideo(video.message_id);
+                          }}
+                          aria-label={isSelected ? `Deselect ${media.cleanTitle}` : `Select ${media.cleanTitle} for playlist`}
+                          aria-pressed={isSelected}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer backdrop-blur-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none pointer-events-auto ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground shadow-md ring-2 ring-primary/50'
+                              : 'bg-black/60 text-white/70 border border-white/20 hover:scale-105 hover:text-white'
+                          }`}
+                          title={isSelected ? 'Deselect video' : 'Select for playlist'}
+                        >
+                          {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : null}
+                        </button>
+                      </div>
+
+                      <div className="absolute bottom-2.5 left-2.5 right-2.5 text-[10px] flex items-center justify-between z-20">
+                        <span className="font-mono text-zinc-300 font-medium bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-md border border-white/10">
+                          {formatBytes(fileSize)}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded-md font-mono font-medium bg-black/75 text-white backdrop-blur-md border border-white/10">
+                          {formatDuration(video.duration)}
+                        </span>
+                      </div>
+
+                      {(() => {
+                        const cardProg = watchProgressMap.get(`${video.chat_id}_${video.message_id}`);
+                        const cardPct = cardProg ? (cardProg.percent !== undefined ? cardProg.percent : (cardProg.progress_percent !== undefined ? Math.round(cardProg.progress_percent) : 0)) : 0;
+                        if (cardPct <= 0) return null;
+                        const progressColor = cardPct >= 80 ? 'bg-emerald-400' : cardPct >= 40 ? 'bg-amber-400' : 'bg-sky-400';
+                        return (
+                          <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/70 z-20 overflow-hidden">
                             <div
-                              className="relative aspect-video bg-zinc-950/90 overflow-hidden flex items-center justify-center cursor-pointer"
-                              onClick={() => void handlePlayInVlc(video)}
-                            >
-                              <img
-                                src={thumbUrl}
-                                alt={`Poster frame for ${media.cleanTitle}`}
-                                loading="lazy"
-                                decoding="async"
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLElement).style.display = 'none';
-                                }}
-                              />
-
-                              <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 pointer-events-none -z-0">
-                                <Clapperboard className="w-8 h-8 mb-2 text-primary/30" />
-                                <span className="text-[11px] font-semibold text-zinc-400 line-clamp-2 px-2">
-                                  {media.cleanTitle}
-                                </span>
-                              </div>
-
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none z-10" />
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20" />
-
-                              <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-40">
-                                <div className="flex items-center gap-1 flex-wrap">
-                                  {resolution && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/90 text-white shadow-xs backdrop-blur-md tracking-wider">
-                                      {resolution}
-                                    </span>
-                                  )}
-                                  {ext && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-black/60 text-zinc-300 border border-white/10 backdrop-blur-md">
-                                      {ext}
-                                    </span>
-                                  )}
-                                  {media.audio && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase bg-black/60 text-emerald-400 border border-emerald-500/30 backdrop-blur-md">
-                                      {media.audio}
-                                    </span>
-                                  )}
-                                  {media.year && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/60 text-white/90 border border-white/10 backdrop-blur-md">
-                                      {media.year}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleSelectVideo(video.message_id);
-                                  }}
-                                  aria-label={isSelected ? `Deselect ${media.cleanTitle}` : `Select ${media.cleanTitle} for playlist`}
-                                  aria-pressed={isSelected}
-                                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer backdrop-blur-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none pointer-events-auto ${
-                                    isSelected
-                                      ? 'bg-primary text-primary-foreground shadow-md ring-2 ring-primary/50'
-                                      : 'bg-black/60 text-white/70 border border-white/20 hover:scale-105 hover:text-white'
-                                  }`}
-                                  title={isSelected ? 'Deselect video' : 'Select for playlist'}
-                                >
-                                  {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : null}
-                                </button>
-                              </div>
-
-                              <div className="absolute bottom-2.5 left-2.5 right-2.5 text-[10px] flex items-center justify-between z-20">
-                                <span className="font-mono text-zinc-300 font-medium bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-md border border-white/10">
-                                  {formatBytes(fileSize)}
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded-md font-mono font-medium bg-black/75 text-white backdrop-blur-md border border-white/10">
-                                  {formatDuration(video.duration)}
-                                </span>
-                              </div>
-
-                              {(() => {
-                                const cardProg = watchProgressMap.get(`${video.chat_id}_${video.message_id}`);
-                                const cardPct = cardProg ? (cardProg.percent !== undefined ? cardProg.percent : (cardProg.progress_percent !== undefined ? Math.round(cardProg.progress_percent) : 0)) : 0;
-                                if (cardPct <= 0) return null;
-                                const progressColor = cardPct >= 80 ? 'bg-emerald-400' : cardPct >= 40 ? 'bg-amber-400' : 'bg-sky-400';
-                                return (
-                                  <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/70 z-20 overflow-hidden">
-                                    <div
-                                      className={`${progressColor} h-full rounded-r transition-all shadow-xs`}
-                                      style={{ width: `${Math.max(5, cardPct)}%` }}
-                                      title={`Watched: ${cardPct}%${cardProg?.last_chunk_index ? ` • Chunk #${cardProg.last_chunk_index}` : ''}`}
-                                    />
-                                  </div>
-                                );
-                              })()}
-                            </div>
-
-                            <div className={`${viewMode === 'fit' ? 'p-2 space-y-1.5' : viewMode === 'dense' ? 'p-2.5 space-y-2' : 'p-3.5 space-y-2.5'} flex-1 flex flex-col justify-between`}>
-                              <div>
-                                <div
-                                  className={`${viewMode === 'fit' ? 'text-[11px]' : 'text-xs'} font-semibold text-foreground line-clamp-1 leading-snug hover:text-primary transition-colors cursor-pointer`}
-                                  title={video.filename}
-                                  onClick={() => void handlePlayInVlc(video)}
-                                >
-                                  {media.cleanTitle}
-                                </div>
-
-                                <div className={`flex items-center ${viewMode === 'fit' ? 'gap-1 mt-0.5 text-[10px]' : 'gap-1.5 mt-1 text-[11px]'} text-muted-foreground flex-wrap`}>
-                                  {media.seasonEpisode && (
-                                    <Badge variant="outline" className={`${viewMode === 'fit' ? 'text-[8px] px-1 h-3.5' : 'text-[9px] px-1.5 h-4'} border-primary/30 text-primary bg-primary/5 font-semibold`}>
-                                      {media.seasonEpisode}
-                                    </Badge>
-                                  )}
-                                  {video.date ? (
-                                    <span className={`${viewMode === 'fit' ? 'text-[9px] px-1 py-0' : 'text-[10px] px-1.5 py-0.5'} text-muted-foreground/80 bg-muted/40 font-mono flex items-center gap-1 rounded`}>
-                                      <Calendar className="w-2.5 h-2.5" />
-                                      {formatMediaDate(video.date)}
-                                    </span>
-                                  ) : null}
-                                  <span className={`${viewMode === 'fit' ? 'text-[9px]' : 'text-[10px]'} text-muted-foreground/60 truncate font-mono max-w-full`} title={video.filename}>
-                                    {video.filename}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className={`flex items-center gap-1.5 ${viewMode === 'fit' ? 'pt-1.5' : 'pt-2'} border-t border-border/40`}>
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => void handlePlayInVlc(video)}
-                                  aria-label={`Play ${media.cleanTitle} in desktop VLC`}
-                                  className={`${viewMode === 'fit' ? 'h-6.5 text-[11px] px-2' : 'h-7.5 sm:h-8 text-xs'} flex-1 gap-1.5 font-medium bg-primary text-primary-foreground hover:opacity-90 cursor-pointer shadow-xs`}
-                                  title="Play in Desktop VLC (Default)"
-                                >
-                                  <PlayCircle className="w-3.5 h-3.5 fill-current" />
-                                  <span>VLC</span>
-                                </Button>
-
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => handleStartPlay(video, true)}
-                                  aria-label={`Stream ${media.cleanTitle} in browser`}
-                                  className={`${viewMode === 'fit' ? 'h-6.5 px-2 text-[11px]' : 'h-7.5 sm:h-8 px-2.5 text-xs'} font-medium gap-1 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 transition-colors cursor-pointer`}
-                                  title="Stream in Browser Player"
-                                >
-                                  <Play className="w-3.5 h-3.5" />
-                                  <span>Stream</span>
-                                </Button>
-
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      aria-label="More media options"
-                                      className={`${viewMode === 'fit' ? 'h-6.5 w-6.5' : 'h-7.5 sm:h-8 w-7.5 sm:w-8'} p-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer`}
-                                    >
-                                      <MoreVertical className="w-4 h-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-56 bg-card/95 border-border shadow-xl backdrop-blur-md">
-                                    <DropdownMenuItem
-                                      onClick={() => setQrModalVideo(video)}
-                                      className="cursor-pointer gap-2 py-2 text-xs"
-                                    >
-                                      <QrCode className="w-4 h-4 text-amber-400 shrink-0" />
-                                      <span>Mobile / TV (QR Code)</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => void handleTriggerFdm(video)}
-                                      className="cursor-pointer gap-2 py-2 text-xs"
-                                    >
-                                      <ExternalLink className="w-4 h-4 text-emerald-400 shrink-0" />
-                                      <span>Send to FDM Downloader</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild className="cursor-pointer gap-2 py-2 text-xs">
-                                      <a
-                                        href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
-                                        download={video.filename}
-                                        className="flex items-center gap-2 w-full text-foreground"
-                                      >
-                                        <Download className="w-4 h-4 text-sky-400 shrink-0" />
-                                        <span>Direct File Download</span>
-                                      </a>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator className="bg-border/50" />
-                                    <DropdownMenuItem
-                                      onClick={() => handleCopyStreamLink(video)}
-                                      className="cursor-pointer gap-2 py-2 text-xs"
-                                    >
-                                      <Copy className="w-4 h-4 text-muted-foreground shrink-0" />
-                                      <span>Copy Direct Stream URL</span>
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </div>
+                              className={`${progressColor} h-full rounded-r transition-all shadow-xs`}
+                              style={{ width: `${Math.max(5, cardPct)}%` }}
+                              title={`Watched: ${cardPct}%${cardProg?.last_chunk_index ? ` • Chunk #${cardProg.last_chunk_index}` : ''}`}
+                            />
                           </div>
                         );
-                      })}
+                      })()}
+                    </div>
+
+                    <div className={`${viewMode === 'fit' ? 'p-2 space-y-1.5' : viewMode === 'dense' ? 'p-2.5 space-y-2' : 'p-3.5 space-y-2.5'} flex-1 flex flex-col justify-between`}>
+                      <div>
+                        <div
+                          className={`${viewMode === 'fit' ? 'text-xs' : 'text-sm sm:text-[13px]'} font-semibold text-foreground line-clamp-1 leading-snug hover:text-primary transition-colors cursor-pointer`}
+                          title={video.filename}
+                          onClick={() => void handlePlayInVlc(video)}
+                        >
+                          {media.cleanTitle}
+                        </div>
+
+                        <div className={`flex items-center ${viewMode === 'fit' ? 'gap-1 mt-0.5 text-[11px]' : 'gap-1.5 mt-1 text-xs'} text-muted-foreground flex-wrap`}>
+                          {media.seasonEpisode && (
+                            <Badge variant="outline" className={`${viewMode === 'fit' ? 'text-[10px] px-1 h-3.5' : 'text-[11px] px-1.5 h-4'} border-primary/30 text-primary bg-primary/5 font-semibold`}>
+                              {media.seasonEpisode}
+                            </Badge>
+                          )}
+                          {video.date ? (
+                            <span className={`${viewMode === 'fit' ? 'text-[10px] px-1.5 py-0.5' : 'text-[11px] px-1.5 py-0.5'} text-muted-foreground/80 bg-muted/40 font-mono flex items-center gap-1 rounded`}>
+                              <Calendar className="w-3 h-3" />
+                              {formatMediaDate(video.date)}
+                            </span>
+                          ) : null}
+                          <span className={`${viewMode === 'fit' ? 'text-[10px]' : 'text-[11px]'} text-muted-foreground/70 truncate font-mono max-w-full`} title={video.filename}>
+                            {video.filename}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className={`flex items-center gap-1.5 ${viewMode === 'fit' ? 'pt-1.5' : 'pt-2'} border-t border-border/40`}>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => void handlePlayInVlc(video)}
+                          disabled={launchingVlcId === `${video.chat_id}_${video.message_id}`}
+                          aria-label={`Play ${media.cleanTitle} in desktop VLC`}
+                          className={`${viewMode === 'fit' ? 'h-6.5 text-[11px] px-2' : 'h-7.5 sm:h-8 text-xs'} flex-1 gap-1.5 font-medium bg-primary text-primary-foreground hover:opacity-90 cursor-pointer shadow-xs`}
+                          title="Play in Desktop VLC (Default)"
+                        >
+                          {launchingVlcId === `${video.chat_id}_${video.message_id}` ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Launching...</span>
+                            </>
+                          ) : (
+                            <>
+                              <PlayCircle className="w-3.5 h-3.5 fill-current" />
+                              <span>VLC</span>
+                            </>
+                          )}
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleStartPlay(video, true)}
+                          aria-label={`Stream ${media.cleanTitle} in browser`}
+                          className={`${viewMode === 'fit' ? 'h-6.5 px-2 text-[11px]' : 'h-7.5 sm:h-8 px-2.5 text-xs'} font-medium gap-1 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 transition-colors cursor-pointer`}
+                          title="Stream in Browser Player"
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                          <span>Stream</span>
+                        </Button>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              aria-label="More media options"
+                              className={`${viewMode === 'fit' ? 'h-6.5 w-6.5' : 'h-7.5 sm:h-8 w-7.5 sm:w-8'} p-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer`}
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56 bg-card/95 border-border shadow-xl backdrop-blur-md">
+                            <DropdownMenuItem
+                              onClick={() => setQrModalVideo(video)}
+                              className="cursor-pointer gap-2 py-2 text-xs"
+                            >
+                              <QrCode className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span>Mobile / TV (QR Code)</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => void handleTriggerFdm(video)}
+                              className="cursor-pointer gap-2 py-2 text-xs"
+                            >
+                              <ExternalLink className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span>Send to FDM Downloader</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild className="cursor-pointer gap-2 py-2 text-xs">
+                              <a
+                                href={`/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`}
+                                download={video.filename}
+                                className="flex items-center gap-2 w-full text-foreground"
+                              >
+                                <Download className="w-4 h-4 text-sky-400 shrink-0" />
+                                <span>Direct File Download</span>
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-border/50" />
+                            <DropdownMenuItem
+                              onClick={() => handleCopyStreamLink(video)}
+                              className="cursor-pointer gap-2 py-2 text-xs"
+                            >
+                              <Copy className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <span>Copy Direct Stream URL</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                        </div>
+                      );
+                    })}
                     </div>
                   </div>
                 );
@@ -2940,12 +3017,17 @@ export const CinemaView: React.FC = () => {
                                     <Button
                                       size="sm"
                                       variant="secondary"
+                                      disabled={launchingVlcId === `${video.chat_id}_${video.message_id}`}
                                       onClick={() => void handlePlayInVlc(video)}
                                       className="h-6 px-1.5 text-[11px] font-medium gap-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 cursor-pointer"
                                       title="Play in Desktop VLC"
                                     >
-                                      <PlayCircle className="w-2.5 h-2.5" />
-                                      <span>VLC</span>
+                                      {launchingVlcId === `${video.chat_id}_${video.message_id}` ? (
+                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                      ) : (
+                                        <PlayCircle className="w-2.5 h-2.5" />
+                                      )}
+                                      <span>{launchingVlcId === `${video.chat_id}_${video.message_id}` ? '...' : 'VLC'}</span>
                                     </Button>
 
                                     <DropdownMenu>
@@ -3089,10 +3171,7 @@ export const CinemaView: React.FC = () => {
         ) : hasContinueWatching ? (
           <div className="shrink-0 flex items-center h-full">
             <button
-              onClick={() => {
-                setContinueWatchingOpen(true);
-                localStorage.setItem('cinema_resume_dock_open', 'true');
-              }}
+              onClick={handleOpenContinueWatching}
               className="h-28 w-5 sm:w-6 flex flex-col items-center justify-center rounded-l-xl border border-r-0 border-border/70 bg-card/90 hover:bg-card hover:border-amber-500/50 text-muted-foreground hover:text-foreground shadow-md transition-all cursor-pointer group z-20"
               title={`Open Continue Watching (${continueWatching.length})`}
               aria-label="Open Continue Watching"

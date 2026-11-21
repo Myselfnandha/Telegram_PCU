@@ -4,6 +4,7 @@ import base64
 import logging
 import asyncio
 import subprocess
+import secrets
 from typing import Optional, Union, Dict, Any, List
 from pathlib import Path
 import httpx
@@ -11,6 +12,31 @@ import httpx
 from app.config import ROOT_DIR, API_ID, SESSION_STRING, SESSION_STRING_2
 
 logger = logging.getLogger("rust_bridge")
+
+def _get_or_create_auth_token() -> str:
+    env_token = os.getenv("TG_RUST_CORE_AUTH_TOKEN", "").strip()
+    if env_token:
+        return env_token
+    token_file = ROOT_DIR / "backend" / "data" / ".rust_core_token"
+    try:
+        if token_file.exists():
+            content = token_file.read_text().strip()
+            if content:
+                os.environ["TG_RUST_CORE_AUTH_TOKEN"] = content
+                return content
+    except Exception:
+        pass
+    new_token = secrets.token_hex(32)
+    try:
+        token_file.parent.mkdir(parents=True, exist_ok=True)
+        token_file.write_text(new_token)
+        os.chmod(token_file, 0o600)
+    except Exception:
+        pass
+    os.environ["TG_RUST_CORE_AUTH_TOKEN"] = new_token
+    return new_token
+
+_RUST_CORE_AUTH_TOKEN = _get_or_create_auth_token()
 
 class RustBridge:
     def __init__(self, base_url: str = "http://127.0.0.1:8099"):
@@ -21,6 +47,40 @@ class RustBridge:
         self._binary_path: Optional[Path] = None
         self._consecutive_failures: int = 0
         self._circuit_broken_until: float = 0.0
+        self._log_file = None
+        self.chunks_requested: int = 0
+        self.chunks_completed: int = 0
+        self.chunks_cancelled: int = 0
+        self.chunks_timed_out: int = 0
+        self.chunks_failed: int = 0
+        self.bytes_delivered: int = 0
+        self.python_fallback_chunks: int = 0
+        self.last_latency_ms: float = 0.0
+        self.total_latency_ms: float = 0.0
+
+    @property
+    def chunks_served(self) -> int:
+        return self.chunks_completed
+
+    @chunks_served.setter
+    def chunks_served(self, val: int):
+        self.chunks_completed = val
+
+    def get_telemetry(self) -> Dict[str, Any]:
+        avg_lat = (self.total_latency_ms / self.chunks_completed) if self.chunks_completed > 0 else 0.0
+        return {
+            "chunks_requested": self.chunks_requested,
+            "chunks_completed": self.chunks_completed,
+            "chunks_served": self.chunks_completed,
+            "chunks_cancelled": self.chunks_cancelled,
+            "chunks_timed_out": self.chunks_timed_out,
+            "chunks_failed": self.chunks_failed,
+            "bytes_delivered": self.bytes_delivered,
+            "bytes_delivered_mb": round(self.bytes_delivered / (1024 * 1024), 2),
+            "python_fallback_chunks": self.python_fallback_chunks,
+            "avg_latency_ms": round(avg_lat, 1),
+            "last_latency_ms": round(self.last_latency_ms, 1),
+        }
 
     def trip_circuit(self, cooldown_seconds: float = 30.0):
         self._circuit_broken_until = max(self._circuit_broken_until, time.time() + cooldown_seconds)
@@ -31,8 +91,10 @@ class RustBridge:
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
+            headers = {"Authorization": f"Bearer {_RUST_CORE_AUTH_TOKEN}"}
             self._client = httpx.AsyncClient(
                 base_url=self.base_url,
+                headers=headers,
                 timeout=httpx.Timeout(45.0, connect=5.0),
                 limits=httpx.Limits(max_keepalive_connections=64, max_connections=128)
             )
@@ -98,10 +160,23 @@ class RustBridge:
 
             self._binary_path = path
             try:
+                env = os.environ.copy()
+                env["TG_RUST_CORE_AUTH_TOKEN"] = _RUST_CORE_AUTH_TOKEN
+                log_path = ROOT_DIR / "backend" / "data" / "rust_core.log"
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                if self._log_file and not self._log_file.closed:
+                    try:
+                        self._log_file.close()
+                    except Exception:
+                        pass
+                self._log_file = open(log_path, "a")
+
                 self._process = subprocess.Popen(
                     [str(path)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    env=env,
+                    stdout=self._log_file,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
                     close_fds=True
                 )
             except Exception as e:
@@ -160,12 +235,50 @@ class RustBridge:
         self._registering_sessions = True
         try:
             reg_any = False
-            if SESSION_STRING and API_ID:
-                ok1 = await self.register_session(SESSION_STRING, API_ID, account_idx=0)
+            s1 = (
+                os.getenv("TG_SESSION_STRING", "").strip()
+                or os.getenv("SESSION_STRING", "").strip()
+                or SESSION_STRING
+            )
+            if not s1:
+                try:
+                    from app.telegram_client import TelegramClientManager
+                    if await TelegramClientManager.is_authorized():
+                        tg_client = await TelegramClientManager.get_client()
+                        if tg_client and tg_client.is_connected() and hasattr(tg_client, "session"):
+                            from telethon.sessions import StringSession
+                            s1 = StringSession.save(tg_client.session)
+                except Exception as e:
+                    logger.debug(f"Could not extract StringSession from primary Telethon client: {e}")
+
+            if s1 and API_ID:
+                ok1 = await self.register_session(s1, API_ID, account_idx=0)
                 reg_any = reg_any or ok1
-            if SESSION_STRING_2 and API_ID:
-                ok2 = await self.register_session(SESSION_STRING_2, API_ID, account_idx=1)
+                if ok1:
+                    logger.info("Successfully registered primary Telegram session with Rust core")
+
+            s2 = (
+                os.getenv("TG_SESSION_STRING_2", "").strip()
+                or os.getenv("SESSION_STRING_2", "").strip()
+                or SESSION_STRING_2
+            )
+            if not s2:
+                try:
+                    from app.telegram_client import TelegramClientManager
+                    if await TelegramClientManager.is_secondary_authorized():
+                        tg_client2 = await TelegramClientManager.get_secondary_client()
+                        if tg_client2 and tg_client2.is_connected() and hasattr(tg_client2, "session"):
+                            from telethon.sessions import StringSession
+                            s2 = StringSession.save(tg_client2.session)
+                except Exception as e:
+                    logger.debug(f"Could not extract StringSession from secondary Telethon client: {e}")
+
+            if s2 and API_ID:
+                ok2 = await self.register_session(s2, API_ID, account_idx=1)
                 reg_any = reg_any or ok2
+                if ok2:
+                    logger.info("Successfully registered secondary Telegram session with Rust core")
+
             return reg_any
         finally:
             self._registering_sessions = False
@@ -202,13 +315,22 @@ class RustBridge:
         if account_idx is not None:
             payload["account_idx"] = account_idx
 
+        self.chunks_requested += 1
+        t0 = time.time()
         try:
             client = self._get_client()
             req_timeout = 30.0
             resp = await client.post("/api/stream/chunk", json=payload, timeout=req_timeout)
             if resp.status_code == 200:
                 self._consecutive_failures = 0
-                return resp.content
+                data = resp.content
+                duration_ms = (time.time() - t0) * 1000.0
+                self.chunks_completed += 1
+                self.bytes_delivered += len(data)
+                self.last_latency_ms = duration_ms
+                self.total_latency_ms += duration_ms
+                return data
+            self.chunks_failed += 1
             err_text = resp.text
             if "FLOOD" in err_text or resp.status_code == 429:
                 import re
@@ -228,7 +350,18 @@ class RustBridge:
                         logger.warning(f"Rust bridge circuit tripped for 3s due to {self._consecutive_failures} consecutive errors ({resp.status_code})")
                         asyncio.create_task(self.ensure_sessions_registered())
             logger.warning(f"Rust stream_chunk failed: {resp.status_code} {err_text}")
+        except asyncio.CancelledError:
+            self.chunks_cancelled += 1
+            raise
+        except (httpx.TimeoutException, asyncio.TimeoutError):
+            self.chunks_timed_out += 1
+            now = time.monotonic()
+            self._consecutive_failures = getattr(self, "_consecutive_failures", 0) + 1
+            if self._consecutive_failures >= 3 and now >= getattr(self, "_circuit_broken_until", 0.0):
+                self.trip_circuit(3.0)
+            logger.warning("Rust stream_chunk timeout")
         except Exception as e:
+            self.chunks_failed += 1
             if "FILE_REFERENCE_EXPIRED" in str(e):
                 raise
             now = time.monotonic()

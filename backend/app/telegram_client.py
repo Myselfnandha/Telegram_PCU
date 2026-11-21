@@ -407,8 +407,19 @@ class TelegramClientManager:
         Retrieves the singleton user Telethon client instance.
         If no user session is authorized but BOT_TOKEN is present, falls back to bot client.
         """
+        running_loop = asyncio.get_running_loop()
+        if cls._client is not None and getattr(cls._client, "loop", None) is not running_loop:
+            logger.info("Active event loop changed; rebinding primary Telethon client...")
+            cls._client = None
+            cls._is_ready = False
+            cls._cached_me = None
+
         if cls._client is None or not cls._client.is_connected():
             async with cls._lock:
+                if cls._client is not None and getattr(cls._client, "loop", None) is not running_loop:
+                    cls._client = None
+                    cls._is_ready = False
+                    cls._cached_me = None
                 if cls._client is None:
                     if not API_ID or not API_HASH:
                         logger.warning("TG_API_ID or TG_API_HASH is not set. Telethon client cannot start.")
@@ -421,6 +432,7 @@ class TelegramClientManager:
                         session_target,
                         API_ID,
                         API_HASH,
+                        loop=running_loop,
                         flood_sleep_threshold=0,  # Never sleep silently inside Telethon; raise FloodWaitError so RateGovernor coordinates all streams cleanly without stalls
                         connection_retries=None,  # Infinite retries so network drops never permanently kill client
                         retry_delay=3,
@@ -443,6 +455,7 @@ class TelegramClientManager:
                             StringSession(),
                             API_ID,
                             API_HASH,
+                            loop=running_loop,
                             flood_sleep_threshold=0,
                             connection_retries=None,
                             retry_delay=3,
@@ -470,6 +483,7 @@ class TelegramClientManager:
                             StringSession(),
                             API_ID,
                             API_HASH,
+                            loop=running_loop,
                             flood_sleep_threshold=0,
                             connection_retries=None,
                             retry_delay=3,
@@ -808,6 +822,13 @@ class TelegramClientManager:
 
     @classmethod
     async def get_secondary_client(cls) -> Optional[TelegramClient]:
+        running_loop = asyncio.get_running_loop()
+        if cls._secondary_client is not None and getattr(cls._secondary_client, "loop", None) is not running_loop:
+            logger.info("Active event loop changed; rebinding secondary Telethon client...")
+            cls._secondary_client = None
+            cls._is_secondary_ready = False
+            cls._cached_secondary_me = None
+
         if cls._secondary_client is not None and getattr(cls._secondary_client, "is_connected", lambda: True)():
             return cls._secondary_client
 
@@ -827,6 +848,10 @@ class TelegramClientManager:
 
         if cls._secondary_client is None or not cls._secondary_client.is_connected():
             async with cls._secondary_lock:
+                if cls._secondary_client is not None and getattr(cls._secondary_client, "loop", None) is not running_loop:
+                    cls._secondary_client = None
+                    cls._is_secondary_ready = False
+                    cls._cached_secondary_me = None
                 if cls._secondary_client is None:
                     # Always use persistent SQLite session file for secondary account
                     session_target = str(SESSION_FILE_PATH_2)
@@ -834,6 +859,7 @@ class TelegramClientManager:
                         session_target,
                         API_ID,
                         API_HASH,
+                        loop=running_loop,
                         flood_sleep_threshold=0,
                         connection_retries=None,
                         retry_delay=3,

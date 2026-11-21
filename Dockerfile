@@ -75,6 +75,6 @@ USER nonroot
 EXPOSE 8088
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8088/api/system/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8088}/api/system/health || exit 1
 
 CMD ["python", "backend/run.py", "start", "--foreground"]
