@@ -52,6 +52,13 @@ export interface AuthStatus {
   session_string?: string | null;
 }
 
+export interface DeviceAuthStatus {
+  auth_required: boolean;
+  authenticated: boolean;
+  is_loopback: boolean;
+  has_token_configured: boolean;
+}
+
 export interface SecondaryAuthStatus {
   enabled: boolean;
   authenticated: boolean;

@@ -61,6 +61,18 @@ def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
     if environ.get("HTTP_X_API_KEY", "").strip() == API_AUTH_TOKEN:
         return True
 
+    # 4. HTTP Cookie
+    cookie_str = environ.get("HTTP_COOKIE", "")
+    if cookie_str:
+        from http.cookies import SimpleCookie
+        try:
+            cookie = SimpleCookie()
+            cookie.load(cookie_str)
+            if "tg_api_token" in cookie and cookie["tg_api_token"].value == API_AUTH_TOKEN:
+                return True
+        except Exception:
+            pass
+
     return False
 
 

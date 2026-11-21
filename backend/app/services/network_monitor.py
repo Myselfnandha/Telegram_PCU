@@ -42,13 +42,20 @@ class NetworkMonitor:
         self._listeners.append(fn)
 
     def check_connectivity(self) -> bool:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.settimeout(0.6)
-                s.connect(("1.1.1.1", 80))
-                return True
-        except Exception:
-            return False
+        targets = [
+            ("1.1.1.1", 53),
+            ("8.8.8.8", 53),
+            ("1.1.1.1", 80),
+        ]
+        for host, port in targets:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    s.settimeout(0.8)
+                    s.connect((host, port))
+                    return True
+            except Exception:
+                continue
+        return False
 
     def start(self, loop: Optional[asyncio.AbstractEventLoop] = None):
         if self._running:

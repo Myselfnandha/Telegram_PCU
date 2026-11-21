@@ -1,5 +1,6 @@
 import type {
   AuthStatus,
+  DeviceAuthStatus,
   SecondaryAuthStatus,
   QrStartResponse,
   QrStatusResponse,
@@ -14,14 +15,72 @@ import type {
 } from '@/types';
 
 class ApiService {
+  private authErrorListeners = new Set<() => void>();
+
+  constructor() {
+    this.initUrlToken();
+  }
+
+  public onAuthRequired(fn: () => void) {
+    this.authErrorListeners.add(fn);
+    return () => this.authErrorListeners.delete(fn);
+  }
+
+  public getStoredToken(): string {
+    try {
+      return localStorage.getItem('tg_api_auth_token') || '';
+    } catch {
+      return '';
+    }
+  }
+
+  public setStoredToken(token: string) {
+    try {
+      if (token) {
+        localStorage.setItem('tg_api_auth_token', token);
+      } else {
+        localStorage.removeItem('tg_api_auth_token');
+      }
+    } catch {}
+  }
+
+  public initUrlToken() {
+    if (typeof window === 'undefined') return;
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token') || urlParams.get('key');
+      if (urlToken) {
+        this.setStoredToken(urlToken);
+        urlParams.delete('token');
+        urlParams.delete('key');
+        const newSearch = urlParams.toString();
+        const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+      }
+    } catch {}
+  }
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const token = this.getStoredToken();
+    const authHeaders: Record<string, string> = {};
+    if (token) {
+      authHeaders['Authorization'] = `Bearer ${token}`;
+      authHeaders['X-API-Key'] = token;
+    }
+
     const res = await fetch(endpoint, {
       ...options,
+      credentials: 'include',
       headers: {
         'Accept': 'application/json',
+        ...authHeaders,
         ...(options.headers || {}),
       },
     });
+
+    if (res.status === 401 && !endpoint.includes('/api/auth/device/')) {
+      this.authErrorListeners.forEach((fn) => fn());
+    }
 
     if (!res.ok) {
       let errorMsg = `HTTP Error ${res.status}`;
@@ -36,6 +95,28 @@ class ApiService {
     }
 
     return res.json() as Promise<T>;
+  }
+
+  // Device Auth endpoints
+  async getDeviceAuthStatus(): Promise<DeviceAuthStatus> {
+    return this.request<DeviceAuthStatus>('/api/auth/device/status');
+  }
+
+  async deviceLogin(token: string): Promise<{ success: boolean; message: string; token?: string }> {
+    const res = await this.request<{ success: boolean; message: string; token?: string }>('/api/auth/device/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (res.success && token) {
+      this.setStoredToken(token);
+    }
+    return res;
+  }
+
+  async deviceLogout(): Promise<{ success: boolean; message: string }> {
+    this.setStoredToken('');
+    return this.request('/api/auth/device/logout', { method: 'POST' });
   }
 
   // Auth endpoints

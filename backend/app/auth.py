@@ -79,6 +79,11 @@ def is_authenticated(request: Request) -> bool:
     if query_token and query_token == token_to_check:
         return True
 
+    # 4. Cookie tg_api_token
+    cookie_token = request.cookies.get("tg_api_token", "").strip()
+    if cookie_token and cookie_token == token_to_check:
+        return True
+
     return False
 
 

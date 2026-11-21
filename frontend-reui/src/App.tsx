@@ -1,11 +1,13 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { NetworkWatchdogBanner } from '@/components/NetworkWatchdogBanner';
 import { FloodWaitBanner } from '@/components/FloodWaitBanner';
 import { AuthModal } from '@/components/AuthModal';
+import { DeviceAuthGateModal } from '@/components/DeviceAuthGateModal';
 import { ToastContainer } from '@/components/ToastContainer';
 import { Loader2 } from 'lucide-react';
+import { api } from '@/services/api';
 
 const ManagementDashboardView = React.lazy(() =>
   import('@/views/ManagementDashboardView').then((m) => ({ default: m.ManagementDashboardView }))
@@ -30,6 +32,31 @@ const ViewLoadingFallback: React.FC = () => (
 
 const MainLayout: React.FC = () => {
   const { activeTab, theme } = useApp();
+  const [isDeviceGateOpen, setIsDeviceGateOpen] = useState(false);
+
+  useEffect(() => {
+    // 1. Check device auth on initial mount
+    const checkDeviceAuth = async () => {
+      try {
+        const status = await api.getDeviceAuthStatus();
+        if (status.auth_required && !status.authenticated) {
+          setIsDeviceGateOpen(true);
+        }
+      } catch {
+        // If 401 or network error, let listener handle it
+      }
+    };
+    checkDeviceAuth();
+
+    // 2. Listen for 401s across the application
+    const unsubAuth = api.onAuthRequired(() => {
+      setIsDeviceGateOpen(true);
+    });
+
+    return () => {
+      unsubAuth();
+    };
+  }, []);
 
   return (
     <div className="h-screen max-h-screen bg-background text-foreground flex flex-col antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">
@@ -94,6 +121,10 @@ const MainLayout: React.FC = () => {
       </div>
 
       <AuthModal />
+      <DeviceAuthGateModal
+        isOpen={isDeviceGateOpen}
+        onSuccess={() => setIsDeviceGateOpen(false)}
+      />
       <ToastContainer />
     </div>
   );

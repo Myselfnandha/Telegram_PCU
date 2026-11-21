@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 from app.models import AuthStatus
 from app.telegram_client import TelegramClientManager
@@ -8,6 +8,55 @@ from app.telegram_client import TelegramClientManager
 logger = logging.getLogger("auth_route")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+class DeviceLoginRequest(BaseModel):
+    token: str
+
+
+@router.get("/device/status")
+async def get_device_auth_status(request: Request):
+    """Checks whether server-level API_AUTH_TOKEN is required and if the current client is authenticated."""
+    from app.auth import API_AUTH_TOKEN, ENABLE_API_AUTH, is_authenticated, is_loopback_request
+    is_loopback = is_loopback_request(request)
+    must_auth = bool(API_AUTH_TOKEN) or ENABLE_API_AUTH or not is_loopback
+    is_authed = is_authenticated(request)
+    return {
+        "auth_required": must_auth,
+        "authenticated": is_authed if must_auth else True,
+        "is_loopback": is_loopback,
+        "has_token_configured": bool(API_AUTH_TOKEN)
+    }
+
+
+@router.post("/device/login")
+async def device_login(body: DeviceLoginRequest, response: Response):
+    """Validates device security token against server API_AUTH_TOKEN and issues an authorized session cookie."""
+    from app.auth import API_AUTH_TOKEN
+    client_token = (body.token or "").strip()
+    if not API_AUTH_TOKEN:
+        return {"success": True, "message": "No server authentication required.", "token": client_token}
+
+    if client_token != API_AUTH_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid API authentication token.")
+
+    # Issue persistent session cookie (1 year)
+    response.set_cookie(
+        key="tg_api_token",
+        value=client_token,
+        max_age=31536000,
+        httponly=True,
+        samesite="lax",
+        secure=True
+    )
+    return {"success": True, "message": "Device authenticated successfully.", "token": client_token}
+
+
+@router.post("/device/logout")
+async def device_logout(response: Response):
+    """Clears the client device authentication session cookie."""
+    response.delete_cookie(key="tg_api_token", path="/")
+    return {"success": True, "message": "Device session cleared."}
 
 
 class SendCodeRequest(BaseModel):

@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import type { SnifferFeedItem, TelemetryStats } from '@/types';
+import { api } from './api';
 
 type Listener<T> = (data: T) => void;
 
@@ -20,6 +21,8 @@ class SocketService {
   init() {
     if (this.socket) return;
 
+    const token = api.getStoredToken();
+
     this.socket = io({
       path: '/socket.io',
       transports: ['websocket', 'polling'],
@@ -27,6 +30,9 @@ class SocketService {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
+      auth: { token, apiKey: token },
+      query: token ? { token } : {},
+      withCredentials: true,
     });
 
     this.socket.on('connect', () => {
@@ -129,6 +135,16 @@ class SocketService {
 
   requestQueueSnapshot() {
     this.socket?.emit('queue_get');
+  }
+
+  reconnectWithToken(_token?: string) {
+    if (this.socket) {
+      try {
+        this.socket.disconnect();
+      } catch {}
+      this.socket = null;
+    }
+    this.init();
   }
 }
 

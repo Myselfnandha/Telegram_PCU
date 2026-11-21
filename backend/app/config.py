@@ -283,7 +283,21 @@ NOTIFICATION_MODE = os.getenv("NOTIFICATION_MODE", "downloads_only").strip().low
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8088"))
 SECRET_KEY = os.getenv("SECRET_KEY", "tg-power-suite-secret-key")
-CORS_ORIGINS = [
+
+# Dynamically gather allowed origins from environment and cloud deployment
+_env_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+_render_url = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+_render_host = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+
+_extra_origins = list(_env_origins)
+if _render_url:
+    _extra_origins.append(_render_url)
+if _render_host:
+    _extra_origins.append(f"https://{_render_host}")
+    _extra_origins.append(f"http://{_render_host}")
+_extra_origins.append("https://telegram-pcu.onrender.com")
+
+CORS_ORIGINS = list(dict.fromkeys([
     f"http://localhost:{PORT}",
     f"http://127.0.0.1:{PORT}",
     "http://localhost:8088",
@@ -293,6 +307,7 @@ CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
-    "http://127.0.0.1:5173"
-]
+    "http://127.0.0.1:5173",
+    *_extra_origins
+]))
 

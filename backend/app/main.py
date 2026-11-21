@@ -439,6 +439,9 @@ class GlobalAuthEnforcementMiddleware:
         "/redoc",
         "/api/system/health",
         "/api/auth/status",
+        "/api/auth/device/status",
+        "/api/auth/device/login",
+        "/api/auth/device/logout",
     }
 
     def __init__(self, app):
@@ -463,12 +466,24 @@ class GlobalAuthEnforcementMiddleware:
             # CSRF protection on state-mutating requests
             origin = req.headers.get("origin")
             if origin and method in ("POST", "PUT", "DELETE", "PATCH"):
+                from urllib.parse import urlparse
                 from app.config import CORS_ORIGINS
                 is_origin_allowed = (
                     origin in CORS_ORIGINS
                     or origin.startswith("http://localhost:")
                     or origin.startswith("http://127.0.0.1:")
+                    or origin.endswith(".onrender.com")
                 )
+                if not is_origin_allowed:
+                    try:
+                        origin_parsed = urlparse(origin)
+                        origin_netloc = origin_parsed.netloc.lower()
+                        host = (req.headers.get("x-forwarded-host") or req.headers.get("host") or "").lower()
+                        if host and (origin_netloc == host or origin_netloc.split(":")[0] == host.split(":")[0]):
+                            is_origin_allowed = True
+                    except Exception:
+                        pass
+
                 if not is_origin_allowed:
                     response = Response(
                         content='{"detail":"CSRF validation failed: Cross-origin request not permitted."}',
@@ -516,6 +531,7 @@ app.add_middleware(SmartStaticCacheASGIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=r"^https?://.*\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

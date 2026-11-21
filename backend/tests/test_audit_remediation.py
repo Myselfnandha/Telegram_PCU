@@ -210,3 +210,53 @@ def test_socket_io_auth_verification(monkeypatch):
         "REMOTE_ADDR": "192.168.1.50",
         "HTTP_AUTHORIZATION": "Bearer ws-secret-key-123"
     }) is True
+
+    # 7. Token configured: accepts valid session cookie
+    assert verify_socket_auth({
+        "REMOTE_ADDR": "192.168.1.50",
+        "HTTP_COOKIE": "tg_api_token=ws-secret-key-123; other=val"
+    }) is True
+
+
+def test_device_auth_and_render_csrf(monkeypatch):
+    """Verify device-level authentication flow and onrender.com CSRF allowance."""
+    monkeypatch.setattr(auth_mod, "API_AUTH_TOKEN", "prod-device-secret-456")
+    monkeypatch.setattr(auth_mod, "ENABLE_API_AUTH", True)
+
+    client = TestClient(app)
+
+    # 1. Device status endpoint is public and reports auth required
+    r_status = client.get("/api/auth/device/status")
+    assert r_status.status_code == 200
+    assert r_status.json()["auth_required"] is True
+    assert r_status.json()["has_token_configured"] is True
+
+    # 2. Device login with wrong token fails (401)
+    r_wrong = client.post("/api/auth/device/login", json={"token": "wrong-token"})
+    assert r_wrong.status_code == 401
+
+    # 3. Device login with onrender.com origin and correct token succeeds and sets cookie
+    r_login = client.post(
+        "/api/auth/device/login",
+        json={"token": "prod-device-secret-456"},
+        headers={"Origin": "https://telegram-pcu.onrender.com"}
+    )
+    assert r_login.status_code == 200
+    assert r_login.json()["success"] is True
+    assert "tg_api_token" in r_login.cookies
+
+    # 4. Device cookie authorizes subsequent protected non-loopback requests
+    cookie_val = r_login.cookies["tg_api_token"]
+    r_clear = client.post(
+        "/api/media/cache/clear",
+        headers={
+            "X-Forwarded-For": "203.0.113.195",
+            "Origin": "https://telegram-pcu.onrender.com"
+        },
+        cookies={"tg_api_token": cookie_val}
+    )
+    assert r_clear.status_code == 200
+
+    # 5. Device logout clears the cookie
+    r_logout = client.post("/api/auth/device/logout")
+    assert r_logout.status_code == 200
