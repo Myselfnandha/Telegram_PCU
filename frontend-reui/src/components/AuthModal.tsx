@@ -41,6 +41,7 @@ export const AuthModal: React.FC = () => {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrExpired, setQrExpired] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
+  const [isApproving, setIsApproving] = useState<boolean>(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -116,14 +117,18 @@ export const AuthModal: React.FC = () => {
         const res = await api.getQrStatus();
         if (res.status === 'success' || res.status === 'authorized') {
           clearQrTimer();
-          addToast({
-            type: 'success',
-            title: 'Authorized',
-            message: `Welcome, ${res.user?.first_name || 'Telegram User'}!`,
-          });
-          await refreshAuth();
-          setAuthModalOpen(false);
-          resetForm();
+          setIsApproving(true);
+          setTimeout(async () => {
+            addToast({
+              type: 'success',
+              title: 'Authorized',
+              message: `Welcome, ${res.user?.first_name || 'Telegram User'}!`,
+            });
+            await refreshAuth();
+            setIsApproving(false);
+            setAuthModalOpen(false);
+            resetForm();
+          }, 800);
         } else if (res.status === '2fa_required') {
           clearQrTimer();
           addToast({
@@ -134,8 +139,8 @@ export const AuthModal: React.FC = () => {
           setLoginMethod('phone');
           setStep('2fa');
         } else if (res.status === 'expired') {
-          clearQrTimer();
-          setQrExpired(true);
+          // Auto-refresh expired QR code seamlessly
+          handleStartQr();
         } else if (res.status === 'error') {
           clearQrTimer();
           setQrError(res.message || 'QR session error. Please refresh.');
@@ -211,18 +216,34 @@ export const AuthModal: React.FC = () => {
     setError(null);
 
     try {
-      const res = await api.verify2FA(password.trim());
-      if (res.authenticated) {
+      const res: any = await api.verify2FA(password.trim());
+      if (res?.authenticated || res?.status === 'authorized' || res?.status === 'success') {
         addToast({
           type: 'success',
           title: 'Authorized',
-          message: `Welcome back, ${res.first_name || 'User'}!`,
+          message: `Welcome back, ${res.user?.first_name || res.first_name || 'User'}!`,
         });
         await refreshAuth();
         setAuthModalOpen(false);
         resetForm();
+      } else {
+        setError(res?.message || '2FA authentication failed');
       }
     } catch (err: any) {
+      try {
+        const checkStatus = await api.getAuthStatus();
+        if (checkStatus.authenticated) {
+          addToast({
+            type: 'success',
+            title: 'Authorized',
+            message: `Welcome back, ${checkStatus.first_name || 'User'}!`,
+          });
+          await refreshAuth();
+          setAuthModalOpen(false);
+          resetForm();
+          return;
+        }
+      } catch {}
       setError(err.message || 'Incorrect 2FA password');
       addToast({ type: 'error', title: '2FA Failed', message: err.message });
     } finally {
@@ -421,6 +442,15 @@ export const AuthModal: React.FC = () => {
                       <div className="w-52 h-52 flex flex-col items-center justify-center gap-2 text-slate-800">
                         <QrCode className="w-10 h-10 text-muted-foreground" />
                         <span className="text-xs text-muted-foreground">No QR code</span>
+                      </div>
+                    )}
+
+                    {/* Approving Overlay */}
+                    {isApproving && (
+                      <div className="absolute inset-0 bg-background/95 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center p-4 text-center gap-3 animate-in fade-in duration-200">
+                        <div className="w-10 h-10 rounded-full border-3 border-primary border-t-transparent animate-spin" />
+                        <div className="text-sm font-bold text-foreground">QR Code Approved!</div>
+                        <p className="text-xs text-muted-foreground">Connecting session & loading dashboard...</p>
                       </div>
                     )}
 

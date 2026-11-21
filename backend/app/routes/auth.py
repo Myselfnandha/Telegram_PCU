@@ -190,7 +190,8 @@ async def sign_in_2fa(payload: Password2FARequest):
     """Verifies 2FA password and finalizes login."""
     try:
         res = await TelegramClientManager.sign_in_with_2fa(password=payload.password.strip())
-        if res.get("status") == "authorized":
+        if res.get("status") == "authorized" or res.get("authenticated"):
+            res["authenticated"] = True
             _trigger_preload_chats()
             _attach_sniffer()
             from app.config import SESSION_STRING
@@ -198,6 +199,12 @@ async def sign_in_2fa(payload: Password2FARequest):
         return res
     except Exception as e:
         logger.error(f"2FA sign-in failed: {e}")
+        try:
+            if await TelegramClientManager.is_authorized():
+                me = await TelegramClientManager.get_me_info()
+                return {"status": "authorized", "authenticated": True, "user": me}
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=str(e))
 
 

@@ -269,7 +269,7 @@
 .cinema-date-panel {
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease-in-out;
+  transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
 @media (max-width: 640px) {
@@ -314,4 +314,70 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+}
+
+/* Custom Minimalist Cyber Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 20%, transparent) transparent;
+}
+
+/* Mobile & Low-Power Performance Optimizations */
+@media (max-width: 768px) {
+  /* Eliminate CPU-heavy continuous pulse loops on mobile */
+  .animate-pulse {
+    animation: none !important;
+  }
+
+  /* Snappier UI rendering without long transition delays */
+  .animate-in {
+    animation-duration: 0.1s !important;
+  }
+
+  .cinema-date-panel {
+    transition: none !important;
+  }
+
+  /* Downgrade heavy backdrop-blur filters to reduce mobile GPU composite overhead */
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-3xl {
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+  }
+}
+
+/* Accessible Reduced-Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

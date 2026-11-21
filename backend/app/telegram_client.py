@@ -707,7 +707,11 @@ class TelegramClientManager:
     async def sign_in_with_2fa(cls, password: str) -> dict:
         """Completes sign-in with 2FA password."""
         client = await cls.get_client()
-        await client.sign_in(password=password)
+        try:
+            await client.sign_in(password=password)
+        except Exception:
+            if not await client.is_user_authorized():
+                raise
         try:
             from telethon.sessions import StringSession
             new_str = StringSession.save(client.session)
@@ -719,7 +723,8 @@ class TelegramClientManager:
         cls._cached_me = None
         me_info = await cls.get_me_info()
         cls.sync_tier_limits()
-        return {"status": "authorized", "user": me_info}
+        cls._qr_status = {"status": "authorized", "user": me_info}
+        return {"status": "authorized", "authenticated": True, "user": me_info}
 
     @classmethod
     async def start_qr_login(cls) -> dict:

@@ -79,9 +79,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const initialSeekDone = useRef(false);
   const lastReportedTime = useRef(0);
 
-  const duration = (videoRef.current?.duration && isFinite(videoRef.current.duration) && videoRef.current.duration > 0)
-    ? videoRef.current.duration
-    : (video?.duration || 0);
+  const duration = (video?.duration && video.duration > 0)
+    ? video.duration
+    : ((videoRef.current?.duration && isFinite(videoRef.current.duration) && videoRef.current.duration > 0)
+        ? videoRef.current.duration
+        : 0);
 
   const isMkvContainer = video ? (
     Boolean(video.is_mkv) ||
@@ -545,10 +547,25 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       if (videoRef.current) {
         try {
           videoRef.current.pause();
-          videoRef.current.removeAttribute('src');
-          videoRef.current.load();
         } catch {}
       }
+
+      const token = api.getStoredToken();
+      const tokenSuffix = token ? `?token=${encodeURIComponent(token)}` : '';
+      const fullHttpUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}${tokenSuffix}`;
+
+      // Check if mobile or remote cloud deployment (e.g. onrender.com)
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
+      if (isMobile || isRemote) {
+        const vlcUri = `vlc://${fullHttpUrl}`;
+        window.location.href = vlcUri;
+        showOsd('Opening in VLC App...');
+        setTimeout(() => onOpenChange(false), 1200);
+        return;
+      }
+
       await api.launchVlc(video.chat_id, video.message_id, video.filename);
       onOpenChange(false);
     } catch (err: any) {
@@ -562,16 +579,30 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     if (!video) return;
     setIsTriggeringFdm(true);
     try {
+      const token = api.getStoredToken();
+      const tokenSuffix = token ? `?token=${encodeURIComponent(token)}` : '';
+      const fullUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}${tokenSuffix}`;
+
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
+      if (isMobile || isRemote) {
+        await navigator.clipboard.writeText(fullUrl).catch(() => {});
+        showOsd('FDM URL Copied');
+        return;
+      }
+
       const res = await api.triggerFdm(video.chat_id, video.message_id, video.filename);
       if (res && res.success) {
         showOsd('Dispatched to FDM');
       } else {
-        const fullUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`;
-        await navigator.clipboard.writeText(fullUrl);
+        await navigator.clipboard.writeText(fullUrl).catch(() => {});
         showOsd('FDM URL Copied');
       }
     } catch {
-      const fullUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`;
+      const token = api.getStoredToken();
+      const tokenSuffix = token ? `?token=${encodeURIComponent(token)}` : '';
+      const fullUrl = `${window.location.origin}/dl/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}${tokenSuffix}`;
       await navigator.clipboard.writeText(fullUrl).catch(() => {});
       showOsd('FDM Link Copied');
     } finally {
