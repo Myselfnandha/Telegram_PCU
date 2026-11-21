@@ -16,6 +16,7 @@ if not ENV_FILE.exists():
 
 load_dotenv(BACKEND_DIR / ".env")
 load_dotenv(ROOT_DIR / ".env")
+load_dotenv("/etc/secrets/.env")
 
 # Directories
 TEMP_UPLOAD_DIR = BACKEND_DIR / "temp_uploads"
