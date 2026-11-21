@@ -448,7 +448,7 @@ class TelegramClientManager:
                     except SESSION_REVOKED_ERRORS as rev_err:
                         if _is_permanent_revocation(rev_err):
                             logger.warning(f"Session permanently revoked ({type(rev_err).__name__}: {rev_err}). Resetting to clean StringSession...")
-                            update_session_string_in_env("")
+                            update_session_string_in_env("", persist=True)
                         else:
                             logger.warning(f"Session temporarily revoked/expired ({type(rev_err).__name__}: {rev_err}). Keeping stored session; will retry on next auth attempt.")
                         cls._client = TelegramClient(
@@ -472,7 +472,7 @@ class TelegramClientManager:
                         cls._is_ready = await cls._client.is_user_authorized()
                     except SESSION_REVOKED_ERRORS as auth_rev_err:
                         logger.warning(f"Session auth check detected revoked key ({type(auth_rev_err).__name__}). Resetting to clean StringSession...")
-                        update_session_string_in_env("")
+                        update_session_string_in_env("", persist=True)
                         cls._is_ready = False
                         cls._cached_me = None
                         try:
@@ -655,7 +655,7 @@ class TelegramClientManager:
         except SESSION_REVOKED_ERRORS as rev_err:
             logger.warning(f"send_login_code hit revoked/duplicated session ({type(rev_err).__name__}). Resetting client...")
             async with cls._lock:
-                update_session_string_in_env("")
+                update_session_string_in_env("", persist=True)
                 cls._is_ready = False
                 cls._cached_me = None
                 try:
@@ -688,10 +688,13 @@ class TelegramClientManager:
         client = await cls.get_client()
         try:
             await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
-            if isinstance(client.session, StringSession):
-                new_str = client.session.save()
+            try:
+                from telethon.sessions import StringSession
+                new_str = StringSession.save(client.session)
                 if new_str:
-                    update_session_string_in_env(new_str)
+                    update_session_string_in_env(new_str, persist=True)
+            except Exception as save_err:
+                logger.debug(f"Could not extract StringSession on sign-in: {save_err}")
             cls._is_ready = True
             cls._cached_me = None
             me_info = await cls.get_me_info()
@@ -705,10 +708,13 @@ class TelegramClientManager:
         """Completes sign-in with 2FA password."""
         client = await cls.get_client()
         await client.sign_in(password=password)
-        if isinstance(client.session, StringSession):
-            new_str = client.session.save()
+        try:
+            from telethon.sessions import StringSession
+            new_str = StringSession.save(client.session)
             if new_str:
-                update_session_string_in_env(new_str)
+                update_session_string_in_env(new_str, persist=True)
+        except Exception as save_err:
+            logger.debug(f"Could not extract StringSession on 2FA: {save_err}")
         cls._is_ready = True
         cls._cached_me = None
         me_info = await cls.get_me_info()
@@ -737,7 +743,7 @@ class TelegramClientManager:
         except (SESSION_REVOKED_ERRORS, Exception) as qr_err:
             logger.warning(f"QR login hit error with session ({type(qr_err).__name__}: {qr_err}); resetting to pristine StringSession...")
             async with cls._lock:
-                update_session_string_in_env("")
+                update_session_string_in_env("", persist=True)
                 cls._is_ready = False
                 cls._cached_me = None
                 try:
@@ -774,10 +780,13 @@ class TelegramClientManager:
     async def _wait_qr_login(cls, qr):
         try:
             user = await qr.wait()
-            if isinstance(cls._client.session, StringSession):
-                new_str = cls._client.session.save()
+            try:
+                from telethon.sessions import StringSession
+                new_str = StringSession.save(cls._client.session)
                 if new_str:
-                    update_session_string_in_env(new_str)
+                    update_session_string_in_env(new_str, persist=True)
+            except Exception as save_err:
+                logger.debug(f"Could not extract StringSession on QR login: {save_err}")
             cls._is_ready = True
             cls._cached_me = None
             me_info = await cls.get_me_info()
@@ -812,7 +821,7 @@ class TelegramClientManager:
             cls._client = None
             cls._cached_me = None
             cls._is_ready = False
-            update_session_string_in_env("")
+            update_session_string_in_env("", persist=True)
             for ext in (".session", ".session.bak", ".session-wal", ".session-shm"):
                 sf = SESSION_FILE_PATH.with_suffix(ext)
                 if sf.exists():
@@ -1141,8 +1150,12 @@ class TelegramClientManager:
             raise RuntimeError("Authentication session expired. Please request a new code.")
         try:
             await cls._secondary_auth_client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
-            session_str = cls._secondary_auth_client.session.save()
-            update_secondary_session_string_in_env(session_str)
+            try:
+                from telethon.sessions import StringSession
+                session_str = StringSession.save(cls._secondary_auth_client.session)
+                update_secondary_session_string_in_env(session_str, persist=True)
+            except Exception as e:
+                logger.debug(f"Could not extract secondary session string: {e}")
             if cls._secondary_client and cls._secondary_client.is_connected():
                 try:
                     await cls._secondary_client.disconnect()
@@ -1258,8 +1271,12 @@ class TelegramClientManager:
     async def _wait_secondary_qr_login(cls, qr):
         try:
             user = await qr.wait()
-            session_str = cls._secondary_auth_client.session.save()
-            update_secondary_session_string_in_env(session_str)
+            try:
+                from telethon.sessions import StringSession
+                session_str = StringSession.save(cls._secondary_auth_client.session)
+                update_secondary_session_string_in_env(session_str, persist=True)
+            except Exception as e:
+                logger.debug(f"Could not extract secondary session string: {e}")
             if cls._secondary_client and cls._secondary_client.is_connected():
                 try:
                     await cls._secondary_client.disconnect()

@@ -55,21 +55,23 @@ def _attach_sniffer():
 async def check_auth():
     """Returns the current Telegram MTProto authentication status."""
     try:
+        from app.config import PHONE_NUMBER, SESSION_STRING
         is_auth = await TelegramClientManager.is_authorized()
         if not is_auth:
-            return AuthStatus(authenticated=False)
+            return AuthStatus(authenticated=False, phone=PHONE_NUMBER if PHONE_NUMBER else None)
 
         info = await TelegramClientManager.get_me_info()
         if info:
             return AuthStatus(
                 authenticated=True,
-                phone=info.get("phone"),
+                phone=info.get("phone") or (PHONE_NUMBER if PHONE_NUMBER else None),
                 username=info.get("username"),
                 user_id=info.get("id"),
                 first_name=info.get("first_name"),
-                last_name=info.get("last_name")
+                last_name=info.get("last_name"),
+                session_string=SESSION_STRING
             )
-        return AuthStatus(authenticated=False)
+        return AuthStatus(authenticated=False, phone=PHONE_NUMBER if PHONE_NUMBER else None)
     except Exception as e:
         logger.error(f"Auth check failed: {e}")
         return AuthStatus(authenticated=False, error=str(e))
@@ -93,6 +95,8 @@ async def get_primary_qr_status():
     if status.get("status") == "authorized":
         _trigger_preload_chats()
         _attach_sniffer()
+        from app.config import SESSION_STRING
+        status["session_string"] = SESSION_STRING
     return status
 
 
@@ -124,6 +128,8 @@ async def sign_in_code(payload: SignInRequest):
         if res.get("status") == "authorized":
             _trigger_preload_chats()
             _attach_sniffer()
+            from app.config import SESSION_STRING
+            res["session_string"] = SESSION_STRING
         return res
     except Exception as e:
         logger.error(f"Sign-in with code failed: {e}")
@@ -138,6 +144,8 @@ async def sign_in_2fa(payload: Password2FARequest):
         if res.get("status") == "authorized":
             _trigger_preload_chats()
             _attach_sniffer()
+            from app.config import SESSION_STRING
+            res["session_string"] = SESSION_STRING
         return res
     except Exception as e:
         logger.error(f"2FA sign-in failed: {e}")

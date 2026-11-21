@@ -68,4 +68,5 @@ class AuthStatus(BaseModel):
     user_id: Optional[int] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    session_string: Optional[str] = None
     error: Optional[str] = None

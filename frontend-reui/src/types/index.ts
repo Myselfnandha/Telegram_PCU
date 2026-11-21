@@ -49,6 +49,7 @@ export interface AuthStatus {
   username?: string | null;
   user_id?: number | null;
   dc_id?: number | null;
+  session_string?: string | null;
 }
 
 export interface SecondaryAuthStatus {

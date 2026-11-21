@@ -43,6 +43,12 @@ export const AuthModal: React.FC = () => {
   const [qrError, setQrError] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  useEffect(() => {
+    if (!phone && authStatus?.phone) {
+      setPhone(authStatus.phone);
+    }
+  }, [authStatus?.phone]);
+
   const resetForm = () => {
     setLoginMethod('qr');
     setStep('phone');

@@ -112,45 +112,47 @@ def get_env_dict() -> Dict[str, str]:
 
 
 def save_env_dict(updates: Dict[str, Any]) -> None:
-    """Updates key-value pairs in the .env file. Never writes plaintext session credentials."""
-    # Security: Never persist plaintext Telegram session credentials into .env
-    filtered_updates = {
-        k: v for k, v in updates.items()
-        if k not in ("TG_SESSION_STRING", "TG_SESSION_STRING_2") and not k.endswith("_SESSION_STRING")
-    }
-    if not filtered_updates:
+    """Updates key-value pairs in the .env files and reloads environment."""
+    if not updates:
         return
 
-    target = ROOT_DIR / ".env"
-    if not target.exists():
-        target = BACKEND_DIR / ".env"
-    
-    existing_lines: List[str] = []
-    if target.exists():
-        with open(target, "r", encoding="utf-8", errors="replace") as f:
-            existing_lines = f.readlines()
+    targets = [ROOT_DIR / ".env", BACKEND_DIR / ".env"]
+    etc_env = Path("/etc/secrets/.env")
+    if etc_env.exists() and os.access(etc_env, os.W_OK):
+        targets.append(etc_env)
 
-    keys_written = set()
-    new_lines = []
+    for target in targets:
+        if not target.exists() and target != BACKEND_DIR / ".env":
+            continue
+        try:
+            existing_lines: List[str] = []
+            if target.exists():
+                with open(target, "r", encoding="utf-8", errors="replace") as f:
+                    existing_lines = f.readlines()
 
-    for line in existing_lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            key = stripped.split("=", 1)[0].strip()
-            if key in filtered_updates:
-                new_lines.append(f"{key}={filtered_updates[key]}\n")
-                keys_written.add(key)
-                continue
-        new_lines.append(line)
+            keys_written = set()
+            new_lines = []
 
-    for k, v in filtered_updates.items():
-        if k not in keys_written:
-            new_lines.append(f"{k}={v}\n")
+            for line in existing_lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#") and "=" in stripped:
+                    key = stripped.split("=", 1)[0].strip()
+                    if key in updates:
+                        new_lines.append(f"{key}={updates[key]}\n")
+                        keys_written.add(key)
+                        continue
+                new_lines.append(line)
 
-    with open(target, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
-    
-    load_dotenv(target, override=True)
+            for k, v in updates.items():
+                if k not in keys_written:
+                    new_lines.append(f"{k}={v}\n")
+
+            with open(target, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+            
+            load_dotenv(target, override=True)
+        except Exception:
+            pass
 
 
 def set_multi_account_turbo(enabled: bool) -> None:
@@ -165,18 +167,22 @@ AUTO_SAVE_STREAM = os.getenv("TG_AUTO_SAVE_STREAM", "false").lower() in ("1", "t
 DEFAULT_SUBTITLE_LANG = os.getenv("DEFAULT_SUBTITLE_LANG", "eng,tam,hin").strip()
 
 
-def update_session_string_in_env(session_string: str) -> None:
-    """Updates in-memory session string for compatibility; NEVER persists plaintext credentials to .env."""
+def update_session_string_in_env(session_string: str, persist: bool = True) -> None:
+    """Updates in-memory session string and auto-persists to .env file."""
     global SESSION_STRING
     SESSION_STRING = session_string
     os.environ["TG_SESSION_STRING"] = session_string
+    if persist and session_string:
+        save_env_dict({"TG_SESSION_STRING": session_string})
 
 
-def update_secondary_session_string_in_env(session_string: str) -> None:
-    """Updates in-memory session string for compatibility; NEVER persists plaintext credentials to .env."""
+def update_secondary_session_string_in_env(session_string: str, persist: bool = True) -> None:
+    """Updates in-memory secondary session string and auto-persists to .env file."""
     global SESSION_STRING_2
     SESSION_STRING_2 = session_string
     os.environ["TG_SESSION_STRING_2"] = session_string
+    if persist and session_string:
+        save_env_dict({"TG_SESSION_STRING_2": session_string})
 
 
 def migrate_and_purge_env_sessions() -> None:
@@ -236,32 +242,7 @@ def migrate_and_purge_env_sessions() -> None:
         except Exception:
             pass
 
-    # Once SQLite session is confirmed valid on disk, purge plaintext string from .env files
-    if primary_target.exists() and primary_target.stat().st_size > 0:
-        for env_path in (BACKEND_DIR / ".env", ROOT_DIR / ".env"):
-            if env_path.exists():
-                try:
-                    with open(env_path, "r", encoding="utf-8", errors="replace") as f:
-                        lines = f.readlines()
-                    purged_lines = []
-                    changed = False
-                    for line in lines:
-                        sline = line.strip()
-                        if sline.startswith("TG_SESSION_STRING=") and not sline.startswith("TG_SESSION_STRING_2="):
-                            purged_lines.append("TG_SESSION_STRING=\n")
-                            changed = True
-                        elif sline.startswith("TG_SESSION_STRING_2="):
-                            purged_lines.append("TG_SESSION_STRING_2=\n")
-                            changed = True
-                        else:
-                            purged_lines.append(line)
-                    if changed:
-                        with open(env_path, "w", encoding="utf-8") as f:
-                            f.writelines(purged_lines)
-                except Exception:
-                    pass
-
-# Auto-execute migration and purge of legacy plaintext session strings
+# Auto-execute migration of legacy plaintext session strings
 try:
     migrate_and_purge_env_sessions()
 except Exception:
