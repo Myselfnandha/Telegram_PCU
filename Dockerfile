@@ -1,12 +1,14 @@
+# syntax=docker/dockerfile:1.4
 # ==============================================================================
-# TG Power Suite — Production Multi-Stage Hardened Dockerfile
+# TG Power Suite — Production Multi-Stage Hardened & Cached Dockerfile
 # ==============================================================================
 
 # --- Stage 1: Build Frontend (React 19 + Vite 8) ---
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend-reui
 COPY frontend-reui/package*.json ./
-RUN npm ci --prefer-offline --no-audit
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline --no-audit
 COPY frontend-reui/ ./
 RUN npm run build
 
@@ -15,10 +17,18 @@ FROM rust:slim AS rust-builder
 WORKDIR /app/rust_core
 RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 COPY rust_core/Cargo.* ./
-# Cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
+# Pre-compile crate dependencies with persistent cargo cache
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/rust_core/target \
+    mkdir src && echo "fn main() {}" > src/main.rs && \
+    cargo build --release && rm -rf src
 COPY rust_core/src ./src
-RUN touch src/main.rs && cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/rust_core/target \
+    touch src/main.rs && cargo build --release && \
+    cp /app/rust_core/target/release/tg-rust-core /usr/local/bin/tg-rust-core
 
 # --- Stage 3: Python Dependencies Builder ---
 FROM python:3.12-slim AS python-builder
@@ -27,7 +37,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # --- Stage 4: Production Runtime Image ---
 FROM python:3.12-slim AS runtime
@@ -53,8 +64,8 @@ ENV PORT=8088
 ENV TG_HOST=0.0.0.0
 ENV TG_PORT=8088
 
-# Copy Rust core accelerator binary
-COPY --from=rust-builder /app/rust_core/target/release/tg-rust-core /usr/local/bin/tg-rust-core
+# Copy Rust core accelerator binary from builder
+COPY --from=rust-builder /usr/local/bin/tg-rust-core /usr/local/bin/tg-rust-core
 RUN chmod 755 /usr/local/bin/tg-rust-core
 
 # Copy compiled frontend assets
