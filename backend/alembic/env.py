@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -63,10 +63,19 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    is_postgres = connection.dialect.name == "postgresql"
+    lock_id = 894723894723  # Dedicated 64-bit advisory lock key to prevent concurrent migration races across overlapping container deploys
 
-    with context.begin_transaction():
-        context.run_migrations()
+    if is_postgres:
+        connection.execute(text(f"SELECT pg_advisory_lock({lock_id})"))
+
+    try:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+    finally:
+        if is_postgres:
+            connection.execute(text(f"SELECT pg_advisory_unlock({lock_id})"))
 
 
 async def run_async_migrations() -> None:

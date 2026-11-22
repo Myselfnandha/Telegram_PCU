@@ -18,12 +18,26 @@ logger = logging.getLogger("db_session")
 DEFAULT_SQLITE_PATH = DATA_DIR / "tg_power_suite_v3.db"
 DEFAULT_DB_URL = f"sqlite+aiosqlite:///{DEFAULT_SQLITE_PATH}"
 
-DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL).strip()
-# Normalize standard postgres:// to postgresql+asyncpg://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
-elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+def normalize_database_url(url: str) -> str:
+    """
+    Normalizes database URL for asyncpg and Neon PostgreSQL compatibility.
+    - Replaces postgres:// or postgresql:// with postgresql+asyncpg://
+    - Translates ?sslmode= to ?ssl= (avoiding asyncpg TypeError: connect() got unexpected keyword 'sslmode')
+    """
+    if not url:
+        return url
+    clean = url.strip()
+    if clean.startswith("postgres://"):
+        clean = clean.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif clean.startswith("postgresql://") and not clean.startswith("postgresql+"):
+        clean = clean.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    if "sslmode=" in clean:
+        clean = clean.replace("sslmode=", "ssl=")
+    return clean
+
+
+DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", DEFAULT_DB_URL))
 
 _engine: Optional[AsyncEngine] = None
 _sessionmaker: Optional[async_sessionmaker[AsyncSession]] = None

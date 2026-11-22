@@ -54,3 +54,27 @@ async def test_postgres_rls_ddl_and_tenant_session_sql():
             res = await session.execute(text("SELECT current_setting('app.current_user_id', true)"))
             assert res.scalar() == test_uid
         await pg_engine.dispose()
+
+
+def test_normalize_database_url_neon_tls():
+    from app.db.session import normalize_database_url
+
+    # 1. Standard Neon format with sslmode=require
+    neon_url = "postgres://user:pass@ep-cool-flower-123.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+    normalized = normalize_database_url(neon_url)
+    assert normalized == "postgresql+asyncpg://user:pass@ep-cool-flower-123.ap-southeast-1.aws.neon.tech/neondb?ssl=require"
+
+    # 2. postgresql:// prefix
+    neon_url_2 = "postgresql://user:pass@ep-cool-flower-123.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+    assert normalize_database_url(neon_url_2) == "postgresql+asyncpg://user:pass@ep-cool-flower-123.ap-southeast-1.aws.neon.tech/neondb?ssl=require"
+
+    # 3. SQLite untouched
+    sqlite_url = "sqlite+aiosqlite:///path/to/test.db"
+    assert normalize_database_url(sqlite_url) == sqlite_url
+
+
+def test_postgres_advisory_lock_env_syntax():
+    env_code = (TEST_DIR.parent / "alembic" / "env.py").read_text(encoding="utf-8")
+    assert "pg_advisory_lock" in env_code
+    assert "pg_advisory_unlock" in env_code
+    assert "894723894723" in env_code
