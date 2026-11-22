@@ -1,16 +1,22 @@
 import logging
 import socketio
-from typing import Dict, Any
+import uuid
+from typing import Dict, Any, Optional
+from http.cookies import SimpleCookie
+from urllib.parse import parse_qs
+
 from app.config import CORS_ORIGINS
 from app.models import UploadStatus
 from app.services.queue_manager import queue_manager, UploadItem
+from app.db.session import get_sessionmaker
+from app.auth_v3.session_service import SessionService, Principal, COOKIE_NAME
 
 logger = logging.getLogger("socket_handlers")
 
 # Create Async Socket.IO Server
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins="*",
+    cors_allowed_origins="*" if "*" in CORS_ORIGINS else CORS_ORIGINS,
     ping_timeout=60,
     ping_interval=25
 )
@@ -25,9 +31,62 @@ def is_loopback_socket_environ(environ: dict) -> bool:
     return remote_addr in ("127.0.0.1", "::1", "localhost", "testserver", "testclient")
 
 
+async def resolve_socket_principal(environ: dict, auth: Any = None) -> Optional[Principal]:
+    """
+    Attempts to resolve an authenticated Principal from WebSocket connection handshake.
+    Checks:
+    1. Socket auth payload: session_token or tg_session
+    2. HTTP cookies: tg_session
+    3. Query string: session_token or tg_session
+    4. HTTP Authorization header: Bearer <session_token>
+    """
+    raw_token = None
+
+    # 1. From auth payload
+    if isinstance(auth, dict):
+        raw_token = auth.get("session_token") or auth.get("tg_session")
+
+    # 2. From query string
+    if not raw_token:
+        qs = parse_qs(environ.get("QUERY_STRING", ""))
+        tokens = qs.get("session_token", []) or qs.get("tg_session", [])
+        if tokens:
+            raw_token = tokens[0]
+
+    # 3. From cookies
+    if not raw_token:
+        cookie_str = environ.get("HTTP_COOKIE", "")
+        if cookie_str:
+            try:
+                cookie = SimpleCookie()
+                cookie.load(cookie_str)
+                if COOKIE_NAME in cookie:
+                    raw_token = cookie[COOKIE_NAME].value
+            except Exception:
+                pass
+
+    # 4. From Bearer authorization header
+    if not raw_token:
+        auth_header = environ.get("HTTP_AUTHORIZATION", "")
+        if auth_header.startswith("Bearer "):
+            raw_token = auth_header[7:].strip()
+
+    if not raw_token:
+        return None
+
+    try:
+        session_maker = get_sessionmaker()
+        async with session_maker() as db_session:
+            principal = await SessionService.validate_session(db_session, raw_token)
+            return principal
+    except Exception as e:
+        logger.debug(f"Failed to validate socket session token: {e}")
+        return None
+
+
 def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
     """
-    Validates WebSocket connections. Rejects if:
+    Validates legacy WebSocket connections. Rejects if:
     1. Connection is non-loopback and API_AUTH_TOKEN is missing or mismatch
     2. API_AUTH_TOKEN / ENABLE_API_AUTH is configured and credentials are missing or invalid
     """
@@ -49,7 +108,6 @@ def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
             return True
 
     # 2. Query parameter
-    from urllib.parse import parse_qs
     qs = parse_qs(environ.get("QUERY_STRING", ""))
     tokens = qs.get("token", [])
     for tok in tokens:
@@ -68,7 +126,6 @@ def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
     # 4. HTTP Cookie
     cookie_str = environ.get("HTTP_COOKIE", "")
     if cookie_str:
-        from http.cookies import SimpleCookie
         try:
             cookie = SimpleCookie()
             cookie.load(cookie_str)
@@ -83,12 +140,40 @@ def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
 # Connect & Disconnect handlers
 @sio.event
 async def connect(sid, environ, auth=None):
-    if not verify_socket_auth(environ, auth):
+    # Validate origin if Origin header is present and not wildcard
+    origin = environ.get("HTTP_ORIGIN")
+    if origin and "*" not in CORS_ORIGINS:
+        if origin not in CORS_ORIGINS and not is_loopback_socket_environ(environ):
+            logger.warning(f"Rejecting socket connection from unauthorized origin: {origin}")
+            raise socketio.exceptions.ConnectionRefusedError("Unauthorized origin")
+
+    principal = await resolve_socket_principal(environ, auth)
+    is_legacy_authed = verify_socket_auth(environ, auth)
+
+    if not principal and not is_legacy_authed:
         logger.warning(f"Rejecting unauthenticated WebSocket connection: {sid} from {environ.get('REMOTE_ADDR')}")
         raise socketio.exceptions.ConnectionRefusedError("Authentication required")
 
     logger.debug(f"Socket client connected: {sid}")
-    # Send current queue snapshot to client
+
+    if principal:
+        user_room = f"user_{principal.user_id}"
+        await sio.enter_room(sid, user_room)
+        if principal.device_id:
+            await sio.enter_room(sid, f"device_{principal.device_id}")
+        await sio.save_session(sid, {
+            "user_id": str(principal.user_id),
+            "device_id": str(principal.device_id) if principal.device_id else None,
+            "role": principal.role,
+            "display_name": principal.display_name
+        })
+        logger.info(f"Socket {sid} authenticated as user {principal.user_id} and joined room {user_room}")
+    else:
+        await sio.enter_room(sid, "legacy_admin")
+        await sio.save_session(sid, {"role": "legacy_admin"})
+        logger.info(f"Socket {sid} joined legacy_admin room")
+
+    # Send initial snapshots
     tasks = queue_manager.get_all_tasks()
     task_snapshots = [_item_to_state_dict(t) for t in tasks]
     await sio.emit("queue:snapshot", task_snapshots, room=sid)
@@ -198,3 +283,9 @@ def broadcast_sniffer_event(event_name: str, data: Any):
         loop.create_task(sio.emit(f"sniffer:{event_name}", data))
     except RuntimeError:
         pass
+
+
+async def emit_to_user(user_id: Any, event: str, data: Any):
+    """Emits an event strictly to the designated tenant room."""
+    room = f"user_{user_id}"
+    await sio.emit(event, data, room=room)

@@ -5,7 +5,7 @@ import logging
 import asyncio
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
-from telethon import TelegramClient
+from telethon import TelegramClient, functions
 from telethon.sessions import StringSession
 from telethon.errors import AuthKeyUnregisteredError, SessionRevokedError, UserDeactivatedError
 
@@ -225,17 +225,17 @@ class MultiTenantTelegramManager:
         account_id: uuid.UUID
     ) -> bool:
         """
-        Safely disconnects client, purges vault encryption entry, and removes account record.
+        Safely revokes remote Telegram authorization via MTProto auth.logOut,
+        disconnects active client, purges vault encryption entry, and removes account record.
         """
+        remote_revoked = False
+        active_client = None
+
         # Disconnect active client if present
         async with self._lock:
             if account_id in self._active_clients:
                 managed = self._active_clients.pop(account_id)
-                try:
-                    if managed.client.is_connected():
-                        await managed.client.disconnect()
-                except Exception as e:
-                    logger.debug(f"Error disconnecting client {account_id}: {e}")
+                active_client = managed.client
 
         session_maker = get_sessionmaker()
         async with session_maker() as db_session:
@@ -246,6 +246,39 @@ class MultiTenantTelegramManager:
             account = await tg_repo.get_scoped(account_id, principal.user_id)
             if not account:
                 return False
+
+            # Attempt remote authorization revocation with Telegram's servers
+            try:
+                if active_client and active_client.is_connected():
+                    await active_client(functions.auth.LogOutRequest())
+                    remote_revoked = True
+                else:
+                    try:
+                        session_str = await vault_repo.load_session(principal.user_id, account_id)
+                        temp_client = TelegramClient(
+                            StringSession(session_str),
+                            API_ID,
+                            API_HASH,
+                            device_model="TG Power Suite v3",
+                            system_version="Linux Multi-Tenant",
+                            app_version="3.0.0"
+                        )
+                        await temp_client.connect()
+                        if await temp_client.is_user_authorized():
+                            await temp_client(functions.auth.LogOutRequest())
+                            remote_revoked = True
+                        await temp_client.disconnect()
+                    except Exception as inner_e:
+                        logger.debug(f"Temporary client remote logout notice for account {account_id}: {inner_e}")
+            except Exception as e:
+                logger.warning(f"Remote Telegram session logout notice for account {account_id}: {e}")
+            finally:
+                if active_client:
+                    try:
+                        if active_client.is_connected():
+                            await active_client.disconnect()
+                    except Exception:
+                        pass
 
             # Delete vault entry
             try:
@@ -260,7 +293,10 @@ class MultiTenantTelegramManager:
                     event_type="telegram.unlinked",
                     user_id=principal.user_id,
                     telegram_account_id=account_id,
-                    metadata={"telegram_user_id": account.telegram_user_id}
+                    metadata={
+                        "telegram_user_id": account.telegram_user_id,
+                        "remote_revoked": remote_revoked
+                    }
                 )
                 await db_session.commit()
                 return True

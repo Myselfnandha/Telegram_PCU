@@ -39,6 +39,11 @@ class UserRepository(BaseRepository[AppUser]):
         res = await self.session.execute(stmt)
         return res.scalar() or 0
 
+    async def has_admin(self) -> bool:
+        stmt = select(func.count(AppUser.id)).where(AppUser.role == "admin")
+        res = await self.session.execute(stmt)
+        return (res.scalar() or 0) > 0
+
     async def add_credential(
         self,
         user_id: uuid.UUID,

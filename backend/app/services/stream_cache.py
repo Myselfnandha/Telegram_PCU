@@ -92,30 +92,34 @@ class StreamCacheManager:
                 cands.append(raw)
         return cands
 
-    def _get_cache_key(self, chat_id: str, message_id: int) -> str:
+    def _get_cache_key(self, chat_id: str, message_id: int, user_id: Optional[Union[uuid.UUID, str]] = None) -> str:
+        if user_id:
+            return f"tenant_{user_id}_{chat_id}_{message_id}"
         return f"{chat_id}_{message_id}"
 
-    def get_cache_path(self, chat_id: str, message_id: int, filename: Optional[str] = None) -> Path:
+    def get_cache_path(self, chat_id: str, message_id: int, filename: Optional[str] = None, user_id: Optional[Union[uuid.UUID, str]] = None) -> Path:
         ext = os.path.splitext(filename)[1] if filename else ".bin"
         if not ext or len(ext) > 6:
             ext = ".bin"
-        return CACHE_DIR / f"{chat_id}_{message_id}{ext}"
+        prefix = f"tenant_{user_id}_" if user_id else ""
+        return CACHE_DIR / f"{prefix}{chat_id}_{message_id}{ext}"
 
-    def get_block_path(self, chat_id: str, message_id: int, block_idx: int) -> Path:
+    def get_block_path(self, chat_id: str, message_id: int, block_idx: int, user_id: Optional[Union[uuid.UUID, str]] = None) -> Path:
         """Returns the file path for a discrete 10MB chunk block."""
-        return BLOCKS_DIR / f"{chat_id}_{message_id}_part{block_idx:05d}.bin"
+        prefix = f"tenant_{user_id}_" if user_id else ""
+        return BLOCKS_DIR / f"{prefix}{chat_id}_{message_id}_part{block_idx:05d}.bin"
 
-    def has_block(self, chat_id: str, message_id: int, block_idx: int, expected_size: int) -> bool:
+    def has_block(self, chat_id: str, message_id: int, block_idx: int, expected_size: int, user_id: Optional[Union[uuid.UUID, str]] = None) -> bool:
         """Returns True if the discrete 10MB block exists on disk and matches expected size."""
-        p = self.get_block_path(chat_id, message_id, block_idx)
+        p = self.get_block_path(chat_id, message_id, block_idx, user_id=user_id)
         try:
             return p.exists() and p.is_file() and p.stat().st_size == expected_size
         except OSError:
             return False
 
-    def read_block_slice(self, chat_id: str, message_id: int, block_idx: int, offset_in_block: int, length: int) -> Optional[bytes]:
+    def read_block_slice(self, chat_id: str, message_id: int, block_idx: int, offset_in_block: int, length: int, user_id: Optional[Union[uuid.UUID, str]] = None) -> Optional[bytes]:
         """Reads a byte slice from a discrete cached block file."""
-        p = self.get_block_path(chat_id, message_id, block_idx)
+        p = self.get_block_path(chat_id, message_id, block_idx, user_id=user_id)
         if not p.exists() or not p.is_file():
             return None
         try:
@@ -125,9 +129,9 @@ class StreamCacheManager:
         except Exception:
             return None
 
-    def save_block(self, chat_id: str, message_id: int, block_idx: int, data: bytes):
+    def save_block(self, chat_id: str, message_id: int, block_idx: int, data: bytes, user_id: Optional[Union[uuid.UUID, str]] = None):
         """Saves a discrete 10MB chunk part to disk atomically."""
-        p = self.get_block_path(chat_id, message_id, block_idx)
+        p = self.get_block_path(chat_id, message_id, block_idx, user_id=user_id)
         tmp = p.with_suffix(f".tmp.{uuid.uuid4().hex[:8]}")
         try:
             with open(tmp, "wb") as f:
@@ -141,10 +145,11 @@ class StreamCacheManager:
             if tmp.exists():
                 tmp.unlink(missing_ok=True)
 
-    def get_slice(self, chat_id: Union[str, int], message_id: int, offset: int, length: int) -> Optional[bytes]:
+    def get_slice(self, chat_id: Union[str, int], message_id: int, offset: int, length: int, user_id: Optional[Union[uuid.UUID, str]] = None) -> Optional[bytes]:
         if length <= 0:
             return b""
         candidate_cids = self._cid_candidates(chat_id)
+        prefix = f"tenant_{user_id}_" if user_id else ""
 
         for cid in candidate_cids:
             full_path = self.get_cached_file(cid, message_id)
@@ -160,7 +165,7 @@ class StreamCacheManager:
                 except Exception:
                     pass
 
-            exact_slice = BLOCKS_DIR / f"{cid}_{message_id}_slice_{offset}_{length}.bin"
+            exact_slice = BLOCKS_DIR / f"{prefix}{cid}_{message_id}_slice_{offset}_{length}.bin"
             if exact_slice.exists() and exact_slice.is_file():
                 try:
                     with open(exact_slice, "rb") as f:
@@ -172,7 +177,7 @@ class StreamCacheManager:
 
             if BLOCKS_DIR.exists():
                 try:
-                    for p in BLOCKS_DIR.glob(f"{cid}_{message_id}_slice_*.bin"):
+                    for p in BLOCKS_DIR.glob(f"{prefix}{cid}_{message_id}_slice_*.bin"):
                         if p.is_file():
                             parts = p.stem.split("_slice_")
                             if len(parts) == 2:
@@ -192,7 +197,7 @@ class StreamCacheManager:
             end_block = (offset + length - 1) // BLOCK_SIZE
             if start_block == end_block:
                 off_in_block = offset % BLOCK_SIZE
-                data = self.read_block_slice(cid, message_id, start_block, off_in_block, length)
+                data = self.read_block_slice(cid, message_id, start_block, off_in_block, length, user_id=user_id)
                 if data and len(data) == length:
                     return data
             else:
@@ -204,7 +209,7 @@ class StreamCacheManager:
                     b_start = b_idx * BLOCK_SIZE
                     off_in_b = cur_offset - b_start
                     to_read = min(needed, BLOCK_SIZE - off_in_b)
-                    chunk = self.read_block_slice(cid, message_id, b_idx, off_in_b, to_read)
+                    chunk = self.read_block_slice(cid, message_id, b_idx, off_in_b, to_read, user_id=user_id)
                     if not chunk or len(chunk) != to_read:
                         can_assemble = False
                         break
@@ -216,13 +221,14 @@ class StreamCacheManager:
 
         return None
 
-    def put_slice(self, chat_id: str, message_id: int, offset: int, data: bytes) -> bool:
+    def put_slice(self, chat_id: str, message_id: int, offset: int, data: bytes, user_id: Optional[Union[uuid.UUID, str]] = None) -> bool:
         if not data:
             return False
         tmp_path = None
+        prefix = f"tenant_{user_id}_" if user_id else ""
         try:
             BLOCKS_DIR.mkdir(parents=True, exist_ok=True)
-            slice_path = BLOCKS_DIR / f"{chat_id}_{message_id}_slice_{offset}_{len(data)}.bin"
+            slice_path = BLOCKS_DIR / f"{prefix}{chat_id}_{message_id}_slice_{offset}_{len(data)}.bin"
             tmp_path = slice_path.with_suffix(f".tmp.{uuid.uuid4().hex[:8]}")
             with open(tmp_path, "wb") as f:
                 f.write(data)
@@ -231,7 +237,7 @@ class StreamCacheManager:
             os.replace(tmp_path, slice_path)
             if len(data) == BLOCK_SIZE and offset % BLOCK_SIZE == 0:
                 block_idx = offset // BLOCK_SIZE
-                block_path = self.get_block_path(chat_id, message_id, block_idx)
+                block_path = self.get_block_path(chat_id, message_id, block_idx, user_id=user_id)
                 if not block_path.exists():
                     try:
                         os.link(slice_path, block_path)
@@ -351,16 +357,17 @@ class StreamCacheManager:
                         return True
         return False
 
-    def get_cached_file(self, chat_id: Union[str, int], message_id: int, expected_size: Optional[int] = None) -> Optional[Path]:
+    def get_cached_file(self, chat_id: Union[str, int], message_id: int, expected_size: Optional[int] = None, user_id: Optional[Union[uuid.UUID, str]] = None) -> Optional[Path]:
         """Returns the local path only if fully cached."""
+        prefix = f"tenant_{user_id}_" if user_id else ""
         for cid in self._cid_candidates(chat_id):
-            key = self._get_cache_key(cid, message_id)
+            key = self._get_cache_key(cid, message_id, user_id=user_id)
             info = self._file_info.get(key)
             if info and info.get("path") and info["path"].exists() and info["path"].is_file():
                 if info["path"].suffix not in (".part", ".tmp", ".merging") and ".tmp." not in info["path"].name and not info["path"].name.endswith(".merging"):
                     if expected_size is None or expected_size <= 0 or info["path"].stat().st_size == expected_size:
                         return info["path"]
-            for p in CACHE_DIR.glob(f"{cid}_{message_id}.*"):
+            for p in CACHE_DIR.glob(f"{prefix}{cid}_{message_id}.*"):
                 if p.exists() and p.is_file() and p.suffix not in (".part", ".tmp", ".merging") and ".tmp." not in p.name and not p.name.endswith(".merging"):
                     if expected_size is not None and expected_size > 0:
                         if p.stat().st_size != expected_size:

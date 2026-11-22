@@ -114,11 +114,26 @@ class DeviceService:
         session: AsyncSession,
         user_id: uuid.UUID,
         device_id: uuid.UUID,
-        challenge_code: Optional[str] = None
+        challenge_code: Optional[str] = None,
+        approver_device_id: Optional[uuid.UUID] = None
     ) -> bool:
-        """Approves a pending device. Can be approved directly by an active trusted session or with challenge code."""
+        """
+        Approves a pending device. Requires approval from an already-verified trusted device session,
+        or submission of a verified one-time challenge code.
+        An unverified device cannot approve itself.
+        """
         user_repo = UserRepository(session)
         audit_repo = AuditRepository(session)
+
+        # Security check: Unverified device cannot approve itself
+        if approver_device_id and approver_device_id == device_id:
+            raise PermissionError("An unverified device cannot approve itself.")
+
+        # If approved from an active session, verify that the approving device is already trusted
+        if approver_device_id:
+            approver_dev = await user_repo.get_device(approver_device_id, user_id)
+            if not approver_dev or approver_dev.verified_at is None:
+                raise PermissionError("Device approval requires an already-verified trusted device session.")
 
         device = await user_repo.get_device(device_id, user_id)
         if not device:
@@ -128,6 +143,9 @@ class DeviceService:
             valid = cls._verify_and_consume_code(user_id, device_id, challenge_code)
             if not valid:
                 return False
+        elif not approver_device_id:
+            # Cannot approve without either challenge code or verified approver session
+            return False
 
         # Mark device verified
         success = await user_repo.verify_device(device_id, user_id)
@@ -136,9 +154,42 @@ class DeviceService:
             await audit_repo.log_event(
                 event_type="device.approved",
                 user_id=user_id,
-                metadata={"device_id": str(device_id)}
+                metadata={"device_id": str(device_id), "approver_device_id": str(approver_device_id) if approver_device_id else None}
             )
         return success
+
+    @classmethod
+    async def get_pending_devices(
+        cls,
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        approver_device_id: Optional[uuid.UUID] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Returns list of devices pending approval along with their active challenge codes.
+        Only accessible by an already-verified trusted device session.
+        """
+        user_repo = UserRepository(session)
+        if approver_device_id:
+            approver = await user_repo.get_device(approver_device_id, user_id)
+            if not approver or approver.verified_at is None:
+                raise PermissionError("Only verified devices can review pending device approval requests.")
+
+        devices = await user_repo.list_devices(user_id)
+        pending = []
+        for dev in devices:
+            if dev.verified_at is None:
+                key = f"{user_id}:{dev.id}"
+                code_entry = cls._pending_approvals.get(key)
+                code = code_entry[0] if (code_entry and code_entry[1] > time.time()) else None
+                pending.append({
+                    "id": str(dev.id),
+                    "display_name": dev.display_name,
+                    "device_fingerprint": dev.device_fingerprint,
+                    "created_at": dev.created_at.isoformat(),
+                    "challenge_code": code
+                })
+        return pending
 
     @classmethod
     async def revoke_device(

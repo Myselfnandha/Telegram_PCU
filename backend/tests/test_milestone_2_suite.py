@@ -32,7 +32,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 # Set test master key for AES-256-GCM vault
 os.environ["SESSION_MASTER_KEY_B64"] = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE="
-os.environ["ADMIN_BOOTSTRAP_TOKEN"] = "secure-bootstrap-token-milestone-2"
+os.environ["ADMIN_BOOTSTRAP_TOKEN"] = "secure-bootstrap-token-tg-suite"
 os.environ["MAX_FAILED_LOGIN_ATTEMPTS"] = "5"
 os.environ["LOGIN_LOCKOUT_WINDOW_SECS"] = "900"
 
@@ -111,12 +111,13 @@ async def test_user_registration_password_pbkdf2():
         user, recovery_codes = await IdentityService.register_user(
             session=session,
             username="alice",
-            password="StrongPassword123!"
+            password="StrongPassword123!",
+            bootstrap_token="secure-bootstrap-token-tg-suite"
         )
         assert user.id is not None
         assert user.display_name == "alice"
         assert user.status == "active"
-        assert user.role == "admin"  # First user bootstraps as admin
+        assert user.role == "admin"  # Bootstraps as admin with valid token
         assert len(recovery_codes) == 8
 
         # Verify credential in database
@@ -238,27 +239,36 @@ async def test_rate_limiting_login_throttling():
 @pytest.mark.asyncio
 async def test_admin_bootstrap_security():
     async with create_test_session() as session:
-        # First user is admin (initial setup)
-        first_user, _ = await IdentityService.register_user(session, "admin_user", "AdminPass123!")
-        assert first_user.role == "admin"
+        # First user without bootstrap token registers as regular user
+        first_user, _ = await IdentityService.register_user(session, "normal_user1", "Pass12345678!")
+        assert first_user.role == "user"
 
-        # Subsequent user without valid bootstrap token is regular user
-        second_user, _ = await IdentityService.register_user(
-            session,
-            "normal_user",
-            "NormalPass123!",
-            bootstrap_token="invalid_token"
-        )
-        assert second_user.role == "user"
+        # User with invalid bootstrap token is rejected
+        with pytest.raises(ValueError, match="Invalid admin bootstrap token"):
+            await IdentityService.register_user(
+                session,
+                "bad_token_user",
+                "NormalPass123!",
+                bootstrap_token="invalid_token"
+            )
 
-        # Subsequent user with matching bootstrap token can become admin
-        third_user, _ = await IdentityService.register_user(
+        # Initial admin bootstrap with valid token succeeds
+        admin_user, _ = await IdentityService.register_user(
             session,
-            "another_admin",
-            "AnotherAdminPass123!",
-            bootstrap_token="secure-bootstrap-token-milestone-2"
+            "admin_user",
+            "AdminPass123!",
+            bootstrap_token="secure-bootstrap-token-tg-suite"
         )
-        assert third_user.role == "admin"
+        assert admin_user.role == "admin"
+
+        # Once admin is initialized, subsequent bootstrap attempt is rejected
+        with pytest.raises(ValueError, match="Administrator account already bootstrapped"):
+            await IdentityService.register_user(
+                session,
+                "another_admin",
+                "AnotherAdminPass123!",
+                bootstrap_token="secure-bootstrap-token-tg-suite"
+            )
 
 
 # =========================================================================
@@ -349,17 +359,30 @@ async def test_subsequent_untrusted_device_approval_challenge():
 async def test_trusted_session_approves_pending_device():
     async with create_test_session() as session:
         user, _ = await IdentityService.register_user(session, "device_user3", "Pass12345678!")
-        await DeviceService.register_or_resolve_device(session, user.id, "Device 1", "fp-1")
+        # 1st device (verified)
+        dev1, _, _ = await DeviceService.register_or_resolve_device(session, user.id, "Device 1", "fp-1")
+        # 2nd device (pending)
         dev2, _, approval_code = await DeviceService.register_or_resolve_device(
             session, user.id, "Device 2", "fp-2"
         )
 
-        # Approve with challenge code
+        # Unverified device cannot approve itself
+        with pytest.raises(PermissionError, match="An unverified device cannot approve itself"):
+            await DeviceService.approve_device(
+                session=session,
+                user_id=user.id,
+                device_id=dev2.id,
+                challenge_code=approval_code,
+                approver_device_id=dev2.id
+            )
+
+        # Approve with challenge code from verified session
         approved = await DeviceService.approve_device(
             session=session,
             user_id=user.id,
             device_id=dev2.id,
-            challenge_code=approval_code
+            challenge_code=approval_code,
+            approver_device_id=dev1.id
         )
         assert approved is True
 

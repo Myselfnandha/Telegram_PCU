@@ -296,15 +296,35 @@ async def handle_proxy_download(
     and pipes it directly to the client (VLC, browser, or download manager).
     Supports HTTP Range requests (seeking/resuming) and real-time caching.
     """
+    # Resolve Tenant Context if v3 session or Playback Grant is present
+    principal = getattr(request.state, "principal", None)
+    grant = getattr(request.state, "grant", None)
+    tenant_user_id = principal.user_id if principal else (grant.user_id if grant else None)
+
     try:
-        # Give client up to 10s to reconnect if network interface is switching (e.g. WiFi to Hotspot/Cellular)
-        connected = await TelegramClientManager.ensure_connected(timeout=10.0)
-        client = await TelegramClientManager.get_client()
-        is_auth = await client.is_user_authorized() if (client and hasattr(client, "is_user_authorized")) else await TelegramClientManager.is_authorized()
-        if not is_auth:
-            raise HTTPException(status_code=401, detail="Telegram client not authorized.")
-        if not connected or not client or not client.is_connected():
-            raise HTTPException(status_code=503, detail="Telegram network connection temporarily unavailable. Please retry.")
+        if tenant_user_id:
+            from app.telegram.client_manager import multi_tenant_manager
+            from app.auth_v3.session_service import Principal
+            t_principal = principal or Principal(
+                user_id=grant.user_id,
+                session_id=uuid.uuid4(),
+                device_id=None,
+                role="user",
+                display_name="GrantUser"
+            )
+            client = await multi_tenant_manager.get_client(t_principal, account_id=getattr(grant, "account_id", None))
+            is_auth = await client.is_user_authorized()
+            if not is_auth:
+                raise HTTPException(status_code=401, detail="Telegram account not authorized.")
+        else:
+            # Give client up to 10s to reconnect if network interface is switching (e.g. WiFi to Hotspot/Cellular)
+            connected = await TelegramClientManager.ensure_connected(timeout=10.0)
+            client = await TelegramClientManager.get_client()
+            is_auth = await client.is_user_authorized() if (client and hasattr(client, "is_user_authorized")) else await TelegramClientManager.is_authorized()
+            if not is_auth:
+                raise HTTPException(status_code=401, detail="Telegram client not authorized.")
+            if not connected or not client or not client.is_connected():
+                raise HTTPException(status_code=503, detail="Telegram network connection temporarily unavailable. Please retry.")
     except HTTPException:
         raise
     except Exception as e:
@@ -492,7 +512,7 @@ async def handle_proxy_download(
         return Response(status_code=status_code, headers=headers)
 
     # 1. Check if complete media file is in local cache -> Instant <1ms serve
-    cached_file = stream_cache_service.get_cached_file(str(chat_id), message_id)
+    cached_file = stream_cache_service.get_cached_file(str(chat_id), message_id, user_id=tenant_user_id)
     if cached_file and cached_file.exists() and cached_file.stat().st_size == file_size:
         logger.info(f"STREAM [{clean_name}] Local disk cache hit: {cached_file.name} (serving {length:,}B from offset {start:,})")
         async def cached_streamer():
@@ -688,21 +708,33 @@ async def handle_proxy_download(
         if stop_event.is_set():
             return
 
-        gen = stream_engine.stream_media(
-            client=client,
-            chat_id=chat_id,
-            message_id=message_id,
-            start=start,
-            length=length,
-            file_size=file_size,
-            is_media_player=is_media_player,
-            clean_name=clean_name,
-            cached_prefix=cached_prefix,
-            message=message,
-            get_fresh_message_fn=get_streamable_message,
-            external_stop_event=stop_event,
-            request_id=req_id
-        )
+        gen = None
+        from app.config import ADAPTIVE_MULTI_TURBO_ENABLED
+        if ADAPTIVE_MULTI_TURBO_ENABLED and tenant_user_id and not is_playback_stream:
+            try:
+                from app.telegram.turbo_pool import turbo_pool_manager
+                pool = await turbo_pool_manager.get_pool(tenant_user_id)
+                gen = pool.stream_byte_range(chat_id, message_id, start, start + length - 1)
+            except Exception as turbo_err:
+                logger.debug(f"Multi-turbo init fallback to stream_engine: {turbo_err}")
+                gen = None
+
+        if gen is None:
+            gen = stream_engine.stream_media(
+                client=client,
+                chat_id=chat_id,
+                message_id=message_id,
+                start=start,
+                length=length,
+                file_size=file_size,
+                is_media_player=is_media_player,
+                clean_name=clean_name,
+                cached_prefix=cached_prefix,
+                message=message,
+                get_fresh_message_fn=get_streamable_message,
+                external_stop_event=stop_event,
+                request_id=req_id
+            )
         handle.it = gen
 
         try:
@@ -767,9 +799,28 @@ async def handle_transmux_stream(
     Remuxes MKV, AVI, TS, and AC3/DTS containers into fragmented MP4 chunks.
     If cached on local disk, runs FFmpeg directly against local file (<10ms start & instant seeks).
     """
-    client = await TelegramClientManager.get_client()
-    if not client or not client.is_connected():
-        raise HTTPException(status_code=503, detail="Telegram client is not connected.")
+    # Resolve Tenant Context if v3 session or Playback Grant is present
+    principal = getattr(request.state, "principal", None)
+    grant = getattr(request.state, "grant", None)
+    tenant_user_id = principal.user_id if principal else (grant.user_id if grant else None)
+
+    if tenant_user_id:
+        from app.telegram.client_manager import multi_tenant_manager
+        from app.auth_v3.session_service import Principal
+        t_principal = principal or Principal(
+            user_id=grant.user_id,
+            session_id=uuid.uuid4(),
+            device_id=None,
+            role="user",
+            display_name="GrantUser"
+        )
+        client = await multi_tenant_manager.get_client(t_principal, account_id=getattr(grant, "account_id", None))
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Telegram client is not connected.")
+    else:
+        client = await TelegramClientManager.get_client()
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Telegram client is not connected.")
 
     clean_chat_id: Union[int, str] = chat_id
     if chat_id != "me":
@@ -814,7 +865,7 @@ async def handle_transmux_stream(
         })
 
     # Check local cache
-    cached_file = stream_cache_service.get_cached_file(str(chat_id), message_id)
+    cached_file = stream_cache_service.get_cached_file(str(chat_id), message_id, user_id=tenant_user_id)
     input_target = str(cached_file) if (cached_file and cached_file.exists()) else "pipe:0"
 
     cmd = [
@@ -971,9 +1022,28 @@ async def probe_media_streams(chat_id: str, message_id: int):
     if cache_key in _STREAM_PROBE_CACHE:
         return _STREAM_PROBE_CACHE[cache_key]
 
-    client = await TelegramClientManager.get_client()
-    if not client or not client.is_connected():
-        raise HTTPException(status_code=503, detail="Telegram client is not connected.")
+    # Resolve Tenant Context if v3 session or Playback Grant is present
+    principal = getattr(request.state, "principal", None)
+    grant = getattr(request.state, "grant", None)
+    tenant_user_id = principal.user_id if principal else (grant.user_id if grant else None)
+
+    if tenant_user_id:
+        from app.telegram.client_manager import multi_tenant_manager
+        from app.auth_v3.session_service import Principal
+        t_principal = principal or Principal(
+            user_id=grant.user_id,
+            session_id=uuid.uuid4(),
+            device_id=None,
+            role="user",
+            display_name="GrantUser"
+        )
+        client = await multi_tenant_manager.get_client(t_principal, account_id=getattr(grant, "account_id", None))
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Telegram client is not connected.")
+    else:
+        client = await TelegramClientManager.get_client()
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Telegram client is not connected.")
 
     message = sniffer_service._message_cache.get((clean_chat_id, message_id))
     if not message or not getattr(message, "media", None):

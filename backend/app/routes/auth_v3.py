@@ -138,7 +138,7 @@ async def login(
         session_token=raw_token,
         device_id=str(device.id),
         device_verified=is_verified,
-        approval_code=approval_code
+        approval_code=None  # Security hardening: Code is never returned to the untrusted caller
     )
 
 
@@ -255,5 +255,5 @@ async def passkey_login_verify(
         session_token=raw_token,
         device_id=str(device.id),
         device_verified=is_verified,
-        approval_code=approval_code
+        approval_code=None  # Security hardening: Code is never returned to the untrusted caller
     )

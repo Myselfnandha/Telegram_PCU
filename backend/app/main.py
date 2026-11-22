@@ -34,6 +34,8 @@ from app.routes.tgweb import router as tgweb_router
 from app.routes.auth_v3 import router as auth_v3_router
 from app.routes.devices_v3 import router as devices_v3_router
 from app.routes.telegram_link_v3 import router as telegram_link_v3_router
+from app.routes.playback_grants_v3 import router as playback_grants_v3_router
+from app.routes.turbo_v3 import router as turbo_v3_router
 from app.telegram.client_manager import multi_tenant_manager
 from app.db.session import init_db as init_db_v3, close_db as close_db_v3
 from app.telegram_client import TelegramClientManager
@@ -567,6 +569,8 @@ app.include_router(tgweb_router)
 app.include_router(auth_v3_router)
 app.include_router(devices_v3_router)
 app.include_router(telegram_link_v3_router)
+app.include_router(playback_grants_v3_router)
+app.include_router(turbo_v3_router)
 
 # Mount Frontend Static Assets
 if FRONTEND_DIR.exists():

@@ -3,6 +3,11 @@ import hmac
 from fastapi import Request, HTTPException
 from typing import Optional
 
+from app.config import (
+    MULTI_TENANT_STREAMING_ENABLED,
+    ENABLE_LEGACY_LOOPBACK,
+)
+
 API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "").strip()
 ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "false").lower() in ("1", "true", "yes")
 
@@ -47,6 +52,19 @@ def is_authenticated(request: Request) -> bool:
         elif path.startswith("/api/media/subtitles/download/") and len(parts) >= 7 and parts[5] and parts[6].isdigit():
             media_identity = (parts[5], int(parts[6]))
         if media_identity:
+            try:
+                from app.services.playback_grants import playback_grant_service
+                grant_token = request.query_params.get("grant") or request.query_params.get("playback_token", "")
+                if grant_token:
+                    grant = playback_grant_service.verify_grant(
+                        grant_token, media_identity[0], media_identity[1]
+                    )
+                    if grant:
+                        request.state.grant = grant
+                        return True
+            except Exception:
+                pass
+
             try:
                 from app.services.vlc_playback import playback_grants
                 if playback_grants.allows(
@@ -96,6 +114,29 @@ async def verify_auth(request: Request):
     2. ENABLE_API_AUTH is true, OR
     3. The request is non-loopback (LAN, Cloudflare tunnel, remote proxy)
     """
+    # 1. Attempt to resolve v3 multi-tenant session token
+    raw_v3_token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        raw_v3_token = auth_header[7:].strip()
+    elif "tg_session" in request.cookies:
+        raw_v3_token = request.cookies["tg_session"]
+    elif "session_token" in request.query_params:
+        raw_v3_token = request.query_params["session_token"]
+
+    if raw_v3_token:
+        try:
+            from app.auth_v3.session_service import SessionService
+            from app.db.session import get_sessionmaker
+            session_maker = get_sessionmaker()
+            async with session_maker() as db_session:
+                principal = await SessionService.validate_session(db_session, raw_v3_token)
+                if principal:
+                    request.state.principal = principal
+                    return
+        except Exception:
+            pass
+
     is_loopback = is_loopback_request(request)
     must_authenticate = bool(API_AUTH_TOKEN) or ENABLE_API_AUTH or not is_loopback
 

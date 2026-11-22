@@ -89,6 +89,25 @@ ENABLE_MULTI_ACCOUNT_TURBO = os.getenv("ENABLE_MULTI_ACCOUNT_TURBO", "true").low
 MULTI_TENANT_ENABLED = os.getenv("MULTI_TENANT_ENABLED", "false").lower() in ("1", "true", "yes")
 SESSION_VAULT_ENABLED = os.getenv("SESSION_VAULT_ENABLED", "false").lower() in ("1", "true", "yes")
 DEVICE_VERIFICATION_REQUIRED = os.getenv("DEVICE_VERIFICATION_REQUIRED", "false").lower() in ("1", "true", "yes")
+MULTI_TENANT_STREAMING_ENABLED = os.getenv("MULTI_TENANT_STREAMING_ENABLED", "false").lower() in ("1", "true", "yes")
+ADAPTIVE_MULTI_TURBO_ENABLED = os.getenv("ADAPTIVE_MULTI_TURBO_ENABLED", "false").lower() in ("1", "true", "yes")
+RUST_MULTI_TENANT_ENABLED = os.getenv("RUST_MULTI_TENANT_ENABLED", "false").lower() in ("1", "true", "yes")
+ENABLE_LEGACY_LOOPBACK = os.getenv("ENABLE_LEGACY_LOOPBACK", "true").lower() in ("1", "true", "yes")
+
+# Resource Profile: "local", "render_free", or "production"
+DEPLOYMENT_PROFILE = os.getenv("DEPLOYMENT_PROFILE", "local").lower()
+if DEPLOYMENT_PROFILE == "render_free":
+    DEFAULT_MAX_ACCOUNTS_PER_USER = 2
+    DEFAULT_MAX_CONCURRENT_STREAMS = 2
+    DEFAULT_BUFFER_CAPACITY_MB = 16
+elif DEPLOYMENT_PROFILE == "production":
+    DEFAULT_MAX_ACCOUNTS_PER_USER = 3
+    DEFAULT_MAX_CONCURRENT_STREAMS = 6
+    DEFAULT_BUFFER_CAPACITY_MB = 64
+else:  # "local"
+    DEFAULT_MAX_ACCOUNTS_PER_USER = 3
+    DEFAULT_MAX_CONCURRENT_STREAMS = 4
+    DEFAULT_BUFFER_CAPACITY_MB = 32
 
 STREAMING_RELAY_CHANNEL_ID_RAW = os.getenv("STREAMING_RELAY_CHANNEL_ID", "").strip()
 try:

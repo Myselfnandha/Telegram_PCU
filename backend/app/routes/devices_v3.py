@@ -26,6 +26,21 @@ async def list_devices(
     )
 
 
+@router.get("/pending")
+async def list_pending_devices(
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await DeviceService.get_pending_devices(
+            session=db,
+            user_id=principal.user_id,
+            approver_device_id=principal.device_id
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
 @router.post("/{device_id}/approve")
 async def approve_device(
     device_id: str,
@@ -38,13 +53,17 @@ async def approve_device(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid device UUID format.")
 
-    # Only an already-verified device session can approve another device, or provide the challenge code
-    success = await DeviceService.approve_device(
-        session=db,
-        user_id=principal.user_id,
-        device_id=dev_uuid,
-        challenge_code=req.challenge_code
-    )
+    try:
+        success = await DeviceService.approve_device(
+            session=db,
+            user_id=principal.user_id,
+            device_id=dev_uuid,
+            challenge_code=req.challenge_code,
+            approver_device_id=principal.device_id
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

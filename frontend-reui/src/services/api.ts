@@ -621,6 +621,34 @@ class ApiService {
       method: 'POST',
     });
   }
+
+  async v3GetPendingDevices(): Promise<import('@/types').V3PendingDevice[]> {
+    return this.request<import('@/types').V3PendingDevice[]>('/api/v3/devices/pending');
+  }
+
+  async v3GetTurboStatus(): Promise<import('@/types').V3TurboStatus> {
+    return this.request<import('@/types').V3TurboStatus>('/api/v3/turbo/status');
+  }
+
+  async v3SetTurboMode(mode: string): Promise<{ status: string; mode: string }> {
+    return this.request<{ status: string; mode: string }>('/api/v3/turbo/mode', {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    });
+  }
+
+  async v3IssueGrant(chatId: string | number, messageId: number, operation: string = 'stream'): Promise<import('@/types').V3PlaybackGrant> {
+    return this.request<import('@/types').V3PlaybackGrant>('/api/v3/media/grants', {
+      method: 'POST',
+      body: JSON.stringify({ chat_id: String(chatId), message_id: messageId, operation }),
+    });
+  }
+
+  async v3RevokeGrant(grantId: string): Promise<{ status: string; grant_id: string }> {
+    return this.request(`/api/v3/media/grants/${encodeURIComponent(grantId)}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new ApiService();

@@ -300,3 +300,43 @@ export interface V3LinkAttempt {
   account_id?: string;
 }
 
+export interface V3TurboWorker {
+  account_id: string;
+  telegram_user_id: number;
+  role: string;
+  is_eligible: boolean;
+  is_cooling_down: boolean;
+  cooldown_remaining_s: number;
+  ewma_latency_ms: number;
+  ewma_throughput_mbs: number;
+  active_in_flight: number;
+  total_bytes_fetched: number;
+}
+
+export interface V3TurboStatus {
+  user_id: string;
+  mode: 'off' | 'balanced' | 'adaptive' | 'maximum';
+  total_workers: number;
+  workers: V3TurboWorker[];
+}
+
+export interface V3PendingDevice {
+  id: string;
+  display_name: string;
+  device_fingerprint?: string;
+  created_at: string;
+  challenge_code?: string;
+}
+
+export interface V3PlaybackGrant {
+  token: string;
+  grant_id: string;
+  chat_id: string;
+  message_id: number;
+  operation: string;
+  expires_at: number;
+  streaming_url: string;
+  download_url: string;
+}
+
+

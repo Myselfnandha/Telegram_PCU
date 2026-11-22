@@ -25,6 +25,16 @@ export const TrustedDevicesCard: React.FC = () => {
     try {
       const res = await api.v3GetDevices();
       setDevices(res);
+      try {
+        const pending = await api.v3GetPendingDevices();
+        const codeMap: { [id: string]: string } = {};
+        for (const p of pending) {
+          if (p.challenge_code) {
+            codeMap[p.id] = p.challenge_code;
+          }
+        }
+        setChallengeCode((prev) => ({ ...codeMap, ...prev }));
+      } catch {}
     } catch {} finally {
       setLoading(false);
     }

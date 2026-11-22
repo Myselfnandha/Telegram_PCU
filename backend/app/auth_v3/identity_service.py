@@ -35,6 +35,34 @@ WEBAUTHN_ORIGIN = os.getenv("WEBAUTHN_ORIGIN", "http://localhost:3000")
 ADMIN_BOOTSTRAP_TOKEN = os.getenv("ADMIN_BOOTSTRAP_TOKEN", "").strip()
 
 
+def get_or_generate_bootstrap_token() -> str:
+    """
+    Returns configured ADMIN_BOOTSTRAP_TOKEN or reads/generates a local random token
+    saved with restricted POSIX permissions.
+    """
+    env_token = os.getenv("ADMIN_BOOTSTRAP_TOKEN", "").strip()
+    if env_token:
+        return env_token
+    from app.config import DATA_DIR
+    token_file = DATA_DIR / "admin_bootstrap_token.txt"
+    try:
+        if token_file.exists():
+            content = token_file.read_text().strip()
+            if content:
+                return content
+    except Exception:
+        pass
+    generated = secrets.token_hex(24)
+    try:
+        token_file.parent.mkdir(parents=True, exist_ok=True)
+        token_file.write_text(generated)
+        os.chmod(token_file, 0o600)
+        logger.info(f"Generated administrator bootstrap token at {token_file}")
+    except Exception as e:
+        logger.warning(f"Could not persist admin bootstrap token to file: {e}")
+    return generated
+
+
 class RateLimitError(Exception):
     """Raised when maximum login attempts are exceeded."""
     pass
@@ -154,14 +182,18 @@ class IdentityService:
         if existing:
             raise ValueError(f"Username '{username}' is already taken.")
 
-        # Determine user role
-        total_users = await user_repo.count_users()
+        # Determine user role with strict bootstrap verification
+        has_admin = await user_repo.has_admin()
+        expected_token = get_or_generate_bootstrap_token()
         role = "user"
-        if bootstrap_token and ADMIN_BOOTSTRAP_TOKEN and hmac.compare_digest(bootstrap_token, ADMIN_BOOTSTRAP_TOKEN):
-            role = "admin"
-        elif total_users == 0:
-            # First user on fresh installation is admin
-            role = "admin"
+
+        if bootstrap_token:
+            if has_admin:
+                raise ValueError("Administrator account already bootstrapped.")
+            if expected_token and hmac.compare_digest(bootstrap_token.strip(), expected_token):
+                role = "admin"
+            else:
+                raise ValueError("Invalid admin bootstrap token.")
 
         user = await user_repo.create_user(
             display_name=username,
