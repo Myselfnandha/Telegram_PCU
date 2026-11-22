@@ -48,7 +48,20 @@ def _get_or_create_master_key() -> bytes:
     if raw_env and len(raw_env.encode("utf-8")) == 32:
         return raw_env.encode("utf-8")
 
-    # Fallback to local protected master key file
+    # Production gate: Enforce externally injected master key on production / Render
+    is_production = (
+        os.getenv("APP_ENV", "").lower() in ("production", "prod")
+        or os.getenv("RENDER", "").lower() in ("true", "1")
+        or os.getenv("ENVIRONMENT", "").lower() == "production"
+    )
+    if is_production:
+        raise SessionEncryptionError(
+            "CRITICAL: In production / Render deployment, SESSION_MASTER_KEY_B64 must be explicitly "
+            "provided in environment variables. Generating an ephemeral master key is strictly prohibited "
+            "as it causes permanent session loss on container restart."
+        )
+
+    # Fallback to local protected master key file (Development/Testing only)
     try:
         if KEY_FILE.exists():
             key_data = KEY_FILE.read_bytes()

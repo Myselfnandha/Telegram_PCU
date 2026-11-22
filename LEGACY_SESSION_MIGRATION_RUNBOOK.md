@@ -91,14 +91,31 @@ Expected Result:
 
 ## 3. Rollback Procedure
 
-If issues occur during the verification stabilization window:
+If issues occur during the verification stabilization window, use **owner-scoped, transaction-safe rollback**:
 
-1. Retrieve the designated owner's UUID and migrated account IDs:
-   ```bash
-   sqlite3 backend/data/tg_power_suite_v3.db "SELECT id, owner_user_id, role, telegram_user_id FROM telegram_accounts;"
-   ```
-2. Delete the migrated vault entries and accounts:
-   ```bash
-   sqlite3 backend/data/tg_power_suite_v3.db "DELETE FROM telegram_session_vault; DELETE FROM telegram_accounts;"
-   ```
-3. The legacy v2.0.0 system continues to function immediately using `backend/sessions/tg_suite_user_session.session` because the legacy files were never modified.
+### Method A: Automated CLI Rollback (Recommended)
+Run the migration script with `--rollback`:
+```bash
+./venv/bin/python backend/scripts/migrate_legacy_sessions.py --rollback --owner-id <OWNER_UUID>
+```
+
+### Method B: Manual Transaction-Safe SQL Rollback
+Execute strictly scoped deletion using the specific designated owner UUID:
+```sql
+BEGIN TRANSACTION;
+
+-- 1. Delete vault entries strictly belonging to the designated owner's accounts
+DELETE FROM telegram_session_vault 
+WHERE telegram_account_id IN (
+    SELECT id FROM telegram_accounts WHERE owner_user_id = '<OWNER_UUID>'
+);
+
+-- 2. Delete the owner's telegram accounts
+DELETE FROM telegram_accounts 
+WHERE owner_user_id = '<OWNER_UUID>';
+
+COMMIT;
+```
+> [!IMPORTANT]
+> Never execute an unscoped `DELETE FROM telegram_accounts;`. Doing so in a multi-tenant environment would wipe other users' linked accounts.
+> The legacy v2.0.0 system continues to function immediately using `backend/sessions/tg_suite_user_session.session` because the legacy files were never modified.

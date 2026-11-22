@@ -263,8 +263,8 @@ def test_backup_restoration():
     import tarfile
 
     backup_dir = Path("backend/backup")
-    enc_file = backup_dir / "v2_legacy_sqlite_backup.tar.gz.enc"
-    key_file = backup_dir / "backup_key.key"
+    enc_file = backup_dir / "archives" / "v2_legacy_sqlite_backup.tar.gz.enc"
+    key_file = backup_dir / "keys" / "backup_key.key"
 
     assert enc_file.exists(), "Encrypted backup file missing"
     assert key_file.exists(), "Backup encryption key missing"

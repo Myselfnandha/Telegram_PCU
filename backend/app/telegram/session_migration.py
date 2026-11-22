@@ -118,7 +118,8 @@ class LegacySessionMigrator:
         owner_user_id: uuid.UUID,
         primary_telegram_user_id: int,
         secondary_telegram_user_id: Optional[int] = None,
-        dry_run: bool = False
+        dry_run: bool = False,
+        verify_live: bool = False
     ) -> MigrationResult:
         """
         Executes legacy session migration for an explicitly designated user owner.
@@ -158,6 +159,36 @@ class LegacySessionMigrator:
         sec_str = self.extract_telethon_string_session(sec_path)
         if sec_str and secondary_telegram_user_id:
             notes.append(f"Extracted secondary StringSession (length={len(sec_str)}).")
+
+        # Live Telegram identity verification if requested
+        if verify_live and primary_str:
+            from telethon import TelegramClient
+            from telethon.sessions import StringSession
+            from app.config import API_ID, API_HASH
+            if not API_ID or not API_HASH:
+                errors.append("Live verification requires TG_API_ID and TG_API_HASH environment variables.")
+            else:
+                test_client = TelegramClient(StringSession(primary_str), API_ID, API_HASH)
+                try:
+                    await test_client.connect()
+                    if not await test_client.is_user_authorized():
+                        errors.append("Live verification failed: primary session is not authorized in Telegram.")
+                    else:
+                        me = await test_client.get_me()
+                        if getattr(me, "id", None) != primary_telegram_user_id:
+                            errors.append(
+                                f"Live verification mismatch: expected TG ID {primary_telegram_user_id}, "
+                                f"but session belongs to {getattr(me, 'id', None)}."
+                            )
+                        else:
+                            notes.append(f"Live Telegram identity verified for @{getattr(me, 'username', 'N/A')} (ID: {me.id}).")
+                except Exception as live_err:
+                    errors.append(f"Live verification error: {live_err}")
+                finally:
+                    try:
+                        await test_client.disconnect()
+                    except Exception:
+                        pass
 
         if dry_run or errors:
             return MigrationResult(
@@ -271,9 +302,12 @@ class LegacySessionMigrator:
             notes=notes
         )
 
-    async def rollback(self, owner_user_id: uuid.UUID, account_ids: List[uuid.UUID]) -> bool:
+    async def rollback(self, owner_user_id: uuid.UUID, account_ids: Optional[List[uuid.UUID]] = None) -> bool:
         """Controlled rollback deleting migrated vault and account records for safety."""
         try:
+            if not account_ids:
+                accounts = await self.account_repo.list_user_accounts(owner_user_id)
+                account_ids = [a.id for a in accounts]
             for acc_id in account_ids:
                 await self.vault_repo.delete_session(owner_user_id, acc_id)
                 await self.account_repo.delete_scoped(acc_id, owner_user_id)

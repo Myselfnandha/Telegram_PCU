@@ -22,6 +22,8 @@ async def main():
     parser.add_argument("--primary-tg-id", type=int, help="Telegram numeric user ID for the primary account")
     parser.add_argument("--secondary-tg-id", type=int, help="Telegram numeric user ID for secondary Turbo account")
     parser.add_argument("--dry-run", action="store_true", help="Perform extraction and validation without database writes")
+    parser.add_argument("--verify-live", action="store_true", help="Verify session identity with live Telegram get_me() before migrating")
+    parser.add_argument("--rollback", action="store_true", help="Execute owner-scoped rollback of migrated accounts and vault entries")
     parser.add_argument("--create-admin", action="store_true", help="Create a designated admin user if owner-id does not exist")
     parser.add_argument("--admin-name", type=str, default="Root Admin", help="Name for the newly created admin user")
 
@@ -36,8 +38,8 @@ async def main():
         print("Error: Either --owner-id or --create-admin must be specified.", file=sys.stderr)
         return 1
 
-    if not args.primary_tg_id:
-        print("Error: --primary-tg-id must be specified.", file=sys.stderr)
+    if not args.rollback and not args.primary_tg_id:
+        print("Error: --primary-tg-id must be specified for migration.", file=sys.stderr)
         return 1
 
     await init_db()
@@ -54,6 +56,17 @@ async def main():
                 print(f"Error: Invalid UUID format for --owner-id: {args.owner_id}", file=sys.stderr)
                 return 1
 
+        migrator = LegacySessionMigrator(session)
+
+        if args.rollback:
+            if not owner_uuid:
+                print("Error: --owner-id is required for rollback.", file=sys.stderr)
+                return 1
+            ok = await migrator.rollback(owner_uuid)
+            print(f"Rollback result for owner {owner_uuid}: {'Success' if ok else 'Failed'}")
+            await close_db()
+            return 0 if ok else 1
+
         if args.create_admin and (not owner_uuid or not await user_repo.get_by_id(owner_uuid)):
             owner_uuid = owner_uuid or uuid.uuid4()
             admin_user = await user_repo.create_user(
@@ -65,12 +78,12 @@ async def main():
             await session.commit()
             print(f"Created designated admin user: {admin_user.display_name} (ID: {admin_user.id})")
 
-        migrator = LegacySessionMigrator(session)
         result = await migrator.migrate(
             owner_user_id=owner_uuid,
             primary_telegram_user_id=args.primary_tg_id,
             secondary_telegram_user_id=args.secondary_tg_id,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
+            verify_live=args.verify_live
         )
 
         print("\n=== Migration Result ===")

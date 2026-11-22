@@ -927,7 +927,10 @@ class StreamEngine:
                         else:
                             if next_to_fetch >= total_chunks:
                                 if next_to_deliver not in buffered:
-                                    break
+                                    if not in_flight:
+                                        break
+                                    await asyncio.sleep(0.02)
+                                    continue
                             else:
                                 if next_to_deliver in buffered:
                                     continue
