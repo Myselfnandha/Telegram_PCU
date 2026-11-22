@@ -38,6 +38,7 @@ backend/data/*.db-shm
 backend/data/*.log*
 backend/data/*.pid
 backend/data/*.json
+backend/data/*token*
 backend/data/.*token*
 backend/data/.rust_core_env
 scratch/

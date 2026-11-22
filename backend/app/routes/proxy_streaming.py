@@ -317,6 +317,9 @@ async def handle_proxy_download(
             if not is_auth:
                 raise HTTPException(status_code=401, detail="Telegram account not authorized.")
         else:
+            from app.config import MULTI_TENANT_STREAMING_ENABLED
+            if MULTI_TENANT_STREAMING_ENABLED:
+                raise HTTPException(status_code=401, detail="Authentication required: No tenant session or playback grant provided.")
             # Give client up to 10s to reconnect if network interface is switching (e.g. WiFi to Hotspot/Cellular)
             connected = await TelegramClientManager.ensure_connected(timeout=10.0)
             client = await TelegramClientManager.get_client()

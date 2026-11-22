@@ -388,6 +388,17 @@ class TelegramClientManager:
         sender_pool.set_max_senders(32)
 
     @staticmethod
+    def _is_loop_mismatched(client, running_loop) -> bool:
+        if client is None:
+            return False
+        if "loop" in getattr(client, "__dict__", {}):
+            return getattr(client, "loop", None) is not running_loop
+        client_loop = getattr(client, "loop", None)
+        if isinstance(client_loop, asyncio.AbstractEventLoop):
+            return client_loop is not running_loop
+        return False
+
+    @staticmethod
     def _secure_session_permissions():
         try:
             if SESSION_DIR.exists():
@@ -408,7 +419,7 @@ class TelegramClientManager:
         If no user session is authorized but BOT_TOKEN is present, falls back to bot client.
         """
         running_loop = asyncio.get_running_loop()
-        if cls._client is not None and getattr(cls._client, "loop", None) is not running_loop:
+        if cls._client is not None and cls._is_loop_mismatched(cls._client, running_loop):
             logger.info("Active event loop changed; rebinding primary Telethon client...")
             cls._client = None
             cls._is_ready = False
@@ -416,7 +427,7 @@ class TelegramClientManager:
 
         if cls._client is None or not cls._client.is_connected():
             async with cls._lock:
-                if cls._client is not None and getattr(cls._client, "loop", None) is not running_loop:
+                if cls._client is not None and cls._is_loop_mismatched(cls._client, running_loop):
                     cls._client = None
                     cls._is_ready = False
                     cls._cached_me = None
@@ -559,18 +570,19 @@ class TelegramClientManager:
                     pass
                 cls._client = None
                 cls._is_ready = False
-            deadline = time.time() + timeout
-            delay = 0.5
-            while time.time() < deadline:
-                try:
-                    client = await cls.get_client()
-                    if client and client.is_connected():
-                        return True
-                except Exception as e:
-                    logger.debug(f"reconnect_primary retry notice: {e}")
-                await asyncio.sleep(min(delay, max(0.1, deadline - time.time())))
-                delay = min(2.0, delay * 1.5)
-            return bool(cls._client and cls._client.is_connected())
+
+        deadline = time.time() + timeout
+        delay = 0.5
+        while time.time() < deadline:
+            try:
+                client = await cls.get_client()
+                if client and client.is_connected():
+                    return True
+            except Exception as e:
+                logger.debug(f"reconnect_primary retry notice: {e}")
+            await asyncio.sleep(min(delay, max(0.1, deadline - time.time())))
+            delay = min(2.0, delay * 1.5)
+        return bool(cls._client and cls._client.is_connected())
 
     @classmethod
     async def ensure_connected(cls, timeout: float = 15.0) -> bool:
@@ -837,7 +849,7 @@ class TelegramClientManager:
     @classmethod
     async def get_secondary_client(cls) -> Optional[TelegramClient]:
         running_loop = asyncio.get_running_loop()
-        if cls._secondary_client is not None and getattr(cls._secondary_client, "loop", None) is not running_loop:
+        if cls._secondary_client is not None and cls._is_loop_mismatched(cls._secondary_client, running_loop):
             logger.info("Active event loop changed; rebinding secondary Telethon client...")
             cls._secondary_client = None
             cls._is_secondary_ready = False

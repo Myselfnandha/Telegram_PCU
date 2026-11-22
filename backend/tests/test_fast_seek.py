@@ -888,10 +888,11 @@ async def test_download_media_subtitles_endpoint(tmp_path):
     from telethon.tl.types import MessageMediaDocument, Document
 
     # 1. Test fallback blank subtitle when no cached file exists
-    res = await download_media_subtitles("chat_sub", 1001)
-    assert res.status_code == 200
-    assert res.media_type == "text/plain; charset=utf-8"
-    assert b"00:00:00,000" in res.body
+    with patch.object(subtitle_service, "get_or_download_subtitle", new_callable=AsyncMock, return_value=None):
+        res = await download_media_subtitles("chat_sub", 1001)
+        assert res.status_code == 200
+        assert res.media_type == "text/plain; charset=utf-8"
+        assert b"00:00:00,000" in res.body
 
     # 2. Test cached subtitle delivery
     sub_file = SUBTITLES_DIR / "test_movie.eng.srt"

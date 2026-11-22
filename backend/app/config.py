@@ -140,6 +140,14 @@ def save_env_dict(updates: Dict[str, Any]) -> None:
     if not updates:
         return
 
+    # Security: never persist raw session strings to plaintext .env files
+    filtered_updates = {
+        k: v for k, v in updates.items()
+        if "SESSION_STRING" not in k.upper()
+    }
+    if not filtered_updates:
+        return
+
     targets = [ROOT_DIR / ".env", BACKEND_DIR / ".env"]
     etc_env = Path("/etc/secrets/.env")
     if etc_env.exists() and os.access(etc_env, os.W_OK):
@@ -161,13 +169,13 @@ def save_env_dict(updates: Dict[str, Any]) -> None:
                 stripped = line.strip()
                 if stripped and not stripped.startswith("#") and "=" in stripped:
                     key = stripped.split("=", 1)[0].strip()
-                    if key in updates:
-                        new_lines.append(f"{key}={updates[key]}\n")
+                    if key in filtered_updates:
+                        new_lines.append(f"{key}={filtered_updates[key]}\n")
                         keys_written.add(key)
                         continue
                 new_lines.append(line)
 
-            for k, v in updates.items():
+            for k, v in filtered_updates.items():
                 if k not in keys_written:
                     new_lines.append(f"{k}={v}\n")
 

@@ -459,7 +459,7 @@ async def test_qr_linking_2fa_challenge_handling():
         mock_client.disconnect = AsyncMock()
         mock_client.is_connected = MagicMock(return_value=True)
 
-        with patch("telethon.TelegramClient.__new__", return_value=mock_client):
+        with patch("app.telegram.link_service.TelegramClient", return_value=mock_client):
             attempt = await TelegramLinkService.start_link_attempt(user_id=user_id, role="turbo")
             # Wait for transition to 2FA_REQUIRED
             for _ in range(20):
@@ -583,7 +583,7 @@ async def test_qr_linking_cancellation_and_cleanup():
         mock_client.disconnect = AsyncMock()
         mock_client.is_connected = MagicMock(return_value=True)
 
-        with patch("telethon.TelegramClient.__new__", return_value=mock_client):
+        with patch("app.telegram.link_service.TelegramClient", return_value=mock_client):
             attempt = await TelegramLinkService.start_link_attempt(user_id=user_id, role="primary")
             cancelled = await TelegramLinkService.cancel_link_attempt(user_id, attempt.id)
             assert cancelled is True
@@ -618,7 +618,7 @@ async def test_multi_tenant_client_manager_lazy_and_isolation():
         mock_telethon.is_user_authorized = AsyncMock(return_value=True)
         mock_telethon.is_connected = MagicMock(return_value=True)
 
-        with patch("telethon.TelegramClient.__new__", return_value=mock_telethon):
+        with patch("app.telegram.client_manager.TelegramClient", return_value=mock_telethon):
             # User A retrieves client successfully
             client = await manager.get_client(principal_a, acc_a.id)
             assert client is not None
@@ -654,7 +654,7 @@ async def test_idle_disconnect_and_relink_required_transition():
         mock_client.disconnect = AsyncMock()
         mock_client.is_connected = MagicMock(return_value=True)
 
-        with patch("telethon.TelegramClient.__new__", return_value=mock_client):
+        with patch("app.telegram.client_manager.TelegramClient", return_value=mock_client):
             await manager.get_client(principal, acc.id)
             assert acc.id in manager._active_clients
 
@@ -672,7 +672,7 @@ async def test_idle_disconnect_and_relink_required_transition():
         mock_revoked_client.disconnect = AsyncMock()
         mock_revoked_client.is_connected = MagicMock(return_value=True)
 
-        with patch("telethon.TelegramClient.__new__", return_value=mock_revoked_client):
+        with patch("app.telegram.client_manager.TelegramClient", return_value=mock_revoked_client):
             with pytest.raises(RelinkRequiredError):
                 await manager.get_client(principal, acc.id)
 

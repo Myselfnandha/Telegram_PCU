@@ -1,0 +1,98 @@
+[
+  {
+    "label": "Single Stream (Legacy Baseline)",
+    "mode": "off",
+    "active_workers": 1,
+    "file_size_mb": 30.0,
+    "duration_s": 1.595,
+    "ttfb_ms": 34.01,
+    "throughput_mbs": 18.81,
+    "peak_rss_mb": 192.37,
+    "memory_delta_mb": 30.51,
+    "sha256_match": true,
+    "sha256": "434f266d931df92b3747acbc47c15be29ed5299ac0f341d57a59c8b90998e08c",
+    "worker_distribution": {
+      "0": {
+        "chunks": 60,
+        "bytes": 31457280
+      }
+    }
+  },
+  {
+    "label": "Balanced Multi-Turbo (2 Workers)",
+    "mode": "balanced",
+    "active_workers": 2,
+    "file_size_mb": 30.0,
+    "duration_s": 0.875,
+    "ttfb_ms": 38.33,
+    "throughput_mbs": 34.27,
+    "peak_rss_mb": 192.37,
+    "memory_delta_mb": 30.0,
+    "sha256_match": true,
+    "sha256": "434f266d931df92b3747acbc47c15be29ed5299ac0f341d57a59c8b90998e08c",
+    "worker_distribution": {
+      "0": {
+        "chunks": 32,
+        "bytes": 16777216
+      },
+      "1": {
+        "chunks": 28,
+        "bytes": 14680064
+      }
+    }
+  },
+  {
+    "label": "Adaptive Multi-Turbo (3 Workers)",
+    "mode": "adaptive",
+    "active_workers": 3,
+    "file_size_mb": 30.0,
+    "duration_s": 0.61,
+    "ttfb_ms": 32.28,
+    "throughput_mbs": 49.22,
+    "peak_rss_mb": 192.37,
+    "memory_delta_mb": 0.0,
+    "sha256_match": true,
+    "sha256": "434f266d931df92b3747acbc47c15be29ed5299ac0f341d57a59c8b90998e08c",
+    "worker_distribution": {
+      "0": {
+        "chunks": 21,
+        "bytes": 11010048
+      },
+      "1": {
+        "chunks": 20,
+        "bytes": 10485760
+      },
+      "2": {
+        "chunks": 19,
+        "bytes": 9961472
+      }
+    }
+  },
+  {
+    "label": "Maximum Turbo (3 Saturated Workers)",
+    "mode": "maximum",
+    "active_workers": 3,
+    "file_size_mb": 30.0,
+    "duration_s": 0.599,
+    "ttfb_ms": 29.81,
+    "throughput_mbs": 50.12,
+    "peak_rss_mb": 192.37,
+    "memory_delta_mb": 0.0,
+    "sha256_match": true,
+    "sha256": "434f266d931df92b3747acbc47c15be29ed5299ac0f341d57a59c8b90998e08c",
+    "worker_distribution": {
+      "0": {
+        "chunks": 21,
+        "bytes": 11010048
+      },
+      "1": {
+        "chunks": 20,
+        "bytes": 10485760
+      },
+      "2": {
+        "chunks": 19,
+        "bytes": 9961472
+      }
+    }
+  }
+]

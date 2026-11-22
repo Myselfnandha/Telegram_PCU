@@ -16,7 +16,13 @@ def is_loopback_request(request: Request) -> bool:
     """
     Checks if the request is strictly from local loopback (127.0.0.1 / ::1 / localhost / testserver)
     and did NOT arrive through an external proxy, tunnel, or forwarded header.
+    When ENABLE_LEGACY_LOOPBACK is False or MULTI_TENANT_STREAMING_ENABLED is True,
+    loopback bypass is disabled to enforce strict tenant authentication.
     """
+    from app.config import ENABLE_LEGACY_LOOPBACK, MULTI_TENANT_STREAMING_ENABLED
+    if not ENABLE_LEGACY_LOOPBACK or MULTI_TENANT_STREAMING_ENABLED:
+        return False
+
     # Any forwarding proxy headers indicate external routing (e.g. Cloudflare Tunnel, ngrok, reverse proxy)
     for header in ("cf-connecting-ip", "x-forwarded-for", "x-real-ip"):
         if header in request.headers:

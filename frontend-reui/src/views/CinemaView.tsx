@@ -135,12 +135,10 @@ export const CinemaView: React.FC = () => {
     return 'dense';
   });
   const [isContinueWatchingOpen, setContinueWatchingOpen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) return false;
     const saved = localStorage.getItem('cinema_resume_dock_open');
     return saved !== 'false';
   });
   const [isChannelDockOpen, setChannelDockOpen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) return false;
     const saved = localStorage.getItem('cinema_channel_dock_open');
     return saved !== 'false';
   });
@@ -174,20 +172,8 @@ export const CinemaView: React.FC = () => {
     };
     document.addEventListener('fullscreenchange', handleFsChange);
 
-    let prevWidth = typeof window !== 'undefined' ? window.innerWidth : 1440;
-    const handleResize = () => {
-      const currentWidth = window.innerWidth;
-      if (currentWidth < 1024 && prevWidth >= 1024) {
-        setChannelDockOpen(false);
-        setContinueWatchingOpen(false);
-      }
-      prevWidth = currentWidth;
-    };
-    window.addEventListener('resize', handleResize);
-
     return () => {
       document.removeEventListener('fullscreenchange', handleFsChange);
-      window.removeEventListener('resize', handleResize);
     };
   }, []);
 

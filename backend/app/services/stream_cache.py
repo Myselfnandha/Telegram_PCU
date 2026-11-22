@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import asyncio
 import logging
@@ -92,22 +93,39 @@ class StreamCacheManager:
                 cands.append(raw)
         return cands
 
+    @staticmethod
+    def _sanitize_id(val: Union[str, int]) -> str:
+        s = str(val).strip()
+        cleaned = re.sub(r'[^a-zA-Z0-9_-]', '_', s)
+        return cleaned or "default"
+
     def _get_cache_key(self, chat_id: str, message_id: int, user_id: Optional[Union[uuid.UUID, str]] = None) -> str:
+        clean_cid = self._sanitize_id(chat_id)
         if user_id:
-            return f"tenant_{user_id}_{chat_id}_{message_id}"
-        return f"{chat_id}_{message_id}"
+            return f"tenant_{self._sanitize_id(user_id)}_{clean_cid}_{message_id}"
+        return f"{clean_cid}_{message_id}"
 
     def get_cache_path(self, chat_id: str, message_id: int, filename: Optional[str] = None, user_id: Optional[Union[uuid.UUID, str]] = None) -> Path:
-        ext = os.path.splitext(filename)[1] if filename else ".bin"
-        if not ext or len(ext) > 6:
+        clean_cid = self._sanitize_id(chat_id)
+        clean_mid = int(message_id) if str(message_id).isdigit() else 0
+        ext = os.path.splitext(os.path.basename(filename))[1] if filename else ".bin"
+        if not ext or len(ext) > 6 or ".." in ext or "/" in ext or "\\" in ext:
             ext = ".bin"
-        prefix = f"tenant_{user_id}_" if user_id else ""
-        return CACHE_DIR / f"{prefix}{chat_id}_{message_id}{ext}"
+        prefix = f"tenant_{self._sanitize_id(user_id)}_" if user_id else ""
+        target = (CACHE_DIR / f"{prefix}{clean_cid}_{clean_mid}{ext}").resolve()
+        if not target.is_relative_to(CACHE_DIR.resolve()):
+            raise ValueError(f"Path traversal detected in cache path: {chat_id}")
+        return target
 
     def get_block_path(self, chat_id: str, message_id: int, block_idx: int, user_id: Optional[Union[uuid.UUID, str]] = None) -> Path:
         """Returns the file path for a discrete 10MB chunk block."""
-        prefix = f"tenant_{user_id}_" if user_id else ""
-        return BLOCKS_DIR / f"{prefix}{chat_id}_{message_id}_part{block_idx:05d}.bin"
+        clean_cid = self._sanitize_id(chat_id)
+        clean_mid = int(message_id) if str(message_id).isdigit() else 0
+        prefix = f"tenant_{self._sanitize_id(user_id)}_" if user_id else ""
+        target = (BLOCKS_DIR / f"{prefix}{clean_cid}_{clean_mid}_part{block_idx:05d}.bin").resolve()
+        if not target.is_relative_to(BLOCKS_DIR.resolve()):
+            raise ValueError(f"Path traversal detected in block path: {chat_id}")
+        return target
 
     def has_block(self, chat_id: str, message_id: int, block_idx: int, expected_size: int, user_id: Optional[Union[uuid.UUID, str]] = None) -> bool:
         """Returns True if the discrete 10MB block exists on disk and matches expected size."""

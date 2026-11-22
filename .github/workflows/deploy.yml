@@ -1,8 +1,7 @@
 name: Build and Push Docker to GHCR
 
 on:
-  push:
-    branches: [ main ]
+  # Manual dispatch only: Render builds the Docker image directly from git at 0 GitHub Actions quota cost.
   workflow_dispatch:
 
 permissions:

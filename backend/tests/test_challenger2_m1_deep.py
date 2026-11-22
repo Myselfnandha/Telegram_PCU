@@ -2,6 +2,8 @@ import pytest
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
+pytestmark = pytest.mark.playwright
+
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend-reui"
 BASE_URL = "http://localhost:8088"

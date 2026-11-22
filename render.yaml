@@ -15,6 +15,18 @@ services:
         value: "true"
       - key: API_AUTH_TOKEN
         generateValue: true
+      - key: DEPLOYMENT_PROFILE
+        value: "render_free"
+      - key: MULTI_TENANT_ENABLED
+        value: "true"
+      - key: SESSION_VAULT_ENABLED
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_VAULT_MASTER_KEY
+        sync: false
+      - key: ADMIN_BOOTSTRAP_TOKEN
+        generateValue: true
       - key: TG_API_ID
         sync: false
       - key: TG_API_HASH
