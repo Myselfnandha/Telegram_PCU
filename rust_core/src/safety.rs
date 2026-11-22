@@ -21,7 +21,12 @@ pub struct TokenBucket {
 }
 
 impl TokenBucket {
-    pub fn new(initial_rate_mbs: f64, min_rate_mbs: f64, max_rate_mbs: f64, capacity_mb: f64) -> Self {
+    pub fn new(
+        initial_rate_mbs: f64,
+        min_rate_mbs: f64,
+        max_rate_mbs: f64,
+        capacity_mb: f64,
+    ) -> Self {
         Self {
             capacity_mb,
             min_rate_mbs,
@@ -107,7 +112,9 @@ impl AntiBanPacer {
     }
 
     pub fn report_success(&self, bytes: usize) {
-        let prev = self.success_bytes.fetch_add(bytes as u64, Ordering::Relaxed);
+        let prev = self
+            .success_bytes
+            .fetch_add(bytes as u64, Ordering::Relaxed);
         if prev + (bytes as u64) >= 4 * 1024 * 1024 {
             self.success_bytes.store(0, Ordering::Relaxed);
             self.token_bucket.apply_aimd_increase();

@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::stream::{StreamEngine, StreamPriority};
 use grammers_client::Client;
+use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use crate::stream::{StreamEngine, StreamPriority};
 
 pub struct DownloadEngine {
     stream_engine: Arc<StreamEngine>,
@@ -27,7 +27,9 @@ impl DownloadEngine {
             return Err("No active clients in pool".to_string());
         }
 
-        let mut file = File::create(target_path).await.map_err(|e| format!("Failed to create file: {e}"))?;
+        let mut file = File::create(target_path)
+            .await
+            .map_err(|e| format!("Failed to create file: {e}"))?;
         let chunk_size = 512 * 1024;
         let mut downloaded = 0i64;
         let mut part_idx = 0usize;
@@ -37,24 +39,31 @@ impl DownloadEngine {
             let client = &clients[part_idx % clients.len()];
             let account_idx = part_idx % clients.len();
 
-            let chunk = self.stream_engine.fetch_chunk(
-                client,
-                dc_id,
-                doc_id,
-                access_hash,
-                file_reference.clone(),
-                downloaded,
-                to_read,
-                StreamPriority::Bulk,
-                account_idx,
-            ).await?;
+            let chunk = self
+                .stream_engine
+                .fetch_chunk(
+                    client,
+                    dc_id,
+                    doc_id,
+                    access_hash,
+                    file_reference.clone(),
+                    downloaded,
+                    to_read,
+                    StreamPriority::Bulk,
+                    account_idx,
+                )
+                .await?;
 
-            file.write_all(&chunk).await.map_err(|e| format!("Disk write error: {e}"))?;
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| format!("Disk write error: {e}"))?;
             downloaded += chunk.len() as i64;
             part_idx += 1;
         }
 
-        file.flush().await.map_err(|e| format!("Flush error: {e}"))?;
+        file.flush()
+            .await
+            .map_err(|e| format!("Flush error: {e}"))?;
         Ok(downloaded as u64)
     }
 }

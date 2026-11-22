@@ -1,13 +1,13 @@
-use std::net::{Ipv4Addr, SocketAddrV4, SocketAddrV6};
-use std::sync::Arc;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::engine::general_purpose::URL_SAFE;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use grammers_client::Client;
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
 use grammers_session::types::DcOption;
 use grammers_session::Session;
+use std::net::{Ipv4Addr, SocketAddrV4, SocketAddrV6};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct TelethonSessionInfo {
@@ -47,14 +47,22 @@ pub fn decode_telethon_string_session(raw: &str) -> Result<TelethonSessionInfo, 
     }
 }
 
-pub async fn create_client_from_string(session_str: &str, api_id: i32, account_idx: usize) -> Result<Client, String> {
+pub async fn create_client_from_string(
+    session_str: &str,
+    api_id: i32,
+    account_idx: usize,
+) -> Result<Client, String> {
     let info = decode_telethon_string_session(session_str)?;
     let db_dir = std::path::Path::new("/home/nandha/Desktop/TG_TOOL/backend/data");
     if !db_dir.exists() {
         let _ = std::fs::create_dir_all(db_dir);
     }
     let db_path = db_dir.join(format!("rust_session_{account_idx}.db"));
-    let session = Arc::new(SqliteSession::open(&db_path).await.map_err(|e| format!("SqliteSession error: {e:?}"))?);
+    let session = Arc::new(
+        SqliteSession::open(&db_path)
+            .await
+            .map_err(|e| format!("SqliteSession error: {e:?}"))?,
+    );
 
     let _ = session.set_home_dc_id(info.dc_id).await;
     let default_dcs = [
@@ -65,7 +73,11 @@ pub async fn create_client_from_string(session_str: &str, api_id: i32, account_i
         (5, Ipv4Addr::new(91, 108, 56, 130), 443),
     ];
     for (id, ip, port) in default_dcs {
-        let existing_auth = session.dc_option(id).ok().flatten().and_then(|opt| opt.auth_key);
+        let existing_auth = session
+            .dc_option(id)
+            .ok()
+            .flatten()
+            .and_then(|opt| opt.auth_key);
         let auth_key = if id == info.dc_id {
             Some(info.auth_key)
         } else {

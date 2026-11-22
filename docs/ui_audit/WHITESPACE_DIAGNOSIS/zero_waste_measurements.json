@@ -1,0 +1,5518 @@
+[
+  {
+    "viewport": "1280x720",
+    "dockState": "dock_open",
+    "windowWidth": 1280,
+    "windowHeight": 720,
+    "mainAreaWidth": 1260,
+    "channelDockWidth": 0,
+    "continueWatchingWidth": 0,
+    "catalogWidth": 736,
+    "catDistFromRight": 272,
+    "catalogRowsCount": 14,
+    "totalPanels": 17,
+    "totalCards": 60,
+    "totalInternalCardRows": 28,
+    "completeCardRows": 28,
+    "incompleteCardRows": 0,
+    "avgCatalogRowOccupancy": 89,
+    "avgInternalCardRowOccupancy": 100,
+    "catalogRows": [
+      {
+        "rowIndex": 1,
+        "panelCount": 2,
+        "panelTitles": [
+          "Today (1c, 358px)",
+          "Yesterday (1c, 358px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "title": "Today",
+            "cardCount": 1,
+            "width": 358,
+            "height": 387,
+            "left": 0,
+            "right": 358,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  328
+                ],
+                "totalOccupiedWidth": 328,
+                "availWidth": 330,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "title": "Yesterday",
+            "cardCount": 1,
+            "width": 358,
+            "height": 387,
+            "left": 374,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  328
+                ],
+                "totalOccupiedWidth": 328,
+                "availWidth": 330,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 14 (14c, 732px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "title": "Sat, Nov 14",
+            "cardCount": 14,
+            "width": 732,
+            "height": 1477,
+            "left": 0,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 2,
+                "cardWidths": [
+                  345,
+                  345
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "panelCount": 1,
+        "panelTitles": [
+          "Fri, Nov 13 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 390,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 346,
+        "percentOccupied": 53,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "title": "Fri, Nov 13",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 12 (3c, 732px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "title": "Thu, Nov 12",
+            "cardCount": 3,
+            "width": 732,
+            "height": 353,
+            "left": 0,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "panelCount": 1,
+        "panelTitles": [
+          "Tue, Nov 10 (2c, 720px)"
+        ],
+        "totalOccupiedWidth": 720,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 16,
+        "percentOccupied": 98,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "title": "Tue, Nov 10",
+            "cardCount": 2,
+            "width": 720,
+            "height": 353,
+            "left": 0,
+            "right": 720,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  339,
+                  339
+                ],
+                "totalOccupiedWidth": 690,
+                "availWidth": 692,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sun, Nov 8 (8c, 732px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "title": "Sun, Nov 8",
+            "cardCount": 8,
+            "width": 732,
+            "height": 941,
+            "left": 0,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  345,
+                  345
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 7 (8c, 732px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "title": "Sat, Nov 7",
+            "cardCount": 8,
+            "width": 732,
+            "height": 941,
+            "left": 0,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  345,
+                  345
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 5 (9c, 732px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "title": "Thu, Nov 5",
+            "cardCount": 9,
+            "width": 732,
+            "height": 941,
+            "left": 0,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "panelCount": 1,
+        "panelTitles": [
+          "Wed, Nov 4 (5c, 732px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "title": "Wed, Nov 4",
+            "cardCount": 5,
+            "width": 732,
+            "height": 647,
+            "left": 0,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  226,
+                  226,
+                  226
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  345,
+                  345
+                ],
+                "totalOccupiedWidth": 702,
+                "availWidth": 704,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "panelCount": 2,
+        "panelTitles": [
+          "Mon, Nov 2 (1c, 358px)",
+          "Sun, Nov 1 (1c, 358px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 10,
+            "title": "Mon, Nov 2",
+            "cardCount": 1,
+            "width": 358,
+            "height": 353,
+            "left": 0,
+            "right": 358,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  328
+                ],
+                "totalOccupiedWidth": 328,
+                "availWidth": 330,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "title": "Sun, Nov 1",
+            "cardCount": 1,
+            "width": 358,
+            "height": 353,
+            "left": 374,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  328
+                ],
+                "totalOccupiedWidth": 328,
+                "availWidth": 330,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 11,
+        "panelCount": 1,
+        "panelTitles": [
+          "Wed, Oct 28 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 390,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 346,
+        "percentOccupied": 53,
+        "panels": [
+          {
+            "panelIndex": 12,
+            "title": "Wed, Oct 28",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 12,
+        "panelCount": 1,
+        "panelTitles": [
+          "Mon, Oct 26 (2c, 720px)"
+        ],
+        "totalOccupiedWidth": 720,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 16,
+        "percentOccupied": 98,
+        "panels": [
+          {
+            "panelIndex": 13,
+            "title": "Mon, Oct 26",
+            "cardCount": 2,
+            "width": 720,
+            "height": 353,
+            "left": 0,
+            "right": 720,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  339,
+                  339
+                ],
+                "totalOccupiedWidth": 690,
+                "availWidth": 692,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 13,
+        "panelCount": 2,
+        "panelTitles": [
+          "Fri, Oct 23 (1c, 358px)",
+          "Tue, Oct 20 (1c, 358px)"
+        ],
+        "totalOccupiedWidth": 732,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 14,
+            "title": "Fri, Oct 23",
+            "cardCount": 1,
+            "width": 358,
+            "height": 353,
+            "left": 0,
+            "right": 358,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  328
+                ],
+                "totalOccupiedWidth": 328,
+                "availWidth": 330,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "title": "Tue, Oct 20",
+            "cardCount": 1,
+            "width": 358,
+            "height": 353,
+            "left": 374,
+            "right": 732,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  328
+                ],
+                "totalOccupiedWidth": 328,
+                "availWidth": 330,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 14,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Oct 17 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 390,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 346,
+        "percentOccupied": 53,
+        "panels": [
+          {
+            "panelIndex": 16,
+            "title": "Sat, Oct 17",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1280x720",
+    "dockState": "dock_closed",
+    "windowWidth": 1280,
+    "windowHeight": 720,
+    "mainAreaWidth": 1260,
+    "channelDockWidth": 0,
+    "continueWatchingWidth": 24,
+    "catalogWidth": 964,
+    "catDistFromRight": 44,
+    "catalogRowsCount": 11,
+    "totalPanels": 17,
+    "totalCards": 60,
+    "totalInternalCardRows": 30,
+    "completeCardRows": 30,
+    "incompleteCardRows": 0,
+    "avgCatalogRowOccupancy": 93,
+    "avgInternalCardRowOccupancy": 100,
+    "catalogRows": [
+      {
+        "rowIndex": 1,
+        "panelCount": 2,
+        "panelTitles": [
+          "Today (1c, 390px)",
+          "Yesterday (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 168,
+        "percentOccupied": 83,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "title": "Today",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "title": "Yesterday",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "panelCount": 2,
+        "panelTitles": [
+          "Sat, Nov 14 (14c, 683px)",
+          "Fri, Nov 13 (1c, 261px)"
+        ],
+        "totalOccupiedWidth": 960,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "title": "Sat, Nov 14",
+            "cardCount": 14,
+            "width": 683,
+            "height": 2264,
+            "left": 0,
+            "right": 683,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  321,
+                  321
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  321,
+                  321
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  321,
+                  321
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 2,
+                "cardWidths": [
+                  321,
+                  321
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 2,
+                "cardWidths": [
+                  321,
+                  321
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 6,
+                "cardCount": 2,
+                "cardWidths": [
+                  321,
+                  321
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 7,
+                "cardCount": 2,
+                "cardWidths": [
+                  321,
+                  321
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 3,
+            "title": "Fri, Nov 13",
+            "cardCount": 1,
+            "width": 261,
+            "height": 332,
+            "left": 699,
+            "right": 960,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  231
+                ],
+                "totalOccupiedWidth": 231,
+                "availWidth": 233,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 12 (3c, 960px)"
+        ],
+        "totalOccupiedWidth": 960,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "title": "Thu, Nov 12",
+            "cardCount": 3,
+            "width": 960,
+            "height": 353,
+            "left": 0,
+            "right": 960,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  302,
+                  302,
+                  302
+                ],
+                "totalOccupiedWidth": 930,
+                "availWidth": 932,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "panelCount": 1,
+        "panelTitles": [
+          "Tue, Nov 10 (2c, 720px)"
+        ],
+        "totalOccupiedWidth": 720,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 244,
+        "percentOccupied": 75,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "title": "Tue, Nov 10",
+            "cardCount": 2,
+            "width": 720,
+            "height": 353,
+            "left": 0,
+            "right": 720,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  339,
+                  339
+                ],
+                "totalOccupiedWidth": 690,
+                "availWidth": 692,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sun, Nov 8 (8c, 960px)"
+        ],
+        "totalOccupiedWidth": 960,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "title": "Sun, Nov 8",
+            "cardCount": 8,
+            "width": 960,
+            "height": 941,
+            "left": 0,
+            "right": 960,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  302,
+                  302,
+                  302
+                ],
+                "totalOccupiedWidth": 930,
+                "availWidth": 932,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  302,
+                  302,
+                  302
+                ],
+                "totalOccupiedWidth": 930,
+                "availWidth": 932,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  450,
+                  450
+                ],
+                "totalOccupiedWidth": 912,
+                "availWidth": 932,
+                "unusedSpace": 20,
+                "percentOccupied": 98
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 7 (8c, 960px)"
+        ],
+        "totalOccupiedWidth": 960,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "title": "Sat, Nov 7",
+            "cardCount": 8,
+            "width": 960,
+            "height": 941,
+            "left": 0,
+            "right": 960,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  302,
+                  302,
+                  302
+                ],
+                "totalOccupiedWidth": 930,
+                "availWidth": 932,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  302,
+                  302,
+                  302
+                ],
+                "totalOccupiedWidth": 930,
+                "availWidth": 932,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  450,
+                  450
+                ],
+                "totalOccupiedWidth": 912,
+                "availWidth": 932,
+                "unusedSpace": 20,
+                "percentOccupied": 98
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 5 (9c, 960px)"
+        ],
+        "totalOccupiedWidth": 960,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "title": "Thu, Nov 5",
+            "cardCount": 9,
+            "width": 960,
+            "height": 941,
+            "left": 0,
+            "right": 960,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  302,
+                  302,
+                  302
+                ],
+                "totalOccupiedWidth": 930,
+                "availWidth": 932,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  302,
+                  302,
+                  302
+                ],
+                "totalOccupiedWidth": 930,
+                "availWidth": 932,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  302,
+                  302,
+                  302
+                ],
+                "totalOccupiedWidth": 930,
+                "availWidth": 932,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "panelCount": 2,
+        "panelTitles": [
+          "Wed, Nov 4 (5c, 683px)",
+          "Mon, Nov 2 (1c, 261px)"
+        ],
+        "totalOccupiedWidth": 960,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "title": "Wed, Nov 4",
+            "cardCount": 5,
+            "width": 683,
+            "height": 647,
+            "left": 0,
+            "right": 683,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  210,
+                  210,
+                  210
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  321,
+                  321
+                ],
+                "totalOccupiedWidth": 654,
+                "availWidth": 655,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "title": "Mon, Nov 2",
+            "cardCount": 1,
+            "width": 261,
+            "height": 353,
+            "left": 699,
+            "right": 960,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  231
+                ],
+                "totalOccupiedWidth": 231,
+                "availWidth": 233,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "panelCount": 2,
+        "panelTitles": [
+          "Sun, Nov 1 (1c, 390px)",
+          "Wed, Oct 28 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 168,
+        "percentOccupied": 83,
+        "panels": [
+          {
+            "panelIndex": 11,
+            "title": "Sun, Nov 1",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "title": "Wed, Oct 28",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "panelCount": 2,
+        "panelTitles": [
+          "Mon, Oct 26 (2c, 623px)",
+          "Fri, Oct 23 (1c, 321px)"
+        ],
+        "totalOccupiedWidth": 960,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 13,
+            "title": "Mon, Oct 26",
+            "cardCount": 2,
+            "width": 623,
+            "height": 353,
+            "left": 0,
+            "right": 623,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  290,
+                  290
+                ],
+                "totalOccupiedWidth": 592,
+                "availWidth": 595,
+                "unusedSpace": 3,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "title": "Fri, Oct 23",
+            "cardCount": 1,
+            "width": 321,
+            "height": 353,
+            "left": 639,
+            "right": 960,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  291
+                ],
+                "totalOccupiedWidth": 291,
+                "availWidth": 293,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 11,
+        "panelCount": 2,
+        "panelTitles": [
+          "Tue, Oct 20 (1c, 390px)",
+          "Sat, Oct 17 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 168,
+        "percentOccupied": 83,
+        "panels": [
+          {
+            "panelIndex": 15,
+            "title": "Tue, Oct 20",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "title": "Sat, Oct 17",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1440x900",
+    "dockState": "dock_open",
+    "windowWidth": 1440,
+    "windowHeight": 900,
+    "mainAreaWidth": 1420,
+    "channelDockWidth": 0,
+    "continueWatchingWidth": 0,
+    "catalogWidth": 840,
+    "catDistFromRight": 300,
+    "catalogRowsCount": 12,
+    "totalPanels": 17,
+    "totalCards": 60,
+    "totalInternalCardRows": 28,
+    "completeCardRows": 28,
+    "incompleteCardRows": 0,
+    "avgCatalogRowOccupancy": 94,
+    "avgInternalCardRowOccupancy": 100,
+    "catalogRows": [
+      {
+        "rowIndex": 1,
+        "panelCount": 2,
+        "panelTitles": [
+          "Today (1c, 390px)",
+          "Yesterday (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 44,
+        "percentOccupied": 95,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "title": "Today",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "title": "Yesterday",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 14 (14c, 836px)"
+        ],
+        "totalOccupiedWidth": 836,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "title": "Sat, Nov 14",
+            "cardCount": 14,
+            "width": 836,
+            "height": 1584,
+            "left": 0,
+            "right": 836,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 2,
+                "cardWidths": [
+                  397,
+                  397
+                ],
+                "totalOccupiedWidth": 806,
+                "availWidth": 808,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "panelCount": 1,
+        "panelTitles": [
+          "Fri, Nov 13 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 390,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 450,
+        "percentOccupied": 46,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "title": "Fri, Nov 13",
+            "cardCount": 1,
+            "width": 390,
+            "height": 384,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 12 (3c, 836px)"
+        ],
+        "totalOccupiedWidth": 836,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "title": "Thu, Nov 12",
+            "cardCount": 3,
+            "width": 836,
+            "height": 353,
+            "left": 0,
+            "right": 836,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "panelCount": 1,
+        "panelTitles": [
+          "Tue, Nov 10 (2c, 720px)"
+        ],
+        "totalOccupiedWidth": 720,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 120,
+        "percentOccupied": 86,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "title": "Tue, Nov 10",
+            "cardCount": 2,
+            "width": 720,
+            "height": 353,
+            "left": 0,
+            "right": 720,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  339,
+                  339
+                ],
+                "totalOccupiedWidth": 690,
+                "availWidth": 692,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sun, Nov 8 (8c, 836px)"
+        ],
+        "totalOccupiedWidth": 836,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "title": "Sun, Nov 8",
+            "cardCount": 8,
+            "width": 836,
+            "height": 941,
+            "left": 0,
+            "right": 836,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  397,
+                  397
+                ],
+                "totalOccupiedWidth": 806,
+                "availWidth": 808,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 7 (8c, 836px)"
+        ],
+        "totalOccupiedWidth": 836,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "title": "Sat, Nov 7",
+            "cardCount": 8,
+            "width": 836,
+            "height": 941,
+            "left": 0,
+            "right": 836,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  397,
+                  397
+                ],
+                "totalOccupiedWidth": 806,
+                "availWidth": 808,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 5 (9c, 836px)"
+        ],
+        "totalOccupiedWidth": 836,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "title": "Thu, Nov 5",
+            "cardCount": 9,
+            "width": 836,
+            "height": 941,
+            "left": 0,
+            "right": 836,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "panelCount": 1,
+        "panelTitles": [
+          "Wed, Nov 4 (5c, 836px)"
+        ],
+        "totalOccupiedWidth": 836,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "title": "Wed, Nov 4",
+            "cardCount": 5,
+            "width": 836,
+            "height": 647,
+            "left": 0,
+            "right": 836,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  261,
+                  261,
+                  261
+                ],
+                "totalOccupiedWidth": 807,
+                "availWidth": 808,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  397,
+                  397
+                ],
+                "totalOccupiedWidth": 806,
+                "availWidth": 808,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "panelCount": 3,
+        "panelTitles": [
+          "Mon, Nov 2 (1c, 268px)",
+          "Sun, Nov 1 (1c, 268px)",
+          "Wed, Oct 28 (1c, 268px)"
+        ],
+        "totalOccupiedWidth": 836,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 10,
+            "title": "Mon, Nov 2",
+            "cardCount": 1,
+            "width": 268,
+            "height": 353,
+            "left": 0,
+            "right": 268,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  238
+                ],
+                "totalOccupiedWidth": 238,
+                "availWidth": 240,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "title": "Sun, Nov 1",
+            "cardCount": 1,
+            "width": 268,
+            "height": 353,
+            "left": 284,
+            "right": 552,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  238
+                ],
+                "totalOccupiedWidth": 238,
+                "availWidth": 240,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "title": "Wed, Oct 28",
+            "cardCount": 1,
+            "width": 268,
+            "height": 353,
+            "left": 568,
+            "right": 836,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  238
+                ],
+                "totalOccupiedWidth": 238,
+                "availWidth": 240,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 11,
+        "panelCount": 2,
+        "panelTitles": [
+          "Mon, Oct 26 (2c, 540px)",
+          "Fri, Oct 23 (1c, 280px)"
+        ],
+        "totalOccupiedWidth": 836,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 13,
+            "title": "Mon, Oct 26",
+            "cardCount": 2,
+            "width": 540,
+            "height": 353,
+            "left": 0,
+            "right": 540,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  249,
+                  249
+                ],
+                "totalOccupiedWidth": 510,
+                "availWidth": 512,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "title": "Fri, Oct 23",
+            "cardCount": 1,
+            "width": 280,
+            "height": 353,
+            "left": 556,
+            "right": 836,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  250
+                ],
+                "totalOccupiedWidth": 250,
+                "availWidth": 252,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 12,
+        "panelCount": 2,
+        "panelTitles": [
+          "Tue, Oct 20 (1c, 390px)",
+          "Sat, Oct 17 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 44,
+        "percentOccupied": 95,
+        "panels": [
+          {
+            "panelIndex": 15,
+            "title": "Tue, Oct 20",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "title": "Sat, Oct 17",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1440x900",
+    "dockState": "dock_closed",
+    "windowWidth": 1440,
+    "windowHeight": 900,
+    "mainAreaWidth": 1420,
+    "channelDockWidth": 0,
+    "continueWatchingWidth": 24,
+    "catalogWidth": 1096,
+    "catDistFromRight": 44,
+    "catalogRowsCount": 10,
+    "totalPanels": 17,
+    "totalCards": 60,
+    "totalInternalCardRows": 26,
+    "completeCardRows": 26,
+    "incompleteCardRows": 0,
+    "avgCatalogRowOccupancy": 93,
+    "avgInternalCardRowOccupancy": 100,
+    "catalogRows": [
+      {
+        "rowIndex": 1,
+        "panelCount": 2,
+        "panelTitles": [
+          "Today (1c, 390px)",
+          "Yesterday (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 300,
+        "percentOccupied": 73,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "title": "Today",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "title": "Yesterday",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "panelCount": 2,
+        "panelTitles": [
+          "Sat, Nov 14 (14c, 797px)",
+          "Fri, Nov 13 (1c, 279px)"
+        ],
+        "totalOccupiedWidth": 1092,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "title": "Sat, Nov 14",
+            "cardCount": 14,
+            "width": 797,
+            "height": 1543,
+            "left": 0,
+            "right": 797,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  248,
+                  248,
+                  248
+                ],
+                "totalOccupiedWidth": 768,
+                "availWidth": 769,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  248,
+                  248,
+                  248
+                ],
+                "totalOccupiedWidth": 768,
+                "availWidth": 769,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  248,
+                  248,
+                  248
+                ],
+                "totalOccupiedWidth": 768,
+                "availWidth": 769,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 3,
+                "cardWidths": [
+                  248,
+                  248,
+                  248
+                ],
+                "totalOccupiedWidth": 768,
+                "availWidth": 769,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 2,
+                "cardWidths": [
+                  377,
+                  377
+                ],
+                "totalOccupiedWidth": 766,
+                "availWidth": 769,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 3,
+            "title": "Fri, Nov 13",
+            "cardCount": 1,
+            "width": 279,
+            "height": 342,
+            "left": 813,
+            "right": 1092,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  249
+                ],
+                "totalOccupiedWidth": 249,
+                "availWidth": 251,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 12 (3c, 1040px)"
+        ],
+        "totalOccupiedWidth": 1040,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 56,
+        "percentOccupied": 95,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "title": "Thu, Nov 12",
+            "cardCount": 3,
+            "width": 1040,
+            "height": 387,
+            "left": 0,
+            "right": 1040,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  329,
+                  329,
+                  329
+                ],
+                "totalOccupiedWidth": 1011,
+                "availWidth": 1012,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "panelCount": 1,
+        "panelTitles": [
+          "Tue, Nov 10 (2c, 720px)"
+        ],
+        "totalOccupiedWidth": 720,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 376,
+        "percentOccupied": 66,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "title": "Tue, Nov 10",
+            "cardCount": 2,
+            "width": 720,
+            "height": 353,
+            "left": 0,
+            "right": 720,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  339,
+                  339
+                ],
+                "totalOccupiedWidth": 690,
+                "availWidth": 692,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sun, Nov 8 (8c, 1092px)"
+        ],
+        "totalOccupiedWidth": 1092,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "title": "Sun, Nov 8",
+            "cardCount": 8,
+            "width": 1092,
+            "height": 647,
+            "left": 0,
+            "right": 1092,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 4,
+                "cardWidths": [
+                  257,
+                  257,
+                  257,
+                  257
+                ],
+                "totalOccupiedWidth": 1064,
+                "availWidth": 1064,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 4,
+                "cardWidths": [
+                  257,
+                  257,
+                  257,
+                  257
+                ],
+                "totalOccupiedWidth": 1064,
+                "availWidth": 1064,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 7 (8c, 1092px)"
+        ],
+        "totalOccupiedWidth": 1092,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "title": "Sat, Nov 7",
+            "cardCount": 8,
+            "width": 1092,
+            "height": 647,
+            "left": 0,
+            "right": 1092,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 4,
+                "cardWidths": [
+                  257,
+                  257,
+                  257,
+                  257
+                ],
+                "totalOccupiedWidth": 1064,
+                "availWidth": 1064,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 4,
+                "cardWidths": [
+                  257,
+                  257,
+                  257,
+                  257
+                ],
+                "totalOccupiedWidth": 1064,
+                "availWidth": 1064,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 5 (9c, 1092px)"
+        ],
+        "totalOccupiedWidth": 1092,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "title": "Thu, Nov 5",
+            "cardCount": 9,
+            "width": 1092,
+            "height": 941,
+            "left": 0,
+            "right": 1092,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  346,
+                  346,
+                  346
+                ],
+                "totalOccupiedWidth": 1062,
+                "availWidth": 1064,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  346,
+                  346,
+                  346
+                ],
+                "totalOccupiedWidth": 1062,
+                "availWidth": 1064,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  346,
+                  346,
+                  346
+                ],
+                "totalOccupiedWidth": 1062,
+                "availWidth": 1064,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "panelCount": 2,
+        "panelTitles": [
+          "Wed, Nov 4 (5c, 789px)",
+          "Mon, Nov 2 (1c, 287px)"
+        ],
+        "totalOccupiedWidth": 1092,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "title": "Wed, Nov 4",
+            "cardCount": 5,
+            "width": 789,
+            "height": 647,
+            "left": 0,
+            "right": 789,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  245,
+                  245,
+                  245
+                ],
+                "totalOccupiedWidth": 759,
+                "availWidth": 761,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  373,
+                  373
+                ],
+                "totalOccupiedWidth": 758,
+                "availWidth": 761,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "title": "Mon, Nov 2",
+            "cardCount": 1,
+            "width": 287,
+            "height": 353,
+            "left": 805,
+            "right": 1092,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  257
+                ],
+                "totalOccupiedWidth": 257,
+                "availWidth": 259,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "panelCount": 3,
+        "panelTitles": [
+          "Sun, Nov 1 (1c, 270px)",
+          "Wed, Oct 28 (1c, 270px)",
+          "Mon, Oct 26 (2c, 520px)"
+        ],
+        "totalOccupiedWidth": 1092,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 11,
+            "title": "Sun, Nov 1",
+            "cardCount": 1,
+            "width": 270,
+            "height": 353,
+            "left": 0,
+            "right": 270,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  240
+                ],
+                "totalOccupiedWidth": 240,
+                "availWidth": 242,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "title": "Wed, Oct 28",
+            "cardCount": 1,
+            "width": 270,
+            "height": 353,
+            "left": 286,
+            "right": 556,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  240
+                ],
+                "totalOccupiedWidth": 240,
+                "availWidth": 242,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "title": "Mon, Oct 26",
+            "cardCount": 2,
+            "width": 520,
+            "height": 353,
+            "left": 572,
+            "right": 1092,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  239,
+                  239
+                ],
+                "totalOccupiedWidth": 490,
+                "availWidth": 492,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "panelCount": 3,
+        "panelTitles": [
+          "Fri, Oct 23 (1c, 353px)",
+          "Tue, Oct 20 (1c, 353px)",
+          "Sat, Oct 17 (1c, 353px)"
+        ],
+        "totalOccupiedWidth": 1091,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 5,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 14,
+            "title": "Fri, Oct 23",
+            "cardCount": 1,
+            "width": 353,
+            "height": 353,
+            "left": 0,
+            "right": 353,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  323
+                ],
+                "totalOccupiedWidth": 323,
+                "availWidth": 325,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "title": "Tue, Oct 20",
+            "cardCount": 1,
+            "width": 353,
+            "height": 353,
+            "left": 369,
+            "right": 723,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  323
+                ],
+                "totalOccupiedWidth": 323,
+                "availWidth": 325,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "title": "Sat, Oct 17",
+            "cardCount": 1,
+            "width": 353,
+            "height": 353,
+            "left": 739,
+            "right": 1092,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  323
+                ],
+                "totalOccupiedWidth": 323,
+                "availWidth": 325,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1536x864",
+    "dockState": "dock_open",
+    "windowWidth": 1536,
+    "windowHeight": 864,
+    "mainAreaWidth": 1516,
+    "channelDockWidth": 0,
+    "continueWatchingWidth": 0,
+    "catalogWidth": 936,
+    "catDistFromRight": 300,
+    "catalogRowsCount": 12,
+    "totalPanels": 17,
+    "totalCards": 60,
+    "totalInternalCardRows": 28,
+    "completeCardRows": 28,
+    "incompleteCardRows": 0,
+    "avgCatalogRowOccupancy": 91,
+    "avgInternalCardRowOccupancy": 100,
+    "catalogRows": [
+      {
+        "rowIndex": 1,
+        "panelCount": 2,
+        "panelTitles": [
+          "Today (1c, 390px)",
+          "Yesterday (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 140,
+        "percentOccupied": 85,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "title": "Today",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "title": "Yesterday",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 14 (14c, 932px)"
+        ],
+        "totalOccupiedWidth": 932,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "title": "Sat, Nov 14",
+            "cardCount": 14,
+            "width": 932,
+            "height": 1683,
+            "left": 0,
+            "right": 932,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 2,
+                "cardWidths": [
+                  445,
+                  445
+                ],
+                "totalOccupiedWidth": 902,
+                "availWidth": 904,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "panelCount": 1,
+        "panelTitles": [
+          "Fri, Nov 13 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 390,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 546,
+        "percentOccupied": 42,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "title": "Fri, Nov 13",
+            "cardCount": 1,
+            "width": 390,
+            "height": 384,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 12 (3c, 932px)"
+        ],
+        "totalOccupiedWidth": 932,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "title": "Thu, Nov 12",
+            "cardCount": 3,
+            "width": 932,
+            "height": 365,
+            "left": 0,
+            "right": 932,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "panelCount": 1,
+        "panelTitles": [
+          "Tue, Nov 10 (2c, 720px)"
+        ],
+        "totalOccupiedWidth": 720,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 216,
+        "percentOccupied": 77,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "title": "Tue, Nov 10",
+            "cardCount": 2,
+            "width": 720,
+            "height": 334,
+            "left": 0,
+            "right": 720,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  339,
+                  339
+                ],
+                "totalOccupiedWidth": 690,
+                "availWidth": 692,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sun, Nov 8 (8c, 932px)"
+        ],
+        "totalOccupiedWidth": 932,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "title": "Sun, Nov 8",
+            "cardCount": 8,
+            "width": 932,
+            "height": 941,
+            "left": 0,
+            "right": 932,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  445,
+                  445
+                ],
+                "totalOccupiedWidth": 902,
+                "availWidth": 904,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 7 (8c, 932px)"
+        ],
+        "totalOccupiedWidth": 932,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "title": "Sat, Nov 7",
+            "cardCount": 8,
+            "width": 932,
+            "height": 941,
+            "left": 0,
+            "right": 932,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  445,
+                  445
+                ],
+                "totalOccupiedWidth": 902,
+                "availWidth": 904,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 5 (9c, 932px)"
+        ],
+        "totalOccupiedWidth": 932,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "title": "Thu, Nov 5",
+            "cardCount": 9,
+            "width": 932,
+            "height": 941,
+            "left": 0,
+            "right": 932,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "panelCount": 1,
+        "panelTitles": [
+          "Wed, Nov 4 (5c, 932px)"
+        ],
+        "totalOccupiedWidth": 932,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "title": "Wed, Nov 4",
+            "cardCount": 5,
+            "width": 932,
+            "height": 647,
+            "left": 0,
+            "right": 932,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  293,
+                  293,
+                  293
+                ],
+                "totalOccupiedWidth": 903,
+                "availWidth": 904,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  445,
+                  445
+                ],
+                "totalOccupiedWidth": 902,
+                "availWidth": 904,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "panelCount": 3,
+        "panelTitles": [
+          "Mon, Nov 2 (1c, 300px)",
+          "Sun, Nov 1 (1c, 300px)",
+          "Wed, Oct 28 (1c, 300px)"
+        ],
+        "totalOccupiedWidth": 932,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 10,
+            "title": "Mon, Nov 2",
+            "cardCount": 1,
+            "width": 300,
+            "height": 353,
+            "left": 0,
+            "right": 300,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  270
+                ],
+                "totalOccupiedWidth": 270,
+                "availWidth": 272,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "title": "Sun, Nov 1",
+            "cardCount": 1,
+            "width": 300,
+            "height": 353,
+            "left": 316,
+            "right": 616,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  270
+                ],
+                "totalOccupiedWidth": 270,
+                "availWidth": 272,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "title": "Wed, Oct 28",
+            "cardCount": 1,
+            "width": 300,
+            "height": 353,
+            "left": 632,
+            "right": 932,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  270
+                ],
+                "totalOccupiedWidth": 270,
+                "availWidth": 272,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 11,
+        "panelCount": 2,
+        "panelTitles": [
+          "Mon, Oct 26 (2c, 604px)",
+          "Fri, Oct 23 (1c, 312px)"
+        ],
+        "totalOccupiedWidth": 932,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 13,
+            "title": "Mon, Oct 26",
+            "cardCount": 2,
+            "width": 604,
+            "height": 353,
+            "left": 0,
+            "right": 604,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  281,
+                  281
+                ],
+                "totalOccupiedWidth": 574,
+                "availWidth": 576,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "title": "Fri, Oct 23",
+            "cardCount": 1,
+            "width": 312,
+            "height": 353,
+            "left": 620,
+            "right": 932,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  282
+                ],
+                "totalOccupiedWidth": 282,
+                "availWidth": 284,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 12,
+        "panelCount": 2,
+        "panelTitles": [
+          "Tue, Oct 20 (1c, 390px)",
+          "Sat, Oct 17 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 936,
+        "unusedHorizontalSpace": 140,
+        "percentOccupied": 85,
+        "panels": [
+          {
+            "panelIndex": 15,
+            "title": "Tue, Oct 20",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "title": "Sat, Oct 17",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1536x864",
+    "dockState": "dock_closed",
+    "windowWidth": 1536,
+    "windowHeight": 864,
+    "mainAreaWidth": 1516,
+    "channelDockWidth": 0,
+    "continueWatchingWidth": 24,
+    "catalogWidth": 1192,
+    "catDistFromRight": 44,
+    "catalogRowsCount": 10,
+    "totalPanels": 17,
+    "totalCards": 60,
+    "totalInternalCardRows": 26,
+    "completeCardRows": 25,
+    "incompleteCardRows": 1,
+    "avgCatalogRowOccupancy": 91,
+    "avgInternalCardRowOccupancy": 97,
+    "catalogRows": [
+      {
+        "rowIndex": 1,
+        "panelCount": 2,
+        "panelTitles": [
+          "Today (1c, 390px)",
+          "Yesterday (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 396,
+        "percentOccupied": 67,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "title": "Today",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "title": "Yesterday",
+            "cardCount": 1,
+            "width": 390,
+            "height": 405,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "panelCount": 2,
+        "panelTitles": [
+          "Sat, Nov 14 (14c, 879px)",
+          "Fri, Nov 13 (1c, 293px)"
+        ],
+        "totalOccupiedWidth": 1188,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "title": "Sat, Nov 14",
+            "cardCount": 14,
+            "width": 879,
+            "height": 1628,
+            "left": 0,
+            "right": 879,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  275,
+                  275,
+                  275
+                ],
+                "totalOccupiedWidth": 849,
+                "availWidth": 851,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  275,
+                  275,
+                  275
+                ],
+                "totalOccupiedWidth": 849,
+                "availWidth": 851,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  275,
+                  275,
+                  275
+                ],
+                "totalOccupiedWidth": 849,
+                "availWidth": 851,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 3,
+                "cardWidths": [
+                  275,
+                  275,
+                  275
+                ],
+                "totalOccupiedWidth": 849,
+                "availWidth": 851,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 2,
+                "cardWidths": [
+                  418,
+                  418
+                ],
+                "totalOccupiedWidth": 848,
+                "availWidth": 851,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 3,
+            "title": "Fri, Nov 13",
+            "cardCount": 1,
+            "width": 293,
+            "height": 350,
+            "left": 895,
+            "right": 1188,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  263
+                ],
+                "totalOccupiedWidth": 263,
+                "availWidth": 265,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 12 (3c, 1040px)"
+        ],
+        "totalOccupiedWidth": 1040,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 152,
+        "percentOccupied": 87,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "title": "Thu, Nov 12",
+            "cardCount": 3,
+            "width": 1040,
+            "height": 387,
+            "left": 0,
+            "right": 1040,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  329,
+                  329,
+                  329
+                ],
+                "totalOccupiedWidth": 1011,
+                "availWidth": 1012,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "panelCount": 1,
+        "panelTitles": [
+          "Tue, Nov 10 (2c, 720px)"
+        ],
+        "totalOccupiedWidth": 720,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 472,
+        "percentOccupied": 60,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "title": "Tue, Nov 10",
+            "cardCount": 2,
+            "width": 720,
+            "height": 353,
+            "left": 0,
+            "right": 720,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  339,
+                  339
+                ],
+                "totalOccupiedWidth": 690,
+                "availWidth": 692,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sun, Nov 8 (8c, 1188px)"
+        ],
+        "totalOccupiedWidth": 1188,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "title": "Sun, Nov 8",
+            "cardCount": 8,
+            "width": 1188,
+            "height": 647,
+            "left": 0,
+            "right": 1188,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 4,
+                "cardWidths": [
+                  281,
+                  281,
+                  281,
+                  281
+                ],
+                "totalOccupiedWidth": 1160,
+                "availWidth": 1160,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 4,
+                "cardWidths": [
+                  281,
+                  281,
+                  281,
+                  281
+                ],
+                "totalOccupiedWidth": 1160,
+                "availWidth": 1160,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 7 (8c, 1188px)"
+        ],
+        "totalOccupiedWidth": 1188,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "title": "Sat, Nov 7",
+            "cardCount": 8,
+            "width": 1188,
+            "height": 647,
+            "left": 0,
+            "right": 1188,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 4,
+                "cardWidths": [
+                  281,
+                  281,
+                  281,
+                  281
+                ],
+                "totalOccupiedWidth": 1160,
+                "availWidth": 1160,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 4,
+                "cardWidths": [
+                  281,
+                  281,
+                  281,
+                  281
+                ],
+                "totalOccupiedWidth": 1160,
+                "availWidth": 1160,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 5 (9c, 1188px)"
+        ],
+        "totalOccupiedWidth": 1188,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "title": "Thu, Nov 5",
+            "cardCount": 9,
+            "width": 1188,
+            "height": 941,
+            "left": 0,
+            "right": 1188,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 4,
+                "cardWidths": [
+                  281,
+                  281,
+                  281,
+                  281
+                ],
+                "totalOccupiedWidth": 1160,
+                "availWidth": 1160,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 4,
+                "cardWidths": [
+                  281,
+                  281,
+                  281,
+                  281
+                ],
+                "totalOccupiedWidth": 1160,
+                "availWidth": 1160,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 1,
+                "cardWidths": [
+                  450
+                ],
+                "totalOccupiedWidth": 450,
+                "availWidth": 1160,
+                "unusedSpace": 710,
+                "percentOccupied": 39
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "panelCount": 2,
+        "panelTitles": [
+          "Wed, Nov 4 (5c, 866px)",
+          "Mon, Nov 2 (1c, 306px)"
+        ],
+        "totalOccupiedWidth": 1188,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "title": "Wed, Nov 4",
+            "cardCount": 5,
+            "width": 866,
+            "height": 647,
+            "left": 0,
+            "right": 866,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  271,
+                  271,
+                  271
+                ],
+                "totalOccupiedWidth": 837,
+                "availWidth": 838,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  412,
+                  412
+                ],
+                "totalOccupiedWidth": 836,
+                "availWidth": 838,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "title": "Mon, Nov 2",
+            "cardCount": 1,
+            "width": 306,
+            "height": 353,
+            "left": 882,
+            "right": 1188,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  276
+                ],
+                "totalOccupiedWidth": 276,
+                "availWidth": 278,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "panelCount": 3,
+        "panelTitles": [
+          "Sun, Nov 1 (1c, 294px)",
+          "Wed, Oct 28 (1c, 294px)",
+          "Mon, Oct 26 (2c, 568px)"
+        ],
+        "totalOccupiedWidth": 1188,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 11,
+            "title": "Sun, Nov 1",
+            "cardCount": 1,
+            "width": 294,
+            "height": 353,
+            "left": 0,
+            "right": 294,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  264
+                ],
+                "totalOccupiedWidth": 264,
+                "availWidth": 266,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "title": "Wed, Oct 28",
+            "cardCount": 1,
+            "width": 294,
+            "height": 353,
+            "left": 310,
+            "right": 604,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  264
+                ],
+                "totalOccupiedWidth": 264,
+                "availWidth": 266,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "title": "Mon, Oct 26",
+            "cardCount": 2,
+            "width": 568,
+            "height": 353,
+            "left": 620,
+            "right": 1188,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  263,
+                  263
+                ],
+                "totalOccupiedWidth": 538,
+                "availWidth": 540,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "panelCount": 3,
+        "panelTitles": [
+          "Fri, Oct 23 (1c, 385px)",
+          "Tue, Oct 20 (1c, 385px)",
+          "Sat, Oct 17 (1c, 385px)"
+        ],
+        "totalOccupiedWidth": 1187,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 5,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 14,
+            "title": "Fri, Oct 23",
+            "cardCount": 1,
+            "width": 385,
+            "height": 353,
+            "left": 0,
+            "right": 385,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  355
+                ],
+                "totalOccupiedWidth": 355,
+                "availWidth": 357,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "title": "Tue, Oct 20",
+            "cardCount": 1,
+            "width": 385,
+            "height": 353,
+            "left": 401,
+            "right": 787,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  355
+                ],
+                "totalOccupiedWidth": 355,
+                "availWidth": 357,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "title": "Sat, Oct 17",
+            "cardCount": 1,
+            "width": 385,
+            "height": 353,
+            "left": 803,
+            "right": 1188,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  355
+                ],
+                "totalOccupiedWidth": 355,
+                "availWidth": 357,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1920x1080",
+    "dockState": "dock_open",
+    "windowWidth": 1920,
+    "windowHeight": 1080,
+    "mainAreaWidth": 1900,
+    "channelDockWidth": 0,
+    "continueWatchingWidth": 0,
+    "catalogWidth": 1320,
+    "catDistFromRight": 300,
+    "catalogRowsCount": 8,
+    "totalPanels": 17,
+    "totalCards": 60,
+    "totalInternalCardRows": 26,
+    "completeCardRows": 26,
+    "incompleteCardRows": 0,
+    "avgCatalogRowOccupancy": 95,
+    "avgInternalCardRowOccupancy": 100,
+    "catalogRows": [
+      {
+        "rowIndex": 1,
+        "panelCount": 3,
+        "panelTitles": [
+          "Today (1c, 271px)",
+          "Yesterday (1c, 271px)",
+          "Sat, Nov 14 (14c, 743px)"
+        ],
+        "totalOccupiedWidth": 1317,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 3,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "title": "Today",
+            "cardCount": 1,
+            "width": 271,
+            "height": 337,
+            "left": 0,
+            "right": 271,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  241
+                ],
+                "totalOccupiedWidth": 241,
+                "availWidth": 243,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "title": "Yesterday",
+            "cardCount": 1,
+            "width": 271,
+            "height": 337,
+            "left": 287,
+            "right": 557,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  241
+                ],
+                "totalOccupiedWidth": 241,
+                "availWidth": 243,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 2,
+            "title": "Sat, Nov 14",
+            "cardCount": 14,
+            "width": 743,
+            "height": 1488,
+            "left": 573,
+            "right": 1316,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  230,
+                  230,
+                  230
+                ],
+                "totalOccupiedWidth": 714,
+                "availWidth": 715,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  230,
+                  230,
+                  230
+                ],
+                "totalOccupiedWidth": 714,
+                "availWidth": 715,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 3,
+                "cardWidths": [
+                  230,
+                  230,
+                  230
+                ],
+                "totalOccupiedWidth": 714,
+                "availWidth": 715,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 3,
+                "cardWidths": [
+                  230,
+                  230,
+                  230
+                ],
+                "totalOccupiedWidth": 714,
+                "availWidth": 715,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 2,
+                "cardWidths": [
+                  351,
+                  351
+                ],
+                "totalOccupiedWidth": 714,
+                "availWidth": 715,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "panelCount": 2,
+        "panelTitles": [
+          "Fri, Nov 13 (1c, 350px)",
+          "Thu, Nov 12 (3c, 950px)"
+        ],
+        "totalOccupiedWidth": 1316,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "title": "Fri, Nov 13",
+            "cardCount": 1,
+            "width": 350,
+            "height": 382,
+            "left": 0,
+            "right": 350,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  320
+                ],
+                "totalOccupiedWidth": 320,
+                "availWidth": 322,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 4,
+            "title": "Thu, Nov 12",
+            "cardCount": 3,
+            "width": 950,
+            "height": 370,
+            "left": 366,
+            "right": 1316,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  299,
+                  299,
+                  299
+                ],
+                "totalOccupiedWidth": 921,
+                "availWidth": 922,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "panelCount": 2,
+        "panelTitles": [
+          "Tue, Nov 10 (2c, 530px)",
+          "Sun, Nov 8 (8c, 770px)"
+        ],
+        "totalOccupiedWidth": 1316,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "title": "Tue, Nov 10",
+            "cardCount": 2,
+            "width": 530,
+            "height": 339,
+            "left": 0,
+            "right": 530,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  244,
+                  244
+                ],
+                "totalOccupiedWidth": 500,
+                "availWidth": 502,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 6,
+            "title": "Sun, Nov 8",
+            "cardCount": 8,
+            "width": 770,
+            "height": 961,
+            "left": 546,
+            "right": 1316,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  239,
+                  239,
+                  239
+                ],
+                "totalOccupiedWidth": 741,
+                "availWidth": 742,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  239,
+                  239,
+                  239
+                ],
+                "totalOccupiedWidth": 741,
+                "availWidth": 742,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  364,
+                  364
+                ],
+                "totalOccupiedWidth": 740,
+                "availWidth": 742,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "panelCount": 1,
+        "panelTitles": [
+          "Sat, Nov 7 (8c, 1316px)"
+        ],
+        "totalOccupiedWidth": 1316,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "title": "Sat, Nov 7",
+            "cardCount": 8,
+            "width": 1316,
+            "height": 647,
+            "left": 0,
+            "right": 1316,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 5,
+                "cardWidths": [
+                  248,
+                  248,
+                  248,
+                  248,
+                  248
+                ],
+                "totalOccupiedWidth": 1288,
+                "availWidth": 1288,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  421,
+                  421,
+                  421
+                ],
+                "totalOccupiedWidth": 1287,
+                "availWidth": 1288,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "panelCount": 1,
+        "panelTitles": [
+          "Thu, Nov 5 (9c, 1316px)"
+        ],
+        "totalOccupiedWidth": 1316,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "title": "Thu, Nov 5",
+            "cardCount": 9,
+            "width": 1316,
+            "height": 647,
+            "left": 0,
+            "right": 1316,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 5,
+                "cardWidths": [
+                  248,
+                  248,
+                  248,
+                  248,
+                  248
+                ],
+                "totalOccupiedWidth": 1288,
+                "availWidth": 1288,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 4,
+                "cardWidths": [
+                  313,
+                  313,
+                  313,
+                  313
+                ],
+                "totalOccupiedWidth": 1288,
+                "availWidth": 1288,
+                "unusedSpace": 0,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "panelCount": 3,
+        "panelTitles": [
+          "Wed, Nov 4 (5c, 736px)",
+          "Mon, Nov 2 (1c, 274px)",
+          "Sun, Nov 1 (1c, 274px)"
+        ],
+        "totalOccupiedWidth": 1316,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "title": "Wed, Nov 4",
+            "cardCount": 5,
+            "width": 736,
+            "height": 647,
+            "left": 0,
+            "right": 736,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  227,
+                  227,
+                  227
+                ],
+                "totalOccupiedWidth": 705,
+                "availWidth": 708,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  347,
+                  347
+                ],
+                "totalOccupiedWidth": 706,
+                "availWidth": 708,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "title": "Mon, Nov 2",
+            "cardCount": 1,
+            "width": 274,
+            "height": 353,
+            "left": 752,
+            "right": 1026,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  244
+                ],
+                "totalOccupiedWidth": 244,
+                "availWidth": 246,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "title": "Sun, Nov 1",
+            "cardCount": 1,
+            "width": 274,
+            "height": 353,
+            "left": 1042,
+            "right": 1316,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  244
+                ],
+                "totalOccupiedWidth": 244,
+                "availWidth": 246,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "panelCount": 3,
+        "panelTitles": [
+          "Wed, Oct 28 (1c, 326px)",
+          "Mon, Oct 26 (2c, 632px)",
+          "Fri, Oct 23 (1c, 326px)"
+        ],
+        "totalOccupiedWidth": 1316,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 12,
+            "title": "Wed, Oct 28",
+            "cardCount": 1,
+            "width": 326,
+            "height": 353,
+            "left": 0,
+            "right": 326,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  296
+                ],
+                "totalOccupiedWidth": 296,
+                "availWidth": 298,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "title": "Mon, Oct 26",
+            "cardCount": 2,
+            "width": 632,
+            "height": 353,
+            "left": 342,
+            "right": 974,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  295,
+                  295
+                ],
+                "totalOccupiedWidth": 602,
+                "availWidth": 604,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "title": "Fri, Oct 23",
+            "cardCount": 1,
+            "width": 326,
+            "height": 353,
+            "left": 990,
+            "right": 1316,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  296
+                ],
+                "totalOccupiedWidth": 296,
+                "availWidth": 298,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "panelCount": 2,
+        "panelTitles": [
+          "Tue, Oct 20 (1c, 390px)",
+          "Sat, Oct 17 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 796,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 524,
+        "percentOccupied": 60,
+        "panels": [
+          {
+            "panelIndex": 15,
+            "title": "Tue, Oct 20",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "title": "Sat, Oct 17",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1920x1080",
+    "dockState": "dock_closed",
+    "windowWidth": 1920,
+    "windowHeight": 1080,
+    "mainAreaWidth": 1900,
+    "channelDockWidth": 0,
+    "continueWatchingWidth": 24,
+    "catalogWidth": 1576,
+    "catDistFromRight": 44,
+    "catalogRowsCount": 6,
+    "totalPanels": 17,
+    "totalCards": 60,
+    "totalInternalCardRows": 32,
+    "completeCardRows": 31,
+    "incompleteCardRows": 1,
+    "avgCatalogRowOccupancy": 96,
+    "avgInternalCardRowOccupancy": 98,
+    "catalogRows": [
+      {
+        "rowIndex": 1,
+        "panelCount": 4,
+        "panelTitles": [
+          "Today (1c, 267px)",
+          "Yesterday (1c, 267px)",
+          "Sat, Nov 14 (14c, 723px)",
+          "Fri, Nov 13 (1c, 267px)"
+        ],
+        "totalOccupiedWidth": 1572,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "title": "Today",
+            "cardCount": 1,
+            "width": 267,
+            "height": 335,
+            "left": 0,
+            "right": 267,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  237
+                ],
+                "totalOccupiedWidth": 237,
+                "availWidth": 239,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "title": "Yesterday",
+            "cardCount": 1,
+            "width": 267,
+            "height": 335,
+            "left": 283,
+            "right": 550,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  237
+                ],
+                "totalOccupiedWidth": 237,
+                "availWidth": 239,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 2,
+            "title": "Sat, Nov 14",
+            "cardCount": 14,
+            "width": 723,
+            "height": 2401,
+            "left": 566,
+            "right": 1289,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  340,
+                  340
+                ],
+                "totalOccupiedWidth": 692,
+                "availWidth": 695,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  340,
+                  340
+                ],
+                "totalOccupiedWidth": 692,
+                "availWidth": 695,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  340,
+                  340
+                ],
+                "totalOccupiedWidth": 692,
+                "availWidth": 695,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 2,
+                "cardWidths": [
+                  340,
+                  340
+                ],
+                "totalOccupiedWidth": 692,
+                "availWidth": 695,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 2,
+                "cardWidths": [
+                  340,
+                  340
+                ],
+                "totalOccupiedWidth": 692,
+                "availWidth": 695,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 6,
+                "cardCount": 2,
+                "cardWidths": [
+                  340,
+                  340
+                ],
+                "totalOccupiedWidth": 692,
+                "availWidth": 695,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 7,
+                "cardCount": 2,
+                "cardWidths": [
+                  340,
+                  340
+                ],
+                "totalOccupiedWidth": 692,
+                "availWidth": 695,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 3,
+            "title": "Fri, Nov 13",
+            "cardCount": 1,
+            "width": 267,
+            "height": 335,
+            "left": 1305,
+            "right": 1572,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  237
+                ],
+                "totalOccupiedWidth": 237,
+                "availWidth": 239,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "panelCount": 2,
+        "panelTitles": [
+          "Thu, Nov 12 (3c, 906px)",
+          "Tue, Nov 10 (2c, 650px)"
+        ],
+        "totalOccupiedWidth": 1572,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "title": "Thu, Nov 12",
+            "cardCount": 3,
+            "width": 906,
+            "height": 362,
+            "left": 0,
+            "right": 906,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  284,
+                  284,
+                  284
+                ],
+                "totalOccupiedWidth": 876,
+                "availWidth": 878,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 5,
+            "title": "Tue, Nov 10",
+            "cardCount": 2,
+            "width": 650,
+            "height": 373,
+            "left": 922,
+            "right": 1572,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  304,
+                  304
+                ],
+                "totalOccupiedWidth": 620,
+                "availWidth": 622,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "panelCount": 2,
+        "panelTitles": [
+          "Sun, Nov 8 (8c, 778px)",
+          "Sat, Nov 7 (8c, 778px)"
+        ],
+        "totalOccupiedWidth": 1572,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "title": "Sun, Nov 8",
+            "cardCount": 8,
+            "width": 778,
+            "height": 926,
+            "left": 0,
+            "right": 778,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  241,
+                  241,
+                  241
+                ],
+                "totalOccupiedWidth": 747,
+                "availWidth": 750,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  241,
+                  241,
+                  241
+                ],
+                "totalOccupiedWidth": 747,
+                "availWidth": 750,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  368,
+                  368
+                ],
+                "totalOccupiedWidth": 748,
+                "availWidth": 750,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          },
+          {
+            "panelIndex": 7,
+            "title": "Sat, Nov 7",
+            "cardCount": 8,
+            "width": 778,
+            "height": 926,
+            "left": 794,
+            "right": 1572,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  241,
+                  241,
+                  241
+                ],
+                "totalOccupiedWidth": 747,
+                "availWidth": 750,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 3,
+                "cardWidths": [
+                  241,
+                  241,
+                  241
+                ],
+                "totalOccupiedWidth": 747,
+                "availWidth": 750,
+                "unusedSpace": 3,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  368,
+                  368
+                ],
+                "totalOccupiedWidth": 748,
+                "availWidth": 750,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "panelCount": 2,
+        "panelTitles": [
+          "Thu, Nov 5 (9c, 798px)",
+          "Wed, Nov 4 (5c, 758px)"
+        ],
+        "totalOccupiedWidth": 1572,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 4,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "title": "Thu, Nov 5",
+            "cardCount": 9,
+            "width": 798,
+            "height": 1529,
+            "left": 0,
+            "right": 798,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  378,
+                  378
+                ],
+                "totalOccupiedWidth": 768,
+                "availWidth": 770,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  378,
+                  378
+                ],
+                "totalOccupiedWidth": 768,
+                "availWidth": 770,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 3,
+                "cardCount": 2,
+                "cardWidths": [
+                  378,
+                  378
+                ],
+                "totalOccupiedWidth": 768,
+                "availWidth": 770,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 4,
+                "cardCount": 2,
+                "cardWidths": [
+                  378,
+                  378
+                ],
+                "totalOccupiedWidth": 768,
+                "availWidth": 770,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 5,
+                "cardCount": 1,
+                "cardWidths": [
+                  450
+                ],
+                "totalOccupiedWidth": 450,
+                "availWidth": 770,
+                "unusedSpace": 320,
+                "percentOccupied": 58
+              }
+            ]
+          },
+          {
+            "panelIndex": 9,
+            "title": "Wed, Nov 4",
+            "cardCount": 5,
+            "width": 758,
+            "height": 647,
+            "left": 814,
+            "right": 1572,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 3,
+                "cardWidths": [
+                  235,
+                  235,
+                  235
+                ],
+                "totalOccupiedWidth": 729,
+                "availWidth": 730,
+                "unusedSpace": 1,
+                "percentOccupied": 100
+              },
+              {
+                "rowIndex": 2,
+                "cardCount": 2,
+                "cardWidths": [
+                  358,
+                  358
+                ],
+                "totalOccupiedWidth": 728,
+                "availWidth": 730,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "panelCount": 4,
+        "panelTitles": [
+          "Mon, Nov 2 (1c, 309px)",
+          "Sun, Nov 1 (1c, 309px)",
+          "Wed, Oct 28 (1c, 309px)",
+          "Mon, Oct 26 (2c, 598px)"
+        ],
+        "totalOccupiedWidth": 1573,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 3,
+        "percentOccupied": 100,
+        "panels": [
+          {
+            "panelIndex": 10,
+            "title": "Mon, Nov 2",
+            "cardCount": 1,
+            "width": 309,
+            "height": 353,
+            "left": 0,
+            "right": 309,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  279
+                ],
+                "totalOccupiedWidth": 279,
+                "availWidth": 281,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "title": "Sun, Nov 1",
+            "cardCount": 1,
+            "width": 309,
+            "height": 353,
+            "left": 325,
+            "right": 634,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  279
+                ],
+                "totalOccupiedWidth": 279,
+                "availWidth": 281,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "title": "Wed, Oct 28",
+            "cardCount": 1,
+            "width": 309,
+            "height": 353,
+            "left": 650,
+            "right": 958,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  279
+                ],
+                "totalOccupiedWidth": 279,
+                "availWidth": 281,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "title": "Mon, Oct 26",
+            "cardCount": 2,
+            "width": 598,
+            "height": 353,
+            "left": 974,
+            "right": 1572,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 2,
+                "cardWidths": [
+                  278,
+                  278
+                ],
+                "totalOccupiedWidth": 568,
+                "availWidth": 570,
+                "unusedSpace": 2,
+                "percentOccupied": 100
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "panelCount": 3,
+        "panelTitles": [
+          "Fri, Oct 23 (1c, 390px)",
+          "Tue, Oct 20 (1c, 390px)",
+          "Sat, Oct 17 (1c, 390px)"
+        ],
+        "totalOccupiedWidth": 1202,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 374,
+        "percentOccupied": 76,
+        "panels": [
+          {
+            "panelIndex": 14,
+            "title": "Fri, Oct 23",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 0,
+            "right": 390,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "title": "Tue, Oct 20",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 406,
+            "right": 796,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "title": "Sat, Oct 17",
+            "cardCount": 1,
+            "width": 390,
+            "height": 353,
+            "left": 812,
+            "right": 1202,
+            "cardRows": [
+              {
+                "rowIndex": 1,
+                "cardCount": 1,
+                "cardWidths": [
+                  360
+                ],
+                "totalOccupiedWidth": 360,
+                "availWidth": 362,
+                "unusedSpace": 2,
+                "percentOccupied": 99
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

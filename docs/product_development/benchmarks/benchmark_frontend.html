@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head><title>Frontend Benchmark</title></head>
+<body>
+    <div id="catalog"></div>
+    <script>
+        async function runBenchmark(size) {
+            const results = [];
+            for (let i = 0; i < 5; i++) {
+                const container = document.getElementById('catalog');
+                container.innerHTML = '';
+                
+                const start = performance.now();
+                const response = await fetch(`data/test_data_${size}.json`);
+                const data = await response.json();
+                const endFetch = performance.now();
+                
+                // Rendering
+                container.innerHTML = data.videos.map(v => `<div class="card">${v.filename}</div>`).join('');
+                const endRender = performance.now();
+                
+                results.push({
+                    fetch: endFetch - start,
+                    render: endRender - endFetch
+                });
+            }
+            console.log(`Results for ${size}:`, results);
+        }
+    </script>
+</body>
+</html>

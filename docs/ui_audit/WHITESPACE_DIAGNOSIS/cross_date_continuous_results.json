@@ -1,0 +1,3192 @@
+{
+  "1280x720_dock_closed": {
+    "gridWidth": 960,
+    "catalogWidth": 964,
+    "totalCards": 13,
+    "totalRows": 4,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-14",
+          "2026-11-13"
+        ],
+        "firstCardIndex": 1,
+        "lastCardIndex": 4,
+        "cardWidths": [
+          228,
+          228,
+          228,
+          228
+        ],
+        "occupiedSpan": 960,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 1,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": true,
+            "left": 272,
+            "right": 500,
+            "width": 228,
+            "title": "DateA Feature Film 01 2026 1080p"
+          },
+          {
+            "index": 2,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 516,
+            "right": 744,
+            "width": 228,
+            "title": "DateA Feature Film 02 2026 1080p"
+          },
+          {
+            "index": 3,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 760,
+            "right": 988,
+            "width": 228,
+            "title": "DateA Feature Film 03 2026 1080p"
+          },
+          {
+            "index": 4,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": true,
+            "left": 1004,
+            "right": 1232,
+            "width": 228,
+            "title": "DateB Documentary Part 01 2026 720p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 439,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-13",
+          "2026-11-12"
+        ],
+        "firstCardIndex": 5,
+        "lastCardIndex": 8,
+        "cardWidths": [
+          228,
+          228,
+          228,
+          228
+        ],
+        "occupiedSpan": 960,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 5,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": false,
+            "left": 272,
+            "right": 500,
+            "width": 228,
+            "title": "DateB Documentary Part 02 2026 720p"
+          },
+          {
+            "index": 6,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": true,
+            "left": 516,
+            "right": 744,
+            "width": 228,
+            "title": "DateC Anthology Episode 01 2026 1080p"
+          },
+          {
+            "index": 7,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 760,
+            "right": 988,
+            "width": 228,
+            "title": "DateC Anthology Episode 02 2026 1080p"
+          },
+          {
+            "index": 8,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1004,
+            "right": 1232,
+            "width": 228,
+            "title": "DateC Anthology Episode 03 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 748,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 9,
+        "lastCardIndex": 12,
+        "cardWidths": [
+          228,
+          228,
+          228,
+          228
+        ],
+        "occupiedSpan": 960,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 9,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 272,
+            "right": 500,
+            "width": 228,
+            "title": "DateC Anthology Episode 04 2026 1080p"
+          },
+          {
+            "index": 10,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 516,
+            "right": 744,
+            "width": 228,
+            "title": "DateC Anthology Episode 05 2026 1080p"
+          },
+          {
+            "index": 11,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 760,
+            "right": 988,
+            "width": 228,
+            "title": "DateC Anthology Episode 06 2026 1080p"
+          },
+          {
+            "index": 12,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1004,
+            "right": 1232,
+            "width": 228,
+            "title": "DateC Anthology Episode 07 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 1051,
+        "cardCount": 1,
+        "dateGroupsInRow": [
+          "2026-11-11"
+        ],
+        "firstCardIndex": 13,
+        "lastCardIndex": 13,
+        "cardWidths": [
+          228
+        ],
+        "occupiedSpan": 228,
+        "unusedEnd": 732,
+        "cards": [
+          {
+            "index": 13,
+            "dateGroup": "2026-11-11",
+            "isFirstOfGroup": true,
+            "left": 272,
+            "right": 500,
+            "width": 228,
+            "title": "DateD Solo Cinema Special 2026 4K"
+          }
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "index": 1,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateA Feature Film 01 2026 1080p",
+        "rect": {
+          "left": 272,
+          "top": 131,
+          "right": 500,
+          "width": 228,
+          "height": 292
+        }
+      },
+      {
+        "index": 2,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 02 2026 1080p",
+        "rect": {
+          "left": 516,
+          "top": 131,
+          "right": 744,
+          "width": 228,
+          "height": 292
+        }
+      },
+      {
+        "index": 3,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 03 2026 1080p",
+        "rect": {
+          "left": 760,
+          "top": 131,
+          "right": 988,
+          "width": 228,
+          "height": 292
+        }
+      },
+      {
+        "index": 4,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateB Documentary Part 01 2026 720p",
+        "rect": {
+          "left": 1004,
+          "top": 131,
+          "right": 1232,
+          "width": 228,
+          "height": 292
+        }
+      },
+      {
+        "index": 5,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateB Documentary Part 02 2026 720p",
+        "rect": {
+          "left": 272,
+          "top": 439,
+          "right": 500,
+          "width": 228,
+          "height": 292
+        }
+      },
+      {
+        "index": 6,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateC Anthology Episode 01 2026 1080p",
+        "rect": {
+          "left": 516,
+          "top": 439,
+          "right": 744,
+          "width": 228,
+          "height": 292
+        }
+      },
+      {
+        "index": 7,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 02 2026 1080p",
+        "rect": {
+          "left": 760,
+          "top": 439,
+          "right": 988,
+          "width": 228,
+          "height": 292
+        }
+      },
+      {
+        "index": 8,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 03 2026 1080p",
+        "rect": {
+          "left": 1004,
+          "top": 439,
+          "right": 1232,
+          "width": 228,
+          "height": 292
+        }
+      },
+      {
+        "index": 9,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 04 2026 1080p",
+        "rect": {
+          "left": 272,
+          "top": 748,
+          "right": 500,
+          "width": 228,
+          "height": 287
+        }
+      },
+      {
+        "index": 10,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 05 2026 1080p",
+        "rect": {
+          "left": 516,
+          "top": 748,
+          "right": 744,
+          "width": 228,
+          "height": 287
+        }
+      },
+      {
+        "index": 11,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 06 2026 1080p",
+        "rect": {
+          "left": 760,
+          "top": 748,
+          "right": 988,
+          "width": 228,
+          "height": 287
+        }
+      },
+      {
+        "index": 12,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 07 2026 1080p",
+        "rect": {
+          "left": 1004,
+          "top": 748,
+          "right": 1232,
+          "width": 228,
+          "height": 287
+        }
+      },
+      {
+        "index": 13,
+        "dateGroup": "2026-11-11",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateD Solo Cinema Special 2026 4K",
+        "rect": {
+          "left": 272,
+          "top": 1051,
+          "right": 500,
+          "width": 228,
+          "height": 292
+        }
+      }
+    ]
+  },
+  "1280x720_dock_open": {
+    "gridWidth": 732,
+    "catalogWidth": 736,
+    "totalCards": 13,
+    "totalRows": 5,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-14"
+        ],
+        "firstCardIndex": 1,
+        "lastCardIndex": 3,
+        "cardWidths": [
+          233,
+          233,
+          233
+        ],
+        "occupiedSpan": 732,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 1,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": true,
+            "left": 272,
+            "right": 505,
+            "width": 233,
+            "title": "DateA Feature Film 01 2026 1080p"
+          },
+          {
+            "index": 2,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 521,
+            "right": 755,
+            "width": 233,
+            "title": "DateA Feature Film 02 2026 1080p"
+          },
+          {
+            "index": 3,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 771,
+            "right": 1004,
+            "width": 233,
+            "title": "DateA Feature Film 03 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 442,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-13",
+          "2026-11-12"
+        ],
+        "firstCardIndex": 4,
+        "lastCardIndex": 6,
+        "cardWidths": [
+          233,
+          233,
+          233
+        ],
+        "occupiedSpan": 732,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 4,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": true,
+            "left": 272,
+            "right": 505,
+            "width": 233,
+            "title": "DateB Documentary Part 01 2026 720p"
+          },
+          {
+            "index": 5,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": false,
+            "left": 521,
+            "right": 755,
+            "width": 233,
+            "title": "DateB Documentary Part 02 2026 720p"
+          },
+          {
+            "index": 6,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": true,
+            "left": 771,
+            "right": 1004,
+            "width": 233,
+            "title": "DateC Anthology Episode 01 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 754,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 7,
+        "lastCardIndex": 9,
+        "cardWidths": [
+          233,
+          233,
+          233
+        ],
+        "occupiedSpan": 732,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 7,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 272,
+            "right": 505,
+            "width": 233,
+            "title": "DateC Anthology Episode 02 2026 1080p"
+          },
+          {
+            "index": 8,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 521,
+            "right": 755,
+            "width": 233,
+            "title": "DateC Anthology Episode 03 2026 1080p"
+          },
+          {
+            "index": 9,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 771,
+            "right": 1004,
+            "width": 233,
+            "title": "DateC Anthology Episode 04 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 1060,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 10,
+        "lastCardIndex": 12,
+        "cardWidths": [
+          233,
+          233,
+          233
+        ],
+        "occupiedSpan": 732,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 10,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 272,
+            "right": 505,
+            "width": 233,
+            "title": "DateC Anthology Episode 05 2026 1080p"
+          },
+          {
+            "index": 11,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 521,
+            "right": 755,
+            "width": 233,
+            "title": "DateC Anthology Episode 06 2026 1080p"
+          },
+          {
+            "index": 12,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 771,
+            "right": 1004,
+            "width": 233,
+            "title": "DateC Anthology Episode 07 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 1366,
+        "cardCount": 1,
+        "dateGroupsInRow": [
+          "2026-11-11"
+        ],
+        "firstCardIndex": 13,
+        "lastCardIndex": 13,
+        "cardWidths": [
+          233
+        ],
+        "occupiedSpan": 233,
+        "unusedEnd": 499,
+        "cards": [
+          {
+            "index": 13,
+            "dateGroup": "2026-11-11",
+            "isFirstOfGroup": true,
+            "left": 272,
+            "right": 505,
+            "width": 233,
+            "title": "DateD Solo Cinema Special 2026 4K"
+          }
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "index": 1,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateA Feature Film 01 2026 1080p",
+        "rect": {
+          "left": 272,
+          "top": 131,
+          "right": 505,
+          "width": 233,
+          "height": 295
+        }
+      },
+      {
+        "index": 2,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 02 2026 1080p",
+        "rect": {
+          "left": 521,
+          "top": 131,
+          "right": 755,
+          "width": 233,
+          "height": 295
+        }
+      },
+      {
+        "index": 3,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 03 2026 1080p",
+        "rect": {
+          "left": 771,
+          "top": 131,
+          "right": 1004,
+          "width": 233,
+          "height": 295
+        }
+      },
+      {
+        "index": 4,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateB Documentary Part 01 2026 720p",
+        "rect": {
+          "left": 272,
+          "top": 442,
+          "right": 505,
+          "width": 233,
+          "height": 295
+        }
+      },
+      {
+        "index": 5,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateB Documentary Part 02 2026 720p",
+        "rect": {
+          "left": 521,
+          "top": 442,
+          "right": 755,
+          "width": 233,
+          "height": 295
+        }
+      },
+      {
+        "index": 6,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateC Anthology Episode 01 2026 1080p",
+        "rect": {
+          "left": 771,
+          "top": 442,
+          "right": 1004,
+          "width": 233,
+          "height": 295
+        }
+      },
+      {
+        "index": 7,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 02 2026 1080p",
+        "rect": {
+          "left": 272,
+          "top": 754,
+          "right": 505,
+          "width": 233,
+          "height": 290
+        }
+      },
+      {
+        "index": 8,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 03 2026 1080p",
+        "rect": {
+          "left": 521,
+          "top": 754,
+          "right": 755,
+          "width": 233,
+          "height": 290
+        }
+      },
+      {
+        "index": 9,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 04 2026 1080p",
+        "rect": {
+          "left": 771,
+          "top": 754,
+          "right": 1004,
+          "width": 233,
+          "height": 290
+        }
+      },
+      {
+        "index": 10,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 05 2026 1080p",
+        "rect": {
+          "left": 272,
+          "top": 1060,
+          "right": 505,
+          "width": 233,
+          "height": 290
+        }
+      },
+      {
+        "index": 11,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 06 2026 1080p",
+        "rect": {
+          "left": 521,
+          "top": 1060,
+          "right": 755,
+          "width": 233,
+          "height": 290
+        }
+      },
+      {
+        "index": 12,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 07 2026 1080p",
+        "rect": {
+          "left": 771,
+          "top": 1060,
+          "right": 1004,
+          "width": 233,
+          "height": 290
+        }
+      },
+      {
+        "index": 13,
+        "dateGroup": "2026-11-11",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateD Solo Cinema Special 2026 4K",
+        "rect": {
+          "left": 272,
+          "top": 1366,
+          "right": 505,
+          "width": 233,
+          "height": 295
+        }
+      }
+    ]
+  },
+  "1440x900_dock_closed": {
+    "gridWidth": 1092,
+    "catalogWidth": 1096,
+    "totalCards": 13,
+    "totalRows": 4,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-14",
+          "2026-11-13"
+        ],
+        "firstCardIndex": 1,
+        "lastCardIndex": 4,
+        "cardWidths": [
+          261,
+          261,
+          261,
+          261
+        ],
+        "occupiedSpan": 1092,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 1,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 561,
+            "width": 261,
+            "title": "DateA Feature Film 01 2026 1080p"
+          },
+          {
+            "index": 2,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 577,
+            "right": 838,
+            "width": 261,
+            "title": "DateA Feature Film 02 2026 1080p"
+          },
+          {
+            "index": 3,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 854,
+            "right": 1115,
+            "width": 261,
+            "title": "DateA Feature Film 03 2026 1080p"
+          },
+          {
+            "index": 4,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": true,
+            "left": 1131,
+            "right": 1392,
+            "width": 261,
+            "title": "DateB Documentary Part 01 2026 720p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 458,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-13",
+          "2026-11-12"
+        ],
+        "firstCardIndex": 5,
+        "lastCardIndex": 8,
+        "cardWidths": [
+          261,
+          261,
+          261,
+          261
+        ],
+        "occupiedSpan": 1092,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 5,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 561,
+            "width": 261,
+            "title": "DateB Documentary Part 02 2026 720p"
+          },
+          {
+            "index": 6,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": true,
+            "left": 577,
+            "right": 838,
+            "width": 261,
+            "title": "DateC Anthology Episode 01 2026 1080p"
+          },
+          {
+            "index": 7,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 854,
+            "right": 1115,
+            "width": 261,
+            "title": "DateC Anthology Episode 02 2026 1080p"
+          },
+          {
+            "index": 8,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1131,
+            "right": 1392,
+            "width": 261,
+            "title": "DateC Anthology Episode 03 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 785,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 9,
+        "lastCardIndex": 12,
+        "cardWidths": [
+          261,
+          261,
+          261,
+          261
+        ],
+        "occupiedSpan": 1092,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 9,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 561,
+            "width": 261,
+            "title": "DateC Anthology Episode 04 2026 1080p"
+          },
+          {
+            "index": 10,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 577,
+            "right": 838,
+            "width": 261,
+            "title": "DateC Anthology Episode 05 2026 1080p"
+          },
+          {
+            "index": 11,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 854,
+            "right": 1115,
+            "width": 261,
+            "title": "DateC Anthology Episode 06 2026 1080p"
+          },
+          {
+            "index": 12,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1131,
+            "right": 1392,
+            "width": 261,
+            "title": "DateC Anthology Episode 07 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 1107,
+        "cardCount": 1,
+        "dateGroupsInRow": [
+          "2026-11-11"
+        ],
+        "firstCardIndex": 13,
+        "lastCardIndex": 13,
+        "cardWidths": [
+          261
+        ],
+        "occupiedSpan": 261,
+        "unusedEnd": 831,
+        "cards": [
+          {
+            "index": 13,
+            "dateGroup": "2026-11-11",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 561,
+            "width": 261,
+            "title": "DateD Solo Cinema Special 2026 4K"
+          }
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "index": 1,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateA Feature Film 01 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 131,
+          "right": 561,
+          "width": 261,
+          "height": 311
+        }
+      },
+      {
+        "index": 2,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 02 2026 1080p",
+        "rect": {
+          "left": 577,
+          "top": 131,
+          "right": 838,
+          "width": 261,
+          "height": 311
+        }
+      },
+      {
+        "index": 3,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 03 2026 1080p",
+        "rect": {
+          "left": 854,
+          "top": 131,
+          "right": 1115,
+          "width": 261,
+          "height": 311
+        }
+      },
+      {
+        "index": 4,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateB Documentary Part 01 2026 720p",
+        "rect": {
+          "left": 1131,
+          "top": 131,
+          "right": 1392,
+          "width": 261,
+          "height": 311
+        }
+      },
+      {
+        "index": 5,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateB Documentary Part 02 2026 720p",
+        "rect": {
+          "left": 300,
+          "top": 458,
+          "right": 561,
+          "width": 261,
+          "height": 311
+        }
+      },
+      {
+        "index": 6,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateC Anthology Episode 01 2026 1080p",
+        "rect": {
+          "left": 577,
+          "top": 458,
+          "right": 838,
+          "width": 261,
+          "height": 311
+        }
+      },
+      {
+        "index": 7,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 02 2026 1080p",
+        "rect": {
+          "left": 854,
+          "top": 458,
+          "right": 1115,
+          "width": 261,
+          "height": 311
+        }
+      },
+      {
+        "index": 8,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 03 2026 1080p",
+        "rect": {
+          "left": 1131,
+          "top": 458,
+          "right": 1392,
+          "width": 261,
+          "height": 311
+        }
+      },
+      {
+        "index": 9,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 04 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 785,
+          "right": 561,
+          "width": 261,
+          "height": 306
+        }
+      },
+      {
+        "index": 10,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 05 2026 1080p",
+        "rect": {
+          "left": 577,
+          "top": 785,
+          "right": 838,
+          "width": 261,
+          "height": 306
+        }
+      },
+      {
+        "index": 11,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 06 2026 1080p",
+        "rect": {
+          "left": 854,
+          "top": 785,
+          "right": 1115,
+          "width": 261,
+          "height": 306
+        }
+      },
+      {
+        "index": 12,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 07 2026 1080p",
+        "rect": {
+          "left": 1131,
+          "top": 785,
+          "right": 1392,
+          "width": 261,
+          "height": 306
+        }
+      },
+      {
+        "index": 13,
+        "dateGroup": "2026-11-11",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateD Solo Cinema Special 2026 4K",
+        "rect": {
+          "left": 300,
+          "top": 1107,
+          "right": 561,
+          "width": 261,
+          "height": 311
+        }
+      }
+    ]
+  },
+  "1440x900_dock_open": {
+    "gridWidth": 836,
+    "catalogWidth": 840,
+    "totalCards": 13,
+    "totalRows": 5,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-14"
+        ],
+        "firstCardIndex": 1,
+        "lastCardIndex": 3,
+        "cardWidths": [
+          268,
+          268,
+          268
+        ],
+        "occupiedSpan": 836,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 1,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 568,
+            "width": 268,
+            "title": "DateA Feature Film 01 2026 1080p"
+          },
+          {
+            "index": 2,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 584,
+            "right": 852,
+            "width": 268,
+            "title": "DateA Feature Film 02 2026 1080p"
+          },
+          {
+            "index": 3,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 868,
+            "right": 1136,
+            "width": 268,
+            "title": "DateA Feature Film 03 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 462,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-13",
+          "2026-11-12"
+        ],
+        "firstCardIndex": 4,
+        "lastCardIndex": 6,
+        "cardWidths": [
+          268,
+          268,
+          268
+        ],
+        "occupiedSpan": 836,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 4,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 568,
+            "width": 268,
+            "title": "DateB Documentary Part 01 2026 720p"
+          },
+          {
+            "index": 5,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": false,
+            "left": 584,
+            "right": 852,
+            "width": 268,
+            "title": "DateB Documentary Part 02 2026 720p"
+          },
+          {
+            "index": 6,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": true,
+            "left": 868,
+            "right": 1136,
+            "width": 268,
+            "title": "DateC Anthology Episode 01 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 793,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 7,
+        "lastCardIndex": 9,
+        "cardWidths": [
+          268,
+          268,
+          268
+        ],
+        "occupiedSpan": 836,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 7,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 568,
+            "width": 268,
+            "title": "DateC Anthology Episode 02 2026 1080p"
+          },
+          {
+            "index": 8,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 584,
+            "right": 852,
+            "width": 268,
+            "title": "DateC Anthology Episode 03 2026 1080p"
+          },
+          {
+            "index": 9,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 868,
+            "right": 1136,
+            "width": 268,
+            "title": "DateC Anthology Episode 04 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 1118,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 10,
+        "lastCardIndex": 12,
+        "cardWidths": [
+          268,
+          268,
+          268
+        ],
+        "occupiedSpan": 836,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 10,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 568,
+            "width": 268,
+            "title": "DateC Anthology Episode 05 2026 1080p"
+          },
+          {
+            "index": 11,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 584,
+            "right": 852,
+            "width": 268,
+            "title": "DateC Anthology Episode 06 2026 1080p"
+          },
+          {
+            "index": 12,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 868,
+            "right": 1136,
+            "width": 268,
+            "title": "DateC Anthology Episode 07 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 1444,
+        "cardCount": 1,
+        "dateGroupsInRow": [
+          "2026-11-11"
+        ],
+        "firstCardIndex": 13,
+        "lastCardIndex": 13,
+        "cardWidths": [
+          268
+        ],
+        "occupiedSpan": 268,
+        "unusedEnd": 568,
+        "cards": [
+          {
+            "index": 13,
+            "dateGroup": "2026-11-11",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 568,
+            "width": 268,
+            "title": "DateD Solo Cinema Special 2026 4K"
+          }
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "index": 1,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateA Feature Film 01 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 131,
+          "right": 568,
+          "width": 268,
+          "height": 315
+        }
+      },
+      {
+        "index": 2,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 02 2026 1080p",
+        "rect": {
+          "left": 584,
+          "top": 131,
+          "right": 852,
+          "width": 268,
+          "height": 315
+        }
+      },
+      {
+        "index": 3,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 03 2026 1080p",
+        "rect": {
+          "left": 868,
+          "top": 131,
+          "right": 1136,
+          "width": 268,
+          "height": 315
+        }
+      },
+      {
+        "index": 4,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateB Documentary Part 01 2026 720p",
+        "rect": {
+          "left": 300,
+          "top": 462,
+          "right": 568,
+          "width": 268,
+          "height": 315
+        }
+      },
+      {
+        "index": 5,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateB Documentary Part 02 2026 720p",
+        "rect": {
+          "left": 584,
+          "top": 462,
+          "right": 852,
+          "width": 268,
+          "height": 315
+        }
+      },
+      {
+        "index": 6,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateC Anthology Episode 01 2026 1080p",
+        "rect": {
+          "left": 868,
+          "top": 462,
+          "right": 1136,
+          "width": 268,
+          "height": 315
+        }
+      },
+      {
+        "index": 7,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 02 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 793,
+          "right": 568,
+          "width": 268,
+          "height": 310
+        }
+      },
+      {
+        "index": 8,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 03 2026 1080p",
+        "rect": {
+          "left": 584,
+          "top": 793,
+          "right": 852,
+          "width": 268,
+          "height": 310
+        }
+      },
+      {
+        "index": 9,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 04 2026 1080p",
+        "rect": {
+          "left": 868,
+          "top": 793,
+          "right": 1136,
+          "width": 268,
+          "height": 310
+        }
+      },
+      {
+        "index": 10,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 05 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 1118,
+          "right": 568,
+          "width": 268,
+          "height": 310
+        }
+      },
+      {
+        "index": 11,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 06 2026 1080p",
+        "rect": {
+          "left": 584,
+          "top": 1118,
+          "right": 852,
+          "width": 268,
+          "height": 310
+        }
+      },
+      {
+        "index": 12,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 07 2026 1080p",
+        "rect": {
+          "left": 868,
+          "top": 1118,
+          "right": 1136,
+          "width": 268,
+          "height": 310
+        }
+      },
+      {
+        "index": 13,
+        "dateGroup": "2026-11-11",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateD Solo Cinema Special 2026 4K",
+        "rect": {
+          "left": 300,
+          "top": 1444,
+          "right": 568,
+          "width": 268,
+          "height": 315
+        }
+      }
+    ]
+  },
+  "1536x864_dock_closed": {
+    "gridWidth": 1188,
+    "catalogWidth": 1192,
+    "totalCards": 13,
+    "totalRows": 3,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "cardCount": 5,
+        "dateGroupsInRow": [
+          "2026-11-14",
+          "2026-11-13"
+        ],
+        "firstCardIndex": 1,
+        "lastCardIndex": 5,
+        "cardWidths": [
+          225,
+          225,
+          225,
+          225,
+          225
+        ],
+        "occupiedSpan": 1188,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 1,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 525,
+            "width": 225,
+            "title": "DateA Feature Film 01 2026 1080p"
+          },
+          {
+            "index": 2,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 541,
+            "right": 766,
+            "width": 225,
+            "title": "DateA Feature Film 02 2026 1080p"
+          },
+          {
+            "index": 3,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 782,
+            "right": 1006,
+            "width": 225,
+            "title": "DateA Feature Film 03 2026 1080p"
+          },
+          {
+            "index": 4,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": true,
+            "left": 1022,
+            "right": 1247,
+            "width": 225,
+            "title": "DateB Documentary Part 01 2026 720p"
+          },
+          {
+            "index": 5,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": false,
+            "left": 1263,
+            "right": 1488,
+            "width": 225,
+            "title": "DateB Documentary Part 02 2026 720p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 438,
+        "cardCount": 5,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 6,
+        "lastCardIndex": 10,
+        "cardWidths": [
+          225,
+          225,
+          225,
+          225,
+          225
+        ],
+        "occupiedSpan": 1188,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 6,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 525,
+            "width": 225,
+            "title": "DateC Anthology Episode 01 2026 1080p"
+          },
+          {
+            "index": 7,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 541,
+            "right": 766,
+            "width": 225,
+            "title": "DateC Anthology Episode 02 2026 1080p"
+          },
+          {
+            "index": 8,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 782,
+            "right": 1006,
+            "width": 225,
+            "title": "DateC Anthology Episode 03 2026 1080p"
+          },
+          {
+            "index": 9,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1022,
+            "right": 1247,
+            "width": 225,
+            "title": "DateC Anthology Episode 04 2026 1080p"
+          },
+          {
+            "index": 10,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1263,
+            "right": 1488,
+            "width": 225,
+            "title": "DateC Anthology Episode 05 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 744,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-12",
+          "2026-11-11"
+        ],
+        "firstCardIndex": 11,
+        "lastCardIndex": 13,
+        "cardWidths": [
+          225,
+          225,
+          225
+        ],
+        "occupiedSpan": 706,
+        "unusedEnd": 482,
+        "cards": [
+          {
+            "index": 11,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 525,
+            "width": 225,
+            "title": "DateC Anthology Episode 06 2026 1080p"
+          },
+          {
+            "index": 12,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 541,
+            "right": 766,
+            "width": 225,
+            "title": "DateC Anthology Episode 07 2026 1080p"
+          },
+          {
+            "index": 13,
+            "dateGroup": "2026-11-11",
+            "isFirstOfGroup": true,
+            "left": 782,
+            "right": 1006,
+            "width": 225,
+            "title": "DateD Solo Cinema Special 2026 4K"
+          }
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "index": 1,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateA Feature Film 01 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 131,
+          "right": 525,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 2,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 02 2026 1080p",
+        "rect": {
+          "left": 541,
+          "top": 131,
+          "right": 766,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 3,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 03 2026 1080p",
+        "rect": {
+          "left": 782,
+          "top": 131,
+          "right": 1006,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 4,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateB Documentary Part 01 2026 720p",
+        "rect": {
+          "left": 1022,
+          "top": 131,
+          "right": 1247,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 5,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateB Documentary Part 02 2026 720p",
+        "rect": {
+          "left": 1263,
+          "top": 131,
+          "right": 1488,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 6,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateC Anthology Episode 01 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 438,
+          "right": 525,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 7,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 02 2026 1080p",
+        "rect": {
+          "left": 541,
+          "top": 438,
+          "right": 766,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 8,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 03 2026 1080p",
+        "rect": {
+          "left": 782,
+          "top": 438,
+          "right": 1006,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 9,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 04 2026 1080p",
+        "rect": {
+          "left": 1022,
+          "top": 438,
+          "right": 1247,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 10,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 05 2026 1080p",
+        "rect": {
+          "left": 1263,
+          "top": 438,
+          "right": 1488,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 11,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 06 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 744,
+          "right": 525,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 12,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 07 2026 1080p",
+        "rect": {
+          "left": 541,
+          "top": 744,
+          "right": 766,
+          "width": 225,
+          "height": 291
+        }
+      },
+      {
+        "index": 13,
+        "dateGroup": "2026-11-11",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateD Solo Cinema Special 2026 4K",
+        "rect": {
+          "left": 782,
+          "top": 744,
+          "right": 1006,
+          "width": 225,
+          "height": 291
+        }
+      }
+    ]
+  },
+  "1536x864_dock_open": {
+    "gridWidth": 932,
+    "catalogWidth": 936,
+    "totalCards": 13,
+    "totalRows": 4,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-14",
+          "2026-11-13"
+        ],
+        "firstCardIndex": 1,
+        "lastCardIndex": 4,
+        "cardWidths": [
+          221,
+          221,
+          221,
+          221
+        ],
+        "occupiedSpan": 932,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 1,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 521,
+            "width": 221,
+            "title": "DateA Feature Film 01 2026 1080p"
+          },
+          {
+            "index": 2,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 537,
+            "right": 758,
+            "width": 221,
+            "title": "DateA Feature Film 02 2026 1080p"
+          },
+          {
+            "index": 3,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 774,
+            "right": 995,
+            "width": 221,
+            "title": "DateA Feature Film 03 2026 1080p"
+          },
+          {
+            "index": 4,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": true,
+            "left": 1011,
+            "right": 1232,
+            "width": 221,
+            "title": "DateB Documentary Part 01 2026 720p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 435,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-13",
+          "2026-11-12"
+        ],
+        "firstCardIndex": 5,
+        "lastCardIndex": 8,
+        "cardWidths": [
+          221,
+          221,
+          221,
+          221
+        ],
+        "occupiedSpan": 932,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 5,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 521,
+            "width": 221,
+            "title": "DateB Documentary Part 02 2026 720p"
+          },
+          {
+            "index": 6,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": true,
+            "left": 537,
+            "right": 758,
+            "width": 221,
+            "title": "DateC Anthology Episode 01 2026 1080p"
+          },
+          {
+            "index": 7,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 774,
+            "right": 995,
+            "width": 221,
+            "title": "DateC Anthology Episode 02 2026 1080p"
+          },
+          {
+            "index": 8,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1011,
+            "right": 1232,
+            "width": 221,
+            "title": "DateC Anthology Episode 03 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 740,
+        "cardCount": 4,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 9,
+        "lastCardIndex": 12,
+        "cardWidths": [
+          221,
+          221,
+          221,
+          221
+        ],
+        "occupiedSpan": 932,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 9,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 521,
+            "width": 221,
+            "title": "DateC Anthology Episode 04 2026 1080p"
+          },
+          {
+            "index": 10,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 537,
+            "right": 758,
+            "width": 221,
+            "title": "DateC Anthology Episode 05 2026 1080p"
+          },
+          {
+            "index": 11,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 774,
+            "right": 995,
+            "width": 221,
+            "title": "DateC Anthology Episode 06 2026 1080p"
+          },
+          {
+            "index": 12,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1011,
+            "right": 1232,
+            "width": 221,
+            "title": "DateC Anthology Episode 07 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 1039,
+        "cardCount": 1,
+        "dateGroupsInRow": [
+          "2026-11-11"
+        ],
+        "firstCardIndex": 13,
+        "lastCardIndex": 13,
+        "cardWidths": [
+          221
+        ],
+        "occupiedSpan": 221,
+        "unusedEnd": 711,
+        "cards": [
+          {
+            "index": 13,
+            "dateGroup": "2026-11-11",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 521,
+            "width": 221,
+            "title": "DateD Solo Cinema Special 2026 4K"
+          }
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "index": 1,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateA Feature Film 01 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 131,
+          "right": 521,
+          "width": 221,
+          "height": 288
+        }
+      },
+      {
+        "index": 2,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 02 2026 1080p",
+        "rect": {
+          "left": 537,
+          "top": 131,
+          "right": 758,
+          "width": 221,
+          "height": 288
+        }
+      },
+      {
+        "index": 3,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 03 2026 1080p",
+        "rect": {
+          "left": 774,
+          "top": 131,
+          "right": 995,
+          "width": 221,
+          "height": 288
+        }
+      },
+      {
+        "index": 4,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateB Documentary Part 01 2026 720p",
+        "rect": {
+          "left": 1011,
+          "top": 131,
+          "right": 1232,
+          "width": 221,
+          "height": 288
+        }
+      },
+      {
+        "index": 5,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateB Documentary Part 02 2026 720p",
+        "rect": {
+          "left": 300,
+          "top": 435,
+          "right": 521,
+          "width": 221,
+          "height": 288
+        }
+      },
+      {
+        "index": 6,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateC Anthology Episode 01 2026 1080p",
+        "rect": {
+          "left": 537,
+          "top": 435,
+          "right": 758,
+          "width": 221,
+          "height": 288
+        }
+      },
+      {
+        "index": 7,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 02 2026 1080p",
+        "rect": {
+          "left": 774,
+          "top": 435,
+          "right": 995,
+          "width": 221,
+          "height": 288
+        }
+      },
+      {
+        "index": 8,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 03 2026 1080p",
+        "rect": {
+          "left": 1011,
+          "top": 435,
+          "right": 1232,
+          "width": 221,
+          "height": 288
+        }
+      },
+      {
+        "index": 9,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 04 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 740,
+          "right": 521,
+          "width": 221,
+          "height": 283
+        }
+      },
+      {
+        "index": 10,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 05 2026 1080p",
+        "rect": {
+          "left": 537,
+          "top": 740,
+          "right": 758,
+          "width": 221,
+          "height": 283
+        }
+      },
+      {
+        "index": 11,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 06 2026 1080p",
+        "rect": {
+          "left": 774,
+          "top": 740,
+          "right": 995,
+          "width": 221,
+          "height": 283
+        }
+      },
+      {
+        "index": 12,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 07 2026 1080p",
+        "rect": {
+          "left": 1011,
+          "top": 740,
+          "right": 1232,
+          "width": 221,
+          "height": 283
+        }
+      },
+      {
+        "index": 13,
+        "dateGroup": "2026-11-11",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateD Solo Cinema Special 2026 4K",
+        "rect": {
+          "left": 300,
+          "top": 1039,
+          "right": 521,
+          "width": 221,
+          "height": 288
+        }
+      }
+    ]
+  },
+  "1920x1080_dock_closed": {
+    "gridWidth": 1572,
+    "catalogWidth": 1576,
+    "totalCards": 13,
+    "totalRows": 3,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "cardCount": 6,
+        "dateGroupsInRow": [
+          "2026-11-14",
+          "2026-11-13",
+          "2026-11-12"
+        ],
+        "firstCardIndex": 1,
+        "lastCardIndex": 6,
+        "cardWidths": [
+          249,
+          249,
+          249,
+          249,
+          249,
+          249
+        ],
+        "occupiedSpan": 1572,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 1,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 549,
+            "width": 249,
+            "title": "DateA Feature Film 01 2026 1080p"
+          },
+          {
+            "index": 2,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 565,
+            "right": 813,
+            "width": 249,
+            "title": "DateA Feature Film 02 2026 1080p"
+          },
+          {
+            "index": 3,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 829,
+            "right": 1078,
+            "width": 249,
+            "title": "DateA Feature Film 03 2026 1080p"
+          },
+          {
+            "index": 4,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": true,
+            "left": 1094,
+            "right": 1343,
+            "width": 249,
+            "title": "DateB Documentary Part 01 2026 720p"
+          },
+          {
+            "index": 5,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": false,
+            "left": 1359,
+            "right": 1607,
+            "width": 249,
+            "title": "DateB Documentary Part 02 2026 720p"
+          },
+          {
+            "index": 6,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": true,
+            "left": 1623,
+            "right": 1872,
+            "width": 249,
+            "title": "DateC Anthology Episode 01 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 451,
+        "cardCount": 6,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 7,
+        "lastCardIndex": 12,
+        "cardWidths": [
+          249,
+          249,
+          249,
+          249,
+          249,
+          249
+        ],
+        "occupiedSpan": 1572,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 7,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 549,
+            "width": 249,
+            "title": "DateC Anthology Episode 02 2026 1080p"
+          },
+          {
+            "index": 8,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 565,
+            "right": 813,
+            "width": 249,
+            "title": "DateC Anthology Episode 03 2026 1080p"
+          },
+          {
+            "index": 9,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 829,
+            "right": 1078,
+            "width": 249,
+            "title": "DateC Anthology Episode 04 2026 1080p"
+          },
+          {
+            "index": 10,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1094,
+            "right": 1343,
+            "width": 249,
+            "title": "DateC Anthology Episode 05 2026 1080p"
+          },
+          {
+            "index": 11,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1359,
+            "right": 1607,
+            "width": 249,
+            "title": "DateC Anthology Episode 06 2026 1080p"
+          },
+          {
+            "index": 12,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1623,
+            "right": 1872,
+            "width": 249,
+            "title": "DateC Anthology Episode 07 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 766,
+        "cardCount": 1,
+        "dateGroupsInRow": [
+          "2026-11-11"
+        ],
+        "firstCardIndex": 13,
+        "lastCardIndex": 13,
+        "cardWidths": [
+          249
+        ],
+        "occupiedSpan": 249,
+        "unusedEnd": 1323,
+        "cards": [
+          {
+            "index": 13,
+            "dateGroup": "2026-11-11",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 549,
+            "width": 249,
+            "title": "DateD Solo Cinema Special 2026 4K"
+          }
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "index": 1,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateA Feature Film 01 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 131,
+          "right": 549,
+          "width": 249,
+          "height": 304
+        }
+      },
+      {
+        "index": 2,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 02 2026 1080p",
+        "rect": {
+          "left": 565,
+          "top": 131,
+          "right": 813,
+          "width": 249,
+          "height": 304
+        }
+      },
+      {
+        "index": 3,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 03 2026 1080p",
+        "rect": {
+          "left": 829,
+          "top": 131,
+          "right": 1078,
+          "width": 249,
+          "height": 304
+        }
+      },
+      {
+        "index": 4,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateB Documentary Part 01 2026 720p",
+        "rect": {
+          "left": 1094,
+          "top": 131,
+          "right": 1343,
+          "width": 249,
+          "height": 304
+        }
+      },
+      {
+        "index": 5,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateB Documentary Part 02 2026 720p",
+        "rect": {
+          "left": 1359,
+          "top": 131,
+          "right": 1607,
+          "width": 249,
+          "height": 304
+        }
+      },
+      {
+        "index": 6,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateC Anthology Episode 01 2026 1080p",
+        "rect": {
+          "left": 1623,
+          "top": 131,
+          "right": 1872,
+          "width": 249,
+          "height": 304
+        }
+      },
+      {
+        "index": 7,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 02 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 451,
+          "right": 549,
+          "width": 249,
+          "height": 299
+        }
+      },
+      {
+        "index": 8,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 03 2026 1080p",
+        "rect": {
+          "left": 565,
+          "top": 451,
+          "right": 813,
+          "width": 249,
+          "height": 299
+        }
+      },
+      {
+        "index": 9,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 04 2026 1080p",
+        "rect": {
+          "left": 829,
+          "top": 451,
+          "right": 1078,
+          "width": 249,
+          "height": 299
+        }
+      },
+      {
+        "index": 10,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 05 2026 1080p",
+        "rect": {
+          "left": 1094,
+          "top": 451,
+          "right": 1343,
+          "width": 249,
+          "height": 299
+        }
+      },
+      {
+        "index": 11,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 06 2026 1080p",
+        "rect": {
+          "left": 1359,
+          "top": 451,
+          "right": 1607,
+          "width": 249,
+          "height": 299
+        }
+      },
+      {
+        "index": 12,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 07 2026 1080p",
+        "rect": {
+          "left": 1623,
+          "top": 451,
+          "right": 1872,
+          "width": 249,
+          "height": 299
+        }
+      },
+      {
+        "index": 13,
+        "dateGroup": "2026-11-11",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateD Solo Cinema Special 2026 4K",
+        "rect": {
+          "left": 300,
+          "top": 766,
+          "right": 549,
+          "width": 249,
+          "height": 304
+        }
+      }
+    ]
+  },
+  "1920x1080_dock_open": {
+    "gridWidth": 1316,
+    "catalogWidth": 1320,
+    "totalCards": 13,
+    "totalRows": 3,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "cardCount": 5,
+        "dateGroupsInRow": [
+          "2026-11-14",
+          "2026-11-13"
+        ],
+        "firstCardIndex": 1,
+        "lastCardIndex": 5,
+        "cardWidths": [
+          250,
+          250,
+          250,
+          250,
+          250
+        ],
+        "occupiedSpan": 1316,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 1,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 550,
+            "width": 250,
+            "title": "DateA Feature Film 01 2026 1080p"
+          },
+          {
+            "index": 2,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 566,
+            "right": 817,
+            "width": 250,
+            "title": "DateA Feature Film 02 2026 1080p"
+          },
+          {
+            "index": 3,
+            "dateGroup": "2026-11-14",
+            "isFirstOfGroup": false,
+            "left": 833,
+            "right": 1083,
+            "width": 250,
+            "title": "DateA Feature Film 03 2026 1080p"
+          },
+          {
+            "index": 4,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": true,
+            "left": 1099,
+            "right": 1350,
+            "width": 250,
+            "title": "DateB Documentary Part 01 2026 720p"
+          },
+          {
+            "index": 5,
+            "dateGroup": "2026-11-13",
+            "isFirstOfGroup": false,
+            "left": 1366,
+            "right": 1616,
+            "width": 250,
+            "title": "DateB Documentary Part 02 2026 720p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 452,
+        "cardCount": 5,
+        "dateGroupsInRow": [
+          "2026-11-12"
+        ],
+        "firstCardIndex": 6,
+        "lastCardIndex": 10,
+        "cardWidths": [
+          250,
+          250,
+          250,
+          250,
+          250
+        ],
+        "occupiedSpan": 1316,
+        "unusedEnd": 0,
+        "cards": [
+          {
+            "index": 6,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": true,
+            "left": 300,
+            "right": 550,
+            "width": 250,
+            "title": "DateC Anthology Episode 01 2026 1080p"
+          },
+          {
+            "index": 7,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 566,
+            "right": 817,
+            "width": 250,
+            "title": "DateC Anthology Episode 02 2026 1080p"
+          },
+          {
+            "index": 8,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 833,
+            "right": 1083,
+            "width": 250,
+            "title": "DateC Anthology Episode 03 2026 1080p"
+          },
+          {
+            "index": 9,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1099,
+            "right": 1350,
+            "width": 250,
+            "title": "DateC Anthology Episode 04 2026 1080p"
+          },
+          {
+            "index": 10,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 1366,
+            "right": 1616,
+            "width": 250,
+            "title": "DateC Anthology Episode 05 2026 1080p"
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 773,
+        "cardCount": 3,
+        "dateGroupsInRow": [
+          "2026-11-12",
+          "2026-11-11"
+        ],
+        "firstCardIndex": 11,
+        "lastCardIndex": 13,
+        "cardWidths": [
+          250,
+          250,
+          250
+        ],
+        "occupiedSpan": 783,
+        "unusedEnd": 533,
+        "cards": [
+          {
+            "index": 11,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 300,
+            "right": 550,
+            "width": 250,
+            "title": "DateC Anthology Episode 06 2026 1080p"
+          },
+          {
+            "index": 12,
+            "dateGroup": "2026-11-12",
+            "isFirstOfGroup": false,
+            "left": 566,
+            "right": 817,
+            "width": 250,
+            "title": "DateC Anthology Episode 07 2026 1080p"
+          },
+          {
+            "index": 13,
+            "dateGroup": "2026-11-11",
+            "isFirstOfGroup": true,
+            "left": 833,
+            "right": 1083,
+            "width": 250,
+            "title": "DateD Solo Cinema Special 2026 4K"
+          }
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "index": 1,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateA Feature Film 01 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 131,
+          "right": 550,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 2,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 02 2026 1080p",
+        "rect": {
+          "left": 566,
+          "top": 131,
+          "right": 817,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 3,
+        "dateGroup": "2026-11-14",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateA Feature Film 03 2026 1080p",
+        "rect": {
+          "left": 833,
+          "top": 131,
+          "right": 1083,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 4,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateB Documentary Part 01 2026 720p",
+        "rect": {
+          "left": 1099,
+          "top": 131,
+          "right": 1350,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 5,
+        "dateGroup": "2026-11-13",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateB Documentary Part 02 2026 720p",
+        "rect": {
+          "left": 1366,
+          "top": 131,
+          "right": 1616,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 6,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateC Anthology Episode 01 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 452,
+          "right": 550,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 7,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 02 2026 1080p",
+        "rect": {
+          "left": 566,
+          "top": 452,
+          "right": 817,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 8,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 03 2026 1080p",
+        "rect": {
+          "left": 833,
+          "top": 452,
+          "right": 1083,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 9,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 04 2026 1080p",
+        "rect": {
+          "left": 1099,
+          "top": 452,
+          "right": 1350,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 10,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 05 2026 1080p",
+        "rect": {
+          "left": 1366,
+          "top": 452,
+          "right": 1616,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 11,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 06 2026 1080p",
+        "rect": {
+          "left": 300,
+          "top": 773,
+          "right": 550,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 12,
+        "dateGroup": "2026-11-12",
+        "isFirstOfGroup": false,
+        "hasDateMarker": false,
+        "hasDateSubmarker": true,
+        "title": "DateC Anthology Episode 07 2026 1080p",
+        "rect": {
+          "left": 566,
+          "top": 773,
+          "right": 817,
+          "width": 250,
+          "height": 305
+        }
+      },
+      {
+        "index": 13,
+        "dateGroup": "2026-11-11",
+        "isFirstOfGroup": true,
+        "hasDateMarker": true,
+        "hasDateSubmarker": false,
+        "title": "DateD Solo Cinema Special 2026 4K",
+        "rect": {
+          "left": 833,
+          "top": 773,
+          "right": 1083,
+          "width": 250,
+          "height": 305
+        }
+      }
+    ]
+  }
+}

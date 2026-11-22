@@ -1,8 +1,8 @@
-use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
 use bytes::Bytes;
 use grammers_client::Client;
 use grammers_tl_types as tl;
+use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use tokio::sync::{RwLock, Semaphore};
 
 use crate::safety::AntiBanPacer;
@@ -86,44 +86,68 @@ impl StreamEngine {
             }
         }
         let mut map = self.account_semaphores.write().await;
-        Arc::clone(map.entry(account_idx).or_insert_with(|| Arc::new(Semaphore::new(12))))
+        Arc::clone(
+            map.entry(account_idx)
+                .or_insert_with(|| Arc::new(Semaphore::new(12))),
+        )
     }
 
-    async fn copy_auth_to_dc(&self, client: &Client, dc_id: i32, account_idx: usize) -> Result<(), String> {
+    async fn copy_auth_to_dc(
+        &self,
+        client: &Client,
+        dc_id: i32,
+        account_idx: usize,
+    ) -> Result<(), String> {
         let exp = tl::functions::auth::ExportAuthorization { dc_id };
-        let res = match tokio::time::timeout(std::time::Duration::from_secs(12), client.invoke(&exp)).await {
-            Ok(Ok(r)) => r,
-            Ok(Err(e)) => {
-                let err_str = format!("{e:?}");
-                if err_str.contains("DC_ID_INVALID") {
-                    return Ok(());
-                }
-                if let Some(pos) = err_str.find("FLOOD_WAIT").or_else(|| err_str.find("FLOOD_PREMIUM_WAIT")) {
-                    let sub = &err_str[pos..];
-                    if let Some(v_pos) = sub.find("Some(") {
-                        let num_str = sub[v_pos + 5..].chars().take_while(|c| c.is_ascii_digit()).collect::<String>();
-                        if let Ok(secs) = num_str.parse::<u64>() {
-                            self.pacer.report_flood_wait(account_idx, secs).await;
+        let res =
+            match tokio::time::timeout(std::time::Duration::from_secs(12), client.invoke(&exp))
+                .await
+            {
+                Ok(Ok(r)) => r,
+                Ok(Err(e)) => {
+                    let err_str = format!("{e:?}");
+                    if err_str.contains("DC_ID_INVALID") {
+                        return Ok(());
+                    }
+                    if let Some(pos) = err_str
+                        .find("FLOOD_WAIT")
+                        .or_else(|| err_str.find("FLOOD_PREMIUM_WAIT"))
+                    {
+                        let sub = &err_str[pos..];
+                        if let Some(v_pos) = sub.find("Some(") {
+                            let num_str = sub[v_pos + 5..]
+                                .chars()
+                                .take_while(|c| c.is_ascii_digit())
+                                .collect::<String>();
+                            if let Ok(secs) = num_str.parse::<u64>() {
+                                self.pacer.report_flood_wait(account_idx, secs).await;
+                            }
                         }
                     }
+                    return Err(format!("ExportAuthorization error: {e:?}"));
                 }
-                return Err(format!("ExportAuthorization error: {e:?}"));
-            }
-            Err(_) => {
-                return Err("ExportAuthorization timed out after 12s".to_string());
-            }
-        };
+                Err(_) => {
+                    return Err("ExportAuthorization timed out after 12s".to_string());
+                }
+            };
         match res {
             tl::enums::auth::ExportedAuthorization::Authorization(auth) => {
                 let imp = tl::functions::auth::ImportAuthorization {
                     id: auth.id,
                     bytes: auth.bytes,
                 };
-                match tokio::time::timeout(std::time::Duration::from_secs(12), client.invoke_in_dc(dc_id, &imp)).await {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(12),
+                    client.invoke_in_dc(dc_id, &imp),
+                )
+                .await
+                {
                     Ok(Ok(_)) => Ok(()),
                     Ok(Err(e)) => {
                         let err_str = format!("{e:?}");
-                        if err_str.contains("DC_ID_INVALID") || err_str.contains("AUTH_BYTES_INVALID") {
+                        if err_str.contains("DC_ID_INVALID")
+                            || err_str.contains("AUTH_BYTES_INVALID")
+                        {
                             Ok(())
                         } else {
                             Err(format!("ImportAuthorization error: {e:?}"))
@@ -161,25 +185,43 @@ impl StreamEngine {
         priority: StreamPriority,
         account_idx: usize,
     ) -> Result<Bytes, String> {
-        let _account_permit = self.get_account_semaphore(account_idx).await.acquire_owned().await.map_err(|e| e.to_string())?;
+        let _account_permit = self
+            .get_account_semaphore(account_idx)
+            .await
+            .acquire_owned()
+            .await
+            .map_err(|e| e.to_string())?;
 
         let _permit = if priority == StreamPriority::Bulk {
-            Some(self.bulk_semaphore.acquire().await.map_err(|e| e.to_string())?)
+            Some(
+                self.bulk_semaphore
+                    .acquire()
+                    .await
+                    .map_err(|e| e.to_string())?,
+            )
         } else {
             None
         };
 
-        self.pacer.wait_for_slot(account_idx, limit as usize, priority == StreamPriority::High).await;
+        self.pacer
+            .wait_for_slot(
+                account_idx,
+                limit as usize,
+                priority == StreamPriority::High,
+            )
+            .await;
 
         let req = tl::functions::upload::GetFile {
             precise: true,
             cdn_supported: false,
-            location: tl::enums::InputFileLocation::InputDocumentFileLocation(tl::types::InputDocumentFileLocation {
-                id: doc_id,
-                access_hash,
-                file_reference: file_reference.to_vec(),
-                thumb_size: String::new(),
-            }),
+            location: tl::enums::InputFileLocation::InputDocumentFileLocation(
+                tl::types::InputDocumentFileLocation {
+                    id: doc_id,
+                    access_hash,
+                    file_reference: file_reference.to_vec(),
+                    thumb_size: String::new(),
+                },
+            ),
             offset,
             limit,
         };
@@ -208,14 +250,20 @@ impl StreamEngine {
                     }
                     self.authed_dcs.write().await.insert((account_idx, dc_id));
                     drop(_guard);
-                    tokio::time::timeout(std::time::Duration::from_secs(25), client.invoke_in_dc(dc_id, &req))
-                        .await
-                        .map_err(|_| "MTProto GetFile retry timed out after 25s".to_string())?
-                        .map_err(|e2| format!("MTProto GetFile retry error: {e2:?}"))?
+                    tokio::time::timeout(
+                        std::time::Duration::from_secs(25),
+                        client.invoke_in_dc(dc_id, &req),
+                    )
+                    .await
+                    .map_err(|_| "MTProto GetFile retry timed out after 25s".to_string())?
+                    .map_err(|e2| format!("MTProto GetFile retry error: {e2:?}"))?
                 } else if err_str.contains("FLOOD_WAIT") || err_str.contains("FLOOD_PREMIUM_WAIT") {
                     let mut wait_secs = 2u64;
                     if let Some(pos) = err_str.find("Some(") {
-                        let num_str = err_str[pos + 5..].chars().take_while(|c| c.is_ascii_digit()).collect::<String>();
+                        let num_str = err_str[pos + 5..]
+                            .chars()
+                            .take_while(|c| c.is_ascii_digit())
+                            .collect::<String>();
                         if let Ok(secs) = num_str.parse::<u64>() {
                             wait_secs = secs;
                         }
@@ -229,9 +277,7 @@ impl StreamEngine {
         };
 
         match result {
-            tl::enums::upload::File::File(file) => {
-                Ok(Bytes::from(file.bytes))
-            }
+            tl::enums::upload::File::File(file) => Ok(Bytes::from(file.bytes)),
             tl::enums::upload::File::CdnRedirect(_) => {
                 Err("CDN redirects not supported for this media".to_string())
             }
@@ -273,7 +319,8 @@ impl StreamEngine {
                 limit,
                 priority,
                 account_idx,
-            ).await?
+            )
+            .await?
         } else {
             let mut sub_tasks = Vec::new();
             let mut cur_offset = offset;
@@ -323,7 +370,19 @@ impl StreamEngine {
         let s = self.clone_ref();
 
         tokio::spawn(async move {
-            let _ = s.fetch_chunk(&c1, dc_id, doc_id, access_hash, ref1, 0, chunk_size, StreamPriority::High, account_idx).await;
+            let _ = s
+                .fetch_chunk(
+                    &c1,
+                    dc_id,
+                    doc_id,
+                    access_hash,
+                    ref1,
+                    0,
+                    chunk_size,
+                    StreamPriority::High,
+                    account_idx,
+                )
+                .await;
         });
 
         if file_size > chunk_size as i64 {
@@ -333,7 +392,19 @@ impl StreamEngine {
             let s2 = self.clone_ref();
 
             tokio::spawn(async move {
-                let _ = s2.fetch_chunk(&c2, dc_id, doc_id, access_hash, ref2, tail_offset, chunk_size, StreamPriority::High, account_idx).await;
+                let _ = s2
+                    .fetch_chunk(
+                        &c2,
+                        dc_id,
+                        doc_id,
+                        access_hash,
+                        ref2,
+                        tail_offset,
+                        chunk_size,
+                        StreamPriority::High,
+                        account_idx,
+                    )
+                    .await;
             });
         }
     }

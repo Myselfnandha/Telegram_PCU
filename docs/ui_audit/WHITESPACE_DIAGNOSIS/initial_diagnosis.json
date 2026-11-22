@@ -1,0 +1,2811 @@
+[
+  {
+    "viewport": "1280x720",
+    "dockState": "dock_open",
+    "windowWidth": 1280,
+    "windowHeight": 720,
+    "mainContainerWidth": 1280,
+    "channelDockWidth": 252,
+    "cwDockWidth": 252,
+    "cwButtonWidth": 0,
+    "catalogWidth": 736,
+    "totalRows": 14,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 491,
+        "percentOccupied": 33,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "dateLabel": "Yesterday",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 470,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 21,
+        "percentOccupied": 97,
+        "panels": [
+          {
+            "panelIndex": 1,
+            "dateLabel": "Sat, Nov 14",
+            "width": 715,
+            "height": 1390,
+            "left": 0,
+            "right": 715,
+            "cardCount": 14,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 1876,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 491,
+        "percentOccupied": 33,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "dateLabel": "Fri, Nov 13",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 2245,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 21,
+        "percentOccupied": 97,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "dateLabel": "Thu, Nov 12",
+            "width": 715,
+            "height": 353,
+            "left": 0,
+            "right": 715,
+            "cardCount": 3,
+            "cardWidths": [
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 2614,
+        "panelCount": 1,
+        "totalOccupiedWidth": 480,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 256,
+        "percentOccupied": 65,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "dateLabel": "Tue, Nov 10",
+            "width": 480,
+            "height": 353,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "top": 2983,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 21,
+        "percentOccupied": 97,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "dateLabel": "Sun, Nov 8",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "top": 3936,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 21,
+        "percentOccupied": 97,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "dateLabel": "Sat, Nov 7",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "top": 4889,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 21,
+        "percentOccupied": 97,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "dateLabel": "Thu, Nov 5",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 9,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "top": 5842,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 21,
+        "percentOccupied": 97,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "dateLabel": "Wed, Nov 4",
+            "width": 715,
+            "height": 645,
+            "left": 0,
+            "right": 715,
+            "cardCount": 5,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "top": 6503,
+        "panelCount": 2,
+        "totalOccupiedWidth": 506,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 230,
+        "percentOccupied": 69,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "dateLabel": "Mon, Nov 2",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "dateLabel": "Sun, Nov 1",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 11,
+        "top": 6872,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 491,
+        "percentOccupied": 33,
+        "panels": [
+          {
+            "panelIndex": 11,
+            "dateLabel": "Wed, Oct 28",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 12,
+        "top": 7241,
+        "panelCount": 1,
+        "totalOccupiedWidth": 480,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 256,
+        "percentOccupied": 65,
+        "panels": [
+          {
+            "panelIndex": 12,
+            "dateLabel": "Mon, Oct 26",
+            "width": 480,
+            "height": 353,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 13,
+        "top": 7610,
+        "panelCount": 2,
+        "totalOccupiedWidth": 506,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 230,
+        "percentOccupied": 69,
+        "panels": [
+          {
+            "panelIndex": 13,
+            "dateLabel": "Fri, Oct 23",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "dateLabel": "Tue, Oct 20",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 14,
+        "top": 7979,
+        "panelCount": 2,
+        "totalOccupiedWidth": 506,
+        "catalogWidth": 736,
+        "unusedHorizontalSpace": 230,
+        "percentOccupied": 69,
+        "panels": [
+          {
+            "panelIndex": 15,
+            "dateLabel": "Sat, Oct 17",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "dateLabel": "Thu, Oct 15",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1280x720",
+    "dockState": "dock_closed",
+    "windowWidth": 1280,
+    "windowHeight": 720,
+    "mainContainerWidth": 1280,
+    "channelDockWidth": 252,
+    "cwDockWidth": 0,
+    "cwButtonWidth": 24,
+    "catalogWidth": 964,
+    "totalRows": 12,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 719,
+        "percentOccupied": 25,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "dateLabel": "Yesterday",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 470,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 249,
+        "percentOccupied": 74,
+        "panels": [
+          {
+            "panelIndex": 1,
+            "dateLabel": "Sat, Nov 14",
+            "width": 715,
+            "height": 1390,
+            "left": 0,
+            "right": 715,
+            "cardCount": 14,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 1876,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 719,
+        "percentOccupied": 25,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "dateLabel": "Fri, Nov 13",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 2245,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 249,
+        "percentOccupied": 74,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "dateLabel": "Thu, Nov 12",
+            "width": 715,
+            "height": 353,
+            "left": 0,
+            "right": 715,
+            "cardCount": 3,
+            "cardWidths": [
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 2614,
+        "panelCount": 1,
+        "totalOccupiedWidth": 480,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 484,
+        "percentOccupied": 50,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "dateLabel": "Tue, Nov 10",
+            "width": 480,
+            "height": 353,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "top": 2983,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 249,
+        "percentOccupied": 74,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "dateLabel": "Sun, Nov 8",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "top": 3936,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 249,
+        "percentOccupied": 74,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "dateLabel": "Sat, Nov 7",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "top": 4889,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 249,
+        "percentOccupied": 74,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "dateLabel": "Thu, Nov 5",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 9,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "top": 5842,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 249,
+        "percentOccupied": 74,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "dateLabel": "Wed, Nov 4",
+            "width": 715,
+            "height": 645,
+            "left": 0,
+            "right": 715,
+            "cardCount": 5,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "top": 6503,
+        "panelCount": 3,
+        "totalOccupiedWidth": 767,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 197,
+        "percentOccupied": 80,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "dateLabel": "Mon, Nov 2",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "dateLabel": "Sun, Nov 1",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "dateLabel": "Wed, Oct 28",
+            "width": 245,
+            "height": 353,
+            "left": 522,
+            "right": 767,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 11,
+        "top": 6872,
+        "panelCount": 2,
+        "totalOccupiedWidth": 741,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 223,
+        "percentOccupied": 77,
+        "panels": [
+          {
+            "panelIndex": 12,
+            "dateLabel": "Mon, Oct 26",
+            "width": 480,
+            "height": 353,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "dateLabel": "Fri, Oct 23",
+            "width": 245,
+            "height": 353,
+            "left": 496,
+            "right": 741,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 12,
+        "top": 7241,
+        "panelCount": 3,
+        "totalOccupiedWidth": 767,
+        "catalogWidth": 964,
+        "unusedHorizontalSpace": 197,
+        "percentOccupied": 80,
+        "panels": [
+          {
+            "panelIndex": 14,
+            "dateLabel": "Tue, Oct 20",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "dateLabel": "Sat, Oct 17",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "dateLabel": "Thu, Oct 15",
+            "width": 245,
+            "height": 353,
+            "left": 522,
+            "right": 767,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1440x900",
+    "dockState": "dock_open",
+    "windowWidth": 1440,
+    "windowHeight": 900,
+    "mainContainerWidth": 1440,
+    "channelDockWidth": 280,
+    "cwDockWidth": 280,
+    "cwButtonWidth": 0,
+    "catalogWidth": 840,
+    "totalRows": 12,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 595,
+        "percentOccupied": 29,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "dateLabel": "Yesterday",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 470,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 125,
+        "percentOccupied": 85,
+        "panels": [
+          {
+            "panelIndex": 1,
+            "dateLabel": "Sat, Nov 14",
+            "width": 715,
+            "height": 1390,
+            "left": 0,
+            "right": 715,
+            "cardCount": 14,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 1876,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 595,
+        "percentOccupied": 29,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "dateLabel": "Fri, Nov 13",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 2215,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 125,
+        "percentOccupied": 85,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "dateLabel": "Thu, Nov 12",
+            "width": 715,
+            "height": 353,
+            "left": 0,
+            "right": 715,
+            "cardCount": 3,
+            "cardWidths": [
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 2584,
+        "panelCount": 1,
+        "totalOccupiedWidth": 480,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 360,
+        "percentOccupied": 57,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "dateLabel": "Tue, Nov 10",
+            "width": 480,
+            "height": 353,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "top": 2953,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 125,
+        "percentOccupied": 85,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "dateLabel": "Sun, Nov 8",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "top": 3906,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 125,
+        "percentOccupied": 85,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "dateLabel": "Sat, Nov 7",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "top": 4859,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 125,
+        "percentOccupied": 85,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "dateLabel": "Thu, Nov 5",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 9,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "top": 5812,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 125,
+        "percentOccupied": 85,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "dateLabel": "Wed, Nov 4",
+            "width": 715,
+            "height": 645,
+            "left": 0,
+            "right": 715,
+            "cardCount": 5,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "top": 6473,
+        "panelCount": 3,
+        "totalOccupiedWidth": 767,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 73,
+        "percentOccupied": 91,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "dateLabel": "Mon, Nov 2",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "dateLabel": "Sun, Nov 1",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "dateLabel": "Wed, Oct 28",
+            "width": 245,
+            "height": 353,
+            "left": 522,
+            "right": 767,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 11,
+        "top": 6842,
+        "panelCount": 2,
+        "totalOccupiedWidth": 741,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 99,
+        "percentOccupied": 88,
+        "panels": [
+          {
+            "panelIndex": 12,
+            "dateLabel": "Mon, Oct 26",
+            "width": 480,
+            "height": 353,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "dateLabel": "Fri, Oct 23",
+            "width": 245,
+            "height": 353,
+            "left": 496,
+            "right": 741,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 12,
+        "top": 7211,
+        "panelCount": 3,
+        "totalOccupiedWidth": 767,
+        "catalogWidth": 840,
+        "unusedHorizontalSpace": 73,
+        "percentOccupied": 91,
+        "panels": [
+          {
+            "panelIndex": 14,
+            "dateLabel": "Tue, Oct 20",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "dateLabel": "Sat, Oct 17",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "dateLabel": "Thu, Oct 15",
+            "width": 245,
+            "height": 353,
+            "left": 522,
+            "right": 767,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1440x900",
+    "dockState": "dock_closed",
+    "windowWidth": 1440,
+    "windowHeight": 900,
+    "mainContainerWidth": 1440,
+    "channelDockWidth": 280,
+    "cwDockWidth": 0,
+    "cwButtonWidth": 24,
+    "catalogWidth": 1096,
+    "totalRows": 9,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "panelCount": 2,
+        "totalOccupiedWidth": 976,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 120,
+        "percentOccupied": 89,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "dateLabel": "Yesterday",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "dateLabel": "Sat, Nov 14",
+            "width": 715,
+            "height": 1390,
+            "left": 261,
+            "right": 976,
+            "cardCount": 14,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 1537,
+        "panelCount": 2,
+        "totalOccupiedWidth": 976,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 120,
+        "percentOccupied": 89,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "dateLabel": "Fri, Nov 13",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 3,
+            "dateLabel": "Thu, Nov 12",
+            "width": 715,
+            "height": 327,
+            "left": 261,
+            "right": 976,
+            "cardCount": 3,
+            "cardWidths": [
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 1880,
+        "panelCount": 1,
+        "totalOccupiedWidth": 480,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 616,
+        "percentOccupied": 44,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "dateLabel": "Tue, Nov 10",
+            "width": 480,
+            "height": 326,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 2221,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 381,
+        "percentOccupied": 65,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "dateLabel": "Sun, Nov 8",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 3174,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 381,
+        "percentOccupied": 65,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "dateLabel": "Sat, Nov 7",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "top": 4127,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 381,
+        "percentOccupied": 65,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "dateLabel": "Thu, Nov 5",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 9,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "top": 5080,
+        "panelCount": 2,
+        "totalOccupiedWidth": 976,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 120,
+        "percentOccupied": 89,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "dateLabel": "Wed, Nov 4",
+            "width": 715,
+            "height": 645,
+            "left": 0,
+            "right": 715,
+            "cardCount": 5,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          },
+          {
+            "panelIndex": 9,
+            "dateLabel": "Mon, Nov 2",
+            "width": 245,
+            "height": 353,
+            "left": 731,
+            "right": 976,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "top": 5741,
+        "panelCount": 3,
+        "totalOccupiedWidth": 1002,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 94,
+        "percentOccupied": 91,
+        "panels": [
+          {
+            "panelIndex": 10,
+            "dateLabel": "Sun, Nov 1",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "dateLabel": "Wed, Oct 28",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "dateLabel": "Mon, Oct 26",
+            "width": 480,
+            "height": 353,
+            "left": 522,
+            "right": 1002,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "top": 6110,
+        "panelCount": 4,
+        "totalOccupiedWidth": 1028,
+        "catalogWidth": 1096,
+        "unusedHorizontalSpace": 68,
+        "percentOccupied": 94,
+        "panels": [
+          {
+            "panelIndex": 13,
+            "dateLabel": "Fri, Oct 23",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "dateLabel": "Tue, Oct 20",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "dateLabel": "Sat, Oct 17",
+            "width": 245,
+            "height": 353,
+            "left": 522,
+            "right": 767,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "dateLabel": "Thu, Oct 15",
+            "width": 245,
+            "height": 353,
+            "left": 783,
+            "right": 1028,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1536x864",
+    "dockState": "dock_open",
+    "windowWidth": 1536,
+    "windowHeight": 864,
+    "mainContainerWidth": 1536,
+    "channelDockWidth": 280,
+    "cwDockWidth": 0,
+    "cwButtonWidth": 0,
+    "catalogWidth": 1226,
+    "totalRows": 9,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "panelCount": 2,
+        "totalOccupiedWidth": 1211,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 15,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "dateLabel": "Yesterday",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "dateLabel": "Sat, Nov 14",
+            "width": 950,
+            "height": 1126,
+            "left": 261,
+            "right": 1211,
+            "cardCount": 14,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 1273,
+        "panelCount": 2,
+        "totalOccupiedWidth": 976,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 250,
+        "percentOccupied": 80,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "dateLabel": "Fri, Nov 13",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 3,
+            "dateLabel": "Thu, Nov 12",
+            "width": 715,
+            "height": 327,
+            "left": 261,
+            "right": 976,
+            "cardCount": 3,
+            "cardWidths": [
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 1616,
+        "panelCount": 1,
+        "totalOccupiedWidth": 480,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 746,
+        "percentOccupied": 39,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "dateLabel": "Tue, Nov 10",
+            "width": 480,
+            "height": 326,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 1957,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 276,
+        "percentOccupied": 77,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "dateLabel": "Sun, Nov 8",
+            "width": 950,
+            "height": 619,
+            "left": 0,
+            "right": 950,
+            "cardCount": 8,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 2593,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 276,
+        "percentOccupied": 77,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "dateLabel": "Sat, Nov 7",
+            "width": 950,
+            "height": 645,
+            "left": 0,
+            "right": 950,
+            "cardCount": 8,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "top": 3254,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 276,
+        "percentOccupied": 77,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "dateLabel": "Thu, Nov 5",
+            "width": 950,
+            "height": 937,
+            "left": 0,
+            "right": 950,
+            "cardCount": 9,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "top": 4207,
+        "panelCount": 2,
+        "totalOccupiedWidth": 1211,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 15,
+        "percentOccupied": 99,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "dateLabel": "Wed, Nov 4",
+            "width": 950,
+            "height": 645,
+            "left": 0,
+            "right": 950,
+            "cardCount": 5,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          },
+          {
+            "panelIndex": 9,
+            "dateLabel": "Mon, Nov 2",
+            "width": 245,
+            "height": 353,
+            "left": 966,
+            "right": 1211,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "top": 4868,
+        "panelCount": 3,
+        "totalOccupiedWidth": 1002,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 224,
+        "percentOccupied": 82,
+        "panels": [
+          {
+            "panelIndex": 10,
+            "dateLabel": "Sun, Nov 1",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "dateLabel": "Wed, Oct 28",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "dateLabel": "Mon, Oct 26",
+            "width": 480,
+            "height": 353,
+            "left": 522,
+            "right": 1002,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "top": 5237,
+        "panelCount": 4,
+        "totalOccupiedWidth": 1028,
+        "catalogWidth": 1226,
+        "unusedHorizontalSpace": 198,
+        "percentOccupied": 84,
+        "panels": [
+          {
+            "panelIndex": 13,
+            "dateLabel": "Fri, Oct 23",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "dateLabel": "Tue, Oct 20",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "dateLabel": "Sat, Oct 17",
+            "width": 245,
+            "height": 353,
+            "left": 522,
+            "right": 767,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "dateLabel": "Thu, Oct 15",
+            "width": 245,
+            "height": 353,
+            "left": 783,
+            "right": 1028,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1536x864",
+    "dockState": "dock_closed",
+    "windowWidth": 1536,
+    "windowHeight": 864,
+    "mainContainerWidth": 1536,
+    "channelDockWidth": 280,
+    "cwDockWidth": 0,
+    "cwButtonWidth": 24,
+    "catalogWidth": 1192,
+    "totalRows": 11,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 947,
+        "percentOccupied": 21,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "dateLabel": "Yesterday",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 470,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 242,
+        "percentOccupied": 80,
+        "panels": [
+          {
+            "panelIndex": 1,
+            "dateLabel": "Sat, Nov 14",
+            "width": 950,
+            "height": 1126,
+            "left": 0,
+            "right": 950,
+            "cardCount": 14,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 1612,
+        "panelCount": 2,
+        "totalOccupiedWidth": 976,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 216,
+        "percentOccupied": 82,
+        "panels": [
+          {
+            "panelIndex": 2,
+            "dateLabel": "Fri, Nov 13",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 3,
+            "dateLabel": "Thu, Nov 12",
+            "width": 715,
+            "height": 327,
+            "left": 261,
+            "right": 976,
+            "cardCount": 3,
+            "cardWidths": [
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 1955,
+        "panelCount": 1,
+        "totalOccupiedWidth": 480,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 712,
+        "percentOccupied": 40,
+        "panels": [
+          {
+            "panelIndex": 4,
+            "dateLabel": "Tue, Nov 10",
+            "width": 480,
+            "height": 326,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 2296,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 242,
+        "percentOccupied": 80,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "dateLabel": "Sun, Nov 8",
+            "width": 950,
+            "height": 645,
+            "left": 0,
+            "right": 950,
+            "cardCount": 8,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "top": 2957,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 242,
+        "percentOccupied": 80,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "dateLabel": "Sat, Nov 7",
+            "width": 950,
+            "height": 645,
+            "left": 0,
+            "right": 950,
+            "cardCount": 8,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "top": 3618,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 242,
+        "percentOccupied": 80,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "dateLabel": "Thu, Nov 5",
+            "width": 950,
+            "height": 937,
+            "left": 0,
+            "right": 950,
+            "cardCount": 9,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "top": 4571,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 242,
+        "percentOccupied": 80,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "dateLabel": "Wed, Nov 4",
+            "width": 950,
+            "height": 645,
+            "left": 0,
+            "right": 950,
+            "cardCount": 5,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 9,
+        "top": 5232,
+        "panelCount": 3,
+        "totalOccupiedWidth": 767,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 425,
+        "percentOccupied": 64,
+        "panels": [
+          {
+            "panelIndex": 9,
+            "dateLabel": "Mon, Nov 2",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "dateLabel": "Sun, Nov 1",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 11,
+            "dateLabel": "Wed, Oct 28",
+            "width": 245,
+            "height": 353,
+            "left": 522,
+            "right": 767,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 10,
+        "top": 5601,
+        "panelCount": 3,
+        "totalOccupiedWidth": 1002,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 190,
+        "percentOccupied": 84,
+        "panels": [
+          {
+            "panelIndex": 12,
+            "dateLabel": "Mon, Oct 26",
+            "width": 480,
+            "height": 353,
+            "left": 0,
+            "right": 480,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "dateLabel": "Fri, Oct 23",
+            "width": 245,
+            "height": 353,
+            "left": 496,
+            "right": 741,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "dateLabel": "Tue, Oct 20",
+            "width": 245,
+            "height": 353,
+            "left": 757,
+            "right": 1002,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 11,
+        "top": 5970,
+        "panelCount": 2,
+        "totalOccupiedWidth": 506,
+        "catalogWidth": 1192,
+        "unusedHorizontalSpace": 686,
+        "percentOccupied": 42,
+        "panels": [
+          {
+            "panelIndex": 15,
+            "dateLabel": "Sat, Oct 17",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "dateLabel": "Thu, Oct 15",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1920x1080",
+    "dockState": "dock_open",
+    "windowWidth": 1920,
+    "windowHeight": 1080,
+    "mainContainerWidth": 1920,
+    "channelDockWidth": 280,
+    "cwDockWidth": 280,
+    "cwButtonWidth": 0,
+    "catalogWidth": 1320,
+    "totalRows": 8,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "panelCount": 3,
+        "totalOccupiedWidth": 1237,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 83,
+        "percentOccupied": 94,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "dateLabel": "Yesterday",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "dateLabel": "Sat, Nov 14",
+            "width": 715,
+            "height": 1390,
+            "left": 261,
+            "right": 976,
+            "cardCount": 14,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          },
+          {
+            "panelIndex": 2,
+            "dateLabel": "Fri, Nov 13",
+            "width": 245,
+            "height": 323,
+            "left": 992,
+            "right": 1237,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 1537,
+        "panelCount": 2,
+        "totalOccupiedWidth": 1211,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 109,
+        "percentOccupied": 92,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "dateLabel": "Thu, Nov 12",
+            "width": 715,
+            "height": 327,
+            "left": 0,
+            "right": 715,
+            "cardCount": 3,
+            "cardWidths": [
+              222,
+              222,
+              222
+            ]
+          },
+          {
+            "panelIndex": 4,
+            "dateLabel": "Tue, Nov 10",
+            "width": 480,
+            "height": 326,
+            "left": 731,
+            "right": 1211,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 1880,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 605,
+        "percentOccupied": 54,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "dateLabel": "Sun, Nov 8",
+            "width": 715,
+            "height": 946,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 2842,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 605,
+        "percentOccupied": 54,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "dateLabel": "Sat, Nov 7",
+            "width": 715,
+            "height": 990,
+            "left": 0,
+            "right": 715,
+            "cardCount": 8,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 3848,
+        "panelCount": 1,
+        "totalOccupiedWidth": 715,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 605,
+        "percentOccupied": 54,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "dateLabel": "Thu, Nov 5",
+            "width": 715,
+            "height": 937,
+            "left": 0,
+            "right": 715,
+            "cardCount": 9,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "top": 4801,
+        "panelCount": 3,
+        "totalOccupiedWidth": 1237,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 83,
+        "percentOccupied": 94,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "dateLabel": "Wed, Nov 4",
+            "width": 715,
+            "height": 645,
+            "left": 0,
+            "right": 715,
+            "cardCount": 5,
+            "cardWidths": [
+              222,
+              222,
+              222,
+              222
+            ]
+          },
+          {
+            "panelIndex": 9,
+            "dateLabel": "Mon, Nov 2",
+            "width": 245,
+            "height": 353,
+            "left": 731,
+            "right": 976,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "dateLabel": "Sun, Nov 1",
+            "width": 245,
+            "height": 353,
+            "left": 992,
+            "right": 1237,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "top": 5462,
+        "panelCount": 4,
+        "totalOccupiedWidth": 1263,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 57,
+        "percentOccupied": 96,
+        "panels": [
+          {
+            "panelIndex": 11,
+            "dateLabel": "Wed, Oct 28",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "dateLabel": "Mon, Oct 26",
+            "width": 480,
+            "height": 353,
+            "left": 261,
+            "right": 741,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "dateLabel": "Fri, Oct 23",
+            "width": 245,
+            "height": 353,
+            "left": 757,
+            "right": 1002,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "dateLabel": "Tue, Oct 20",
+            "width": 245,
+            "height": 353,
+            "left": 1018,
+            "right": 1263,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "top": 5831,
+        "panelCount": 2,
+        "totalOccupiedWidth": 506,
+        "catalogWidth": 1320,
+        "unusedHorizontalSpace": 814,
+        "percentOccupied": 38,
+        "panels": [
+          {
+            "panelIndex": 15,
+            "dateLabel": "Sat, Oct 17",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 16,
+            "dateLabel": "Thu, Oct 15",
+            "width": 245,
+            "height": 353,
+            "left": 261,
+            "right": 506,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "viewport": "1920x1080",
+    "dockState": "dock_closed",
+    "windowWidth": 1920,
+    "windowHeight": 1080,
+    "mainContainerWidth": 1920,
+    "channelDockWidth": 280,
+    "cwDockWidth": 0,
+    "cwButtonWidth": 24,
+    "catalogWidth": 1576,
+    "totalRows": 8,
+    "rows": [
+      {
+        "rowIndex": 1,
+        "top": 131,
+        "panelCount": 3,
+        "totalOccupiedWidth": 1472,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 104,
+        "percentOccupied": 93,
+        "panels": [
+          {
+            "panelIndex": 0,
+            "dateLabel": "Yesterday",
+            "width": 245,
+            "height": 323,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 1,
+            "dateLabel": "Sat, Nov 14",
+            "width": 950,
+            "height": 1126,
+            "left": 261,
+            "right": 1211,
+            "cardCount": 14,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          },
+          {
+            "panelIndex": 2,
+            "dateLabel": "Fri, Nov 13",
+            "width": 245,
+            "height": 323,
+            "left": 1227,
+            "right": 1472,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 2,
+        "top": 1273,
+        "panelCount": 2,
+        "totalOccupiedWidth": 1211,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 365,
+        "percentOccupied": 77,
+        "panels": [
+          {
+            "panelIndex": 3,
+            "dateLabel": "Thu, Nov 12",
+            "width": 715,
+            "height": 327,
+            "left": 0,
+            "right": 715,
+            "cardCount": 3,
+            "cardWidths": [
+              222,
+              222,
+              222
+            ]
+          },
+          {
+            "panelIndex": 4,
+            "dateLabel": "Tue, Nov 10",
+            "width": 480,
+            "height": 326,
+            "left": 731,
+            "right": 1211,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 3,
+        "top": 1616,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 626,
+        "percentOccupied": 60,
+        "panels": [
+          {
+            "panelIndex": 5,
+            "dateLabel": "Sun, Nov 8",
+            "width": 950,
+            "height": 593,
+            "left": 0,
+            "right": 950,
+            "cardCount": 8,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 4,
+        "top": 2225,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 626,
+        "percentOccupied": 60,
+        "panels": [
+          {
+            "panelIndex": 6,
+            "dateLabel": "Sat, Nov 7",
+            "width": 950,
+            "height": 593,
+            "left": 0,
+            "right": 950,
+            "cardCount": 8,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 5,
+        "top": 2835,
+        "panelCount": 1,
+        "totalOccupiedWidth": 950,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 626,
+        "percentOccupied": 60,
+        "panels": [
+          {
+            "panelIndex": 7,
+            "dateLabel": "Thu, Nov 5",
+            "width": 950,
+            "height": 937,
+            "left": 0,
+            "right": 950,
+            "cardCount": 9,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 6,
+        "top": 3788,
+        "panelCount": 3,
+        "totalOccupiedWidth": 1472,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 104,
+        "percentOccupied": 93,
+        "panels": [
+          {
+            "panelIndex": 8,
+            "dateLabel": "Wed, Nov 4",
+            "width": 950,
+            "height": 645,
+            "left": 0,
+            "right": 950,
+            "cardCount": 5,
+            "cardWidths": [
+              223,
+              223,
+              223,
+              223
+            ]
+          },
+          {
+            "panelIndex": 9,
+            "dateLabel": "Mon, Nov 2",
+            "width": 245,
+            "height": 353,
+            "left": 966,
+            "right": 1211,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 10,
+            "dateLabel": "Sun, Nov 1",
+            "width": 245,
+            "height": 353,
+            "left": 1227,
+            "right": 1472,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 7,
+        "top": 4449,
+        "panelCount": 5,
+        "totalOccupiedWidth": 1524,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 52,
+        "percentOccupied": 97,
+        "panels": [
+          {
+            "panelIndex": 11,
+            "dateLabel": "Wed, Oct 28",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 12,
+            "dateLabel": "Mon, Oct 26",
+            "width": 480,
+            "height": 353,
+            "left": 261,
+            "right": 741,
+            "cardCount": 2,
+            "cardWidths": [
+              220,
+              220
+            ]
+          },
+          {
+            "panelIndex": 13,
+            "dateLabel": "Fri, Oct 23",
+            "width": 245,
+            "height": 353,
+            "left": 757,
+            "right": 1002,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 14,
+            "dateLabel": "Tue, Oct 20",
+            "width": 245,
+            "height": 353,
+            "left": 1018,
+            "right": 1263,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          },
+          {
+            "panelIndex": 15,
+            "dateLabel": "Sat, Oct 17",
+            "width": 245,
+            "height": 353,
+            "left": 1279,
+            "right": 1524,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      },
+      {
+        "rowIndex": 8,
+        "top": 4818,
+        "panelCount": 1,
+        "totalOccupiedWidth": 245,
+        "catalogWidth": 1576,
+        "unusedHorizontalSpace": 1331,
+        "percentOccupied": 16,
+        "panels": [
+          {
+            "panelIndex": 16,
+            "dateLabel": "Thu, Oct 15",
+            "width": 245,
+            "height": 353,
+            "left": 0,
+            "right": 245,
+            "cardCount": 1,
+            "cardWidths": [
+              215
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,1338 @@
+{
+  "1280x720_dock_closed": {
+    "catalogWidth": 964,
+    "totalContainers": 4,
+    "containers": [
+      {
+        "index": 1,
+        "dateKey": "2026-11-14",
+        "title": "Sat, Nov 14",
+        "containerWidth": 960,
+        "isFullWidth": false,
+        "totalCards": 3,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateA Feature Film 01 2026 1080p",
+            "left": 289,
+            "top": 207,
+            "right": 574,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateA Feature Film 02 2026 1080p",
+            "left": 588,
+            "top": 207,
+            "right": 873,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateA Feature Film 03 2026 1080p",
+            "left": 887,
+            "top": 207,
+            "right": 1172,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "dateKey": "2026-11-13",
+        "title": "Fri, Nov 13",
+        "containerWidth": 960,
+        "isFullWidth": false,
+        "totalCards": 2,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateB Documentary Part 01 2026 720p",
+            "left": 289,
+            "top": 617,
+            "right": 574,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateB Documentary Part 02 2026 720p",
+            "left": 588,
+            "top": 617,
+            "right": 873,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "dateKey": "2026-11-12",
+        "title": "Thu, Nov 12",
+        "containerWidth": 960,
+        "isFullWidth": false,
+        "totalCards": 7,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 289,
+            "top": 1030,
+            "right": 574,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 2,
+            "title": "",
+            "left": 588,
+            "top": 1030,
+            "right": 873,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 3,
+            "title": "",
+            "left": 887,
+            "top": 1030,
+            "right": 1172,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 4,
+            "title": "",
+            "left": 1186,
+            "top": 1030,
+            "right": 1471,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 5,
+            "title": "",
+            "left": 1485,
+            "top": 1030,
+            "right": 1770,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 6,
+            "title": "",
+            "left": 1784,
+            "top": 1030,
+            "right": 2069,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 7,
+            "title": "",
+            "left": 2083,
+            "top": 1030,
+            "right": 2368,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "dateKey": "2026-11-11",
+        "title": "Wed, Nov 11",
+        "containerWidth": 960,
+        "isFullWidth": false,
+        "totalCards": 1,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 289,
+            "top": 1471,
+            "right": 574,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      }
+    ]
+  },
+  "1280x720_dock_open": {
+    "catalogWidth": 736,
+    "totalContainers": 4,
+    "containers": [
+      {
+        "index": 1,
+        "dateKey": "2026-11-14",
+        "title": "Sat, Nov 14",
+        "containerWidth": 732,
+        "isFullWidth": false,
+        "totalCards": 3,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateA Feature Film 01 2026 1080p",
+            "left": 289,
+            "top": 207,
+            "right": 574,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateA Feature Film 02 2026 1080p",
+            "left": 588,
+            "top": 207,
+            "right": 873,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateA Feature Film 03 2026 1080p",
+            "left": 887,
+            "top": 207,
+            "right": 1172,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "dateKey": "2026-11-13",
+        "title": "Fri, Nov 13",
+        "containerWidth": 732,
+        "isFullWidth": false,
+        "totalCards": 2,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateB Documentary Part 01 2026 720p",
+            "left": 289,
+            "top": 617,
+            "right": 574,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateB Documentary Part 02 2026 720p",
+            "left": 588,
+            "top": 617,
+            "right": 873,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "dateKey": "2026-11-12",
+        "title": "Thu, Nov 12",
+        "containerWidth": 732,
+        "isFullWidth": false,
+        "totalCards": 7,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 289,
+            "top": 1030,
+            "right": 574,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 2,
+            "title": "",
+            "left": 588,
+            "top": 1030,
+            "right": 873,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 3,
+            "title": "",
+            "left": 887,
+            "top": 1030,
+            "right": 1172,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 4,
+            "title": "",
+            "left": 1186,
+            "top": 1030,
+            "right": 1471,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 5,
+            "title": "",
+            "left": 1485,
+            "top": 1030,
+            "right": 1770,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 6,
+            "title": "",
+            "left": 1784,
+            "top": 1030,
+            "right": 2069,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 7,
+            "title": "",
+            "left": 2083,
+            "top": 1030,
+            "right": 2368,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "dateKey": "2026-11-11",
+        "title": "Wed, Nov 11",
+        "containerWidth": 732,
+        "isFullWidth": false,
+        "totalCards": 1,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 289,
+            "top": 1471,
+            "right": 574,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      }
+    ]
+  },
+  "1440x900_dock_closed": {
+    "catalogWidth": 1096,
+    "totalContainers": 4,
+    "containers": [
+      {
+        "index": 1,
+        "dateKey": "2026-11-14",
+        "title": "Sat, Nov 14",
+        "containerWidth": 1092,
+        "isFullWidth": false,
+        "totalCards": 3,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateA Feature Film 01 2026 1080p",
+            "left": 317,
+            "top": 207,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateA Feature Film 02 2026 1080p",
+            "left": 616,
+            "top": 207,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateA Feature Film 03 2026 1080p",
+            "left": 915,
+            "top": 207,
+            "right": 1200,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "dateKey": "2026-11-13",
+        "title": "Fri, Nov 13",
+        "containerWidth": 1092,
+        "isFullWidth": false,
+        "totalCards": 2,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateB Documentary Part 01 2026 720p",
+            "left": 317,
+            "top": 617,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateB Documentary Part 02 2026 720p",
+            "left": 616,
+            "top": 617,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "dateKey": "2026-11-12",
+        "title": "Thu, Nov 12",
+        "containerWidth": 1092,
+        "isFullWidth": false,
+        "totalCards": 7,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1030,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 2,
+            "title": "",
+            "left": 616,
+            "top": 1030,
+            "right": 901,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 3,
+            "title": "",
+            "left": 915,
+            "top": 1030,
+            "right": 1200,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 4,
+            "title": "",
+            "left": 1214,
+            "top": 1030,
+            "right": 1499,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 5,
+            "title": "",
+            "left": 1513,
+            "top": 1030,
+            "right": 1798,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 6,
+            "title": "",
+            "left": 1812,
+            "top": 1030,
+            "right": 2097,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 7,
+            "title": "",
+            "left": 2111,
+            "top": 1030,
+            "right": 2396,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "dateKey": "2026-11-11",
+        "title": "Wed, Nov 11",
+        "containerWidth": 1092,
+        "isFullWidth": false,
+        "totalCards": 1,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1471,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      }
+    ]
+  },
+  "1440x900_dock_open": {
+    "catalogWidth": 840,
+    "totalContainers": 4,
+    "containers": [
+      {
+        "index": 1,
+        "dateKey": "2026-11-14",
+        "title": "Sat, Nov 14",
+        "containerWidth": 836,
+        "isFullWidth": false,
+        "totalCards": 3,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateA Feature Film 01 2026 1080p",
+            "left": 317,
+            "top": 207,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateA Feature Film 02 2026 1080p",
+            "left": 616,
+            "top": 207,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateA Feature Film 03 2026 1080p",
+            "left": 915,
+            "top": 207,
+            "right": 1200,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "dateKey": "2026-11-13",
+        "title": "Fri, Nov 13",
+        "containerWidth": 836,
+        "isFullWidth": false,
+        "totalCards": 2,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateB Documentary Part 01 2026 720p",
+            "left": 317,
+            "top": 617,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateB Documentary Part 02 2026 720p",
+            "left": 616,
+            "top": 617,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "dateKey": "2026-11-12",
+        "title": "Thu, Nov 12",
+        "containerWidth": 836,
+        "isFullWidth": false,
+        "totalCards": 7,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1030,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 2,
+            "title": "",
+            "left": 616,
+            "top": 1030,
+            "right": 901,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 3,
+            "title": "",
+            "left": 915,
+            "top": 1030,
+            "right": 1200,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 4,
+            "title": "",
+            "left": 1214,
+            "top": 1030,
+            "right": 1499,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 5,
+            "title": "",
+            "left": 1513,
+            "top": 1030,
+            "right": 1798,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 6,
+            "title": "",
+            "left": 1812,
+            "top": 1030,
+            "right": 2097,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 7,
+            "title": "",
+            "left": 2111,
+            "top": 1030,
+            "right": 2396,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "dateKey": "2026-11-11",
+        "title": "Wed, Nov 11",
+        "containerWidth": 836,
+        "isFullWidth": false,
+        "totalCards": 1,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1471,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      }
+    ]
+  },
+  "1536x864_dock_closed": {
+    "catalogWidth": 1192,
+    "totalContainers": 4,
+    "containers": [
+      {
+        "index": 1,
+        "dateKey": "2026-11-14",
+        "title": "Sat, Nov 14",
+        "containerWidth": 1188,
+        "isFullWidth": false,
+        "totalCards": 3,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateA Feature Film 01 2026 1080p",
+            "left": 317,
+            "top": 207,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateA Feature Film 02 2026 1080p",
+            "left": 616,
+            "top": 207,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateA Feature Film 03 2026 1080p",
+            "left": 915,
+            "top": 207,
+            "right": 1200,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "dateKey": "2026-11-13",
+        "title": "Fri, Nov 13",
+        "containerWidth": 1188,
+        "isFullWidth": false,
+        "totalCards": 2,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateB Documentary Part 01 2026 720p",
+            "left": 317,
+            "top": 617,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateB Documentary Part 02 2026 720p",
+            "left": 616,
+            "top": 617,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "dateKey": "2026-11-12",
+        "title": "Thu, Nov 12",
+        "containerWidth": 1188,
+        "isFullWidth": false,
+        "totalCards": 7,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1030,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 2,
+            "title": "",
+            "left": 616,
+            "top": 1030,
+            "right": 901,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 3,
+            "title": "",
+            "left": 915,
+            "top": 1030,
+            "right": 1200,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 4,
+            "title": "",
+            "left": 1214,
+            "top": 1030,
+            "right": 1499,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 5,
+            "title": "",
+            "left": 1513,
+            "top": 1030,
+            "right": 1798,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 6,
+            "title": "",
+            "left": 1812,
+            "top": 1030,
+            "right": 2097,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 7,
+            "title": "",
+            "left": 2111,
+            "top": 1030,
+            "right": 2396,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "dateKey": "2026-11-11",
+        "title": "Wed, Nov 11",
+        "containerWidth": 1188,
+        "isFullWidth": false,
+        "totalCards": 1,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1471,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      }
+    ]
+  },
+  "1536x864_dock_open": {
+    "catalogWidth": 936,
+    "totalContainers": 4,
+    "containers": [
+      {
+        "index": 1,
+        "dateKey": "2026-11-14",
+        "title": "Sat, Nov 14",
+        "containerWidth": 932,
+        "isFullWidth": false,
+        "totalCards": 3,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateA Feature Film 01 2026 1080p",
+            "left": 317,
+            "top": 207,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateA Feature Film 02 2026 1080p",
+            "left": 616,
+            "top": 207,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateA Feature Film 03 2026 1080p",
+            "left": 915,
+            "top": 207,
+            "right": 1200,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "dateKey": "2026-11-13",
+        "title": "Fri, Nov 13",
+        "containerWidth": 932,
+        "isFullWidth": false,
+        "totalCards": 2,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateB Documentary Part 01 2026 720p",
+            "left": 317,
+            "top": 617,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateB Documentary Part 02 2026 720p",
+            "left": 616,
+            "top": 617,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "dateKey": "2026-11-12",
+        "title": "Thu, Nov 12",
+        "containerWidth": 932,
+        "isFullWidth": false,
+        "totalCards": 7,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1030,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 2,
+            "title": "",
+            "left": 616,
+            "top": 1030,
+            "right": 901,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 3,
+            "title": "",
+            "left": 915,
+            "top": 1030,
+            "right": 1200,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 4,
+            "title": "",
+            "left": 1214,
+            "top": 1030,
+            "right": 1499,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 5,
+            "title": "",
+            "left": 1513,
+            "top": 1030,
+            "right": 1798,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 6,
+            "title": "",
+            "left": 1812,
+            "top": 1030,
+            "right": 2097,
+            "width": 285,
+            "height": 322
+          },
+          {
+            "index": 7,
+            "title": "",
+            "left": 2111,
+            "top": 1030,
+            "right": 2396,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "dateKey": "2026-11-11",
+        "title": "Wed, Nov 11",
+        "containerWidth": 932,
+        "isFullWidth": false,
+        "totalCards": 1,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1471,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      }
+    ]
+  },
+  "1920x1080_dock_closed": {
+    "catalogWidth": 1576,
+    "totalContainers": 4,
+    "containers": [
+      {
+        "index": 1,
+        "dateKey": "2026-11-14",
+        "title": "Sat, Nov 14",
+        "containerWidth": 1572,
+        "isFullWidth": false,
+        "totalCards": 3,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateA Feature Film 01 2026 1080p",
+            "left": 317,
+            "top": 207,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateA Feature Film 02 2026 1080p",
+            "left": 616,
+            "top": 207,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateA Feature Film 03 2026 1080p",
+            "left": 915,
+            "top": 207,
+            "right": 1200,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "dateKey": "2026-11-13",
+        "title": "Fri, Nov 13",
+        "containerWidth": 1572,
+        "isFullWidth": false,
+        "totalCards": 2,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateB Documentary Part 01 2026 720p",
+            "left": 317,
+            "top": 617,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateB Documentary Part 02 2026 720p",
+            "left": 616,
+            "top": 617,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "dateKey": "2026-11-12",
+        "title": "Thu, Nov 12",
+        "containerWidth": 1572,
+        "isFullWidth": false,
+        "totalCards": 7,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateC Anthology Episode 01 2026 1080p",
+            "left": 317,
+            "top": 1030,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateC Anthology Episode 02 2026 1080p",
+            "left": 616,
+            "top": 1030,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateC Anthology Episode 03 2026 1080p",
+            "left": 915,
+            "top": 1030,
+            "right": 1200,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 4,
+            "title": "DateC Anthology Episode 04 2026 1080p",
+            "left": 1214,
+            "top": 1030,
+            "right": 1499,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 5,
+            "title": "DateC Anthology Episode 05 2026 1080p",
+            "left": 1513,
+            "top": 1030,
+            "right": 1798,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 6,
+            "title": "DateC Anthology Episode 06 2026 1080p",
+            "left": 1812,
+            "top": 1030,
+            "right": 2097,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 7,
+            "title": "DateC Anthology Episode 07 2026 1080p",
+            "left": 2111,
+            "top": 1030,
+            "right": 2396,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "dateKey": "2026-11-11",
+        "title": "Wed, Nov 11",
+        "containerWidth": 1572,
+        "isFullWidth": false,
+        "totalCards": 1,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1440,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      }
+    ]
+  },
+  "1920x1080_dock_open": {
+    "catalogWidth": 1320,
+    "totalContainers": 4,
+    "containers": [
+      {
+        "index": 1,
+        "dateKey": "2026-11-14",
+        "title": "Sat, Nov 14",
+        "containerWidth": 1316,
+        "isFullWidth": false,
+        "totalCards": 3,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateA Feature Film 01 2026 1080p",
+            "left": 317,
+            "top": 207,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateA Feature Film 02 2026 1080p",
+            "left": 616,
+            "top": 207,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateA Feature Film 03 2026 1080p",
+            "left": 915,
+            "top": 207,
+            "right": 1200,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "dateKey": "2026-11-13",
+        "title": "Fri, Nov 13",
+        "containerWidth": 1316,
+        "isFullWidth": false,
+        "totalCards": 2,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateB Documentary Part 01 2026 720p",
+            "left": 317,
+            "top": 617,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateB Documentary Part 02 2026 720p",
+            "left": 616,
+            "top": 617,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "dateKey": "2026-11-12",
+        "title": "Thu, Nov 12",
+        "containerWidth": 1316,
+        "isFullWidth": false,
+        "totalCards": 7,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "DateC Anthology Episode 01 2026 1080p",
+            "left": 317,
+            "top": 1030,
+            "right": 602,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 2,
+            "title": "DateC Anthology Episode 02 2026 1080p",
+            "left": 616,
+            "top": 1030,
+            "right": 901,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 3,
+            "title": "DateC Anthology Episode 03 2026 1080p",
+            "left": 915,
+            "top": 1030,
+            "right": 1200,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 4,
+            "title": "DateC Anthology Episode 04 2026 1080p",
+            "left": 1214,
+            "top": 1030,
+            "right": 1499,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 5,
+            "title": "DateC Anthology Episode 05 2026 1080p",
+            "left": 1513,
+            "top": 1030,
+            "right": 1798,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 6,
+            "title": "DateC Anthology Episode 06 2026 1080p",
+            "left": 1812,
+            "top": 1030,
+            "right": 2097,
+            "width": 285,
+            "height": 291
+          },
+          {
+            "index": 7,
+            "title": "DateC Anthology Episode 07 2026 1080p",
+            "left": 2111,
+            "top": 1030,
+            "right": 2396,
+            "width": 285,
+            "height": 291
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "dateKey": "2026-11-11",
+        "title": "Wed, Nov 11",
+        "containerWidth": 1316,
+        "isFullWidth": false,
+        "totalCards": 1,
+        "isContinuousRow": true,
+        "cards": [
+          {
+            "index": 1,
+            "title": "",
+            "left": 317,
+            "top": 1440,
+            "right": 602,
+            "width": 285,
+            "height": 322
+          }
+        ]
+      }
+    ]
+  }
+}

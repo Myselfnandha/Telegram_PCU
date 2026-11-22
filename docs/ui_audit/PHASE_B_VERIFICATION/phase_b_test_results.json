@@ -1,0 +1,449 @@
+{
+  "suite": "TG Power Suite Phase A & B Verification",
+  "timestamp": "2026-11-16T08:24:23Z",
+  "tests": [
+    {
+      "name": "Account Modal Opens Without Logout Request",
+      "category": "Logout Safety",
+      "status": "PASS",
+      "details": {
+        "logout_requests": 0
+      }
+    },
+    {
+      "name": "Log Out Click Reveals Confirmation State (No Request Fired)",
+      "category": "Logout Safety",
+      "status": "PASS",
+      "details": {
+        "confirm_disconnect_visible": true,
+        "cancel_visible": true,
+        "logout_requests": 0
+      }
+    },
+    {
+      "name": "Cancel Closes Confirmation Without Firing Logout",
+      "category": "Logout Safety",
+      "status": "PASS",
+      "details": {
+        "logout_button_restored": true,
+        "confirm_button_hidden": true,
+        "logout_requests": 0
+      }
+    },
+    {
+      "name": "Flush Cache Reveals Confirmation State (No Request Fired)",
+      "category": "Settings Actions",
+      "status": "PASS",
+      "details": {
+        "confirm_flush_visible": true,
+        "cache_clear_calls": 0
+      }
+    },
+    {
+      "name": "Flush Cache Cancel Reverts State Without Request",
+      "category": "Settings Actions",
+      "status": "PASS",
+      "details": {
+        "flush_button_restored": true,
+        "cache_clear_calls": 0
+      }
+    },
+    {
+      "name": "Reset Settings Reveals Two-Step Confirmation Card",
+      "category": "Settings Actions",
+      "status": "PASS",
+      "details": {
+        "confirm_reset_visible": true,
+        "cancel_visible": true
+      }
+    },
+    {
+      "name": "Reset Settings Cancel Preserves Configuration",
+      "category": "Settings Actions",
+      "status": "PASS",
+      "details": {
+        "player": "web",
+        "buffer": "16"
+      }
+    },
+    {
+      "name": "Reset Settings Confirm Restores System Defaults",
+      "category": "Settings Actions",
+      "status": "PASS",
+      "details": {
+        "player": "vlc",
+        "buffer": "4",
+        "network": "1000",
+        "theme": "cyber-emerald"
+      }
+    },
+    {
+      "name": "Default Cinema State Clean (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Channel Drawer Opens Independently (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": true,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Escape Key Dismisses Channel Drawer (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Close Button Dismisses Channel Drawer (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Backdrop Click Dismisses Channel Drawer (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Continue Watching Opens Independently (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": true,
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Escape Key Dismisses CW Drawer (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Drawer Mutual Exclusivity: Opening Channel Closes CW (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": true,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Drawer Mutual Exclusivity: Opening CW Closes Channel (320x640)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": true,
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Default Cinema State Clean (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Channel Drawer Opens Independently (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": true,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Escape Key Dismisses Channel Drawer (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Close Button Dismisses Channel Drawer (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Backdrop Click Dismisses Channel Drawer (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Continue Watching Opens Independently (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": true,
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Escape Key Dismisses CW Drawer (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Drawer Mutual Exclusivity: Opening Channel Closes CW (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": true,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Drawer Mutual Exclusivity: Opening CW Closes Channel (375x812)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": true,
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Default Cinema State Clean (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Channel Drawer Opens Independently (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": true,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Escape Key Dismisses Channel Drawer (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Close Button Dismisses Channel Drawer (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Backdrop Click Dismisses Channel Drawer (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Continue Watching Opens Independently (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": true,
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Escape Key Dismisses CW Drawer (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Drawer Mutual Exclusivity: Opening Channel Closes CW (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "channel_visible": true,
+        "cw_visible": false
+      }
+    },
+    {
+      "name": "Drawer Mutual Exclusivity: Opening CW Closes Channel (430x932)",
+      "category": "Mobile Drawers",
+      "status": "PASS",
+      "details": {
+        "cw_visible": true,
+        "channel_visible": false
+      }
+    },
+    {
+      "name": "Category Filter Pills >= 36px Height",
+      "category": "Touch Targets",
+      "status": "PASS",
+      "details": {
+        "rendered_height_px": 36,
+        "target_min": 36
+      }
+    },
+    {
+      "name": "Layout Mode Buttons >= 36x36px",
+      "category": "Touch Targets",
+      "status": "PASS",
+      "details": {
+        "rendered_width_px": 36,
+        "rendered_height_px": 36,
+        "target_min": "36x36"
+      }
+    },
+    {
+      "name": "Card Title Typography >= 13px",
+      "category": "Typography",
+      "status": "PASS",
+      "details": {
+        "rendered_font_size_px": 13,
+        "target_min": 13
+      }
+    },
+    {
+      "name": "Card Metadata Typography >= 11px",
+      "category": "Typography",
+      "status": "PASS",
+      "details": {
+        "rendered_font_size_px": 11,
+        "target_min": 11
+      }
+    },
+    {
+      "name": "Muted Text Contrast >= 4.5:1 (cyber-emerald)",
+      "category": "Theme Contrast",
+      "status": "PASS",
+      "details": {
+        "theme": "cyber-emerald",
+        "bg_rgb": "[0, 7, 14]",
+        "fg_rgb": "[166, 189, 188]",
+        "contrast_ratio": "10.25:1",
+        "wcag_aa_target": ">= 4.5:1"
+      }
+    },
+    {
+      "name": "Muted Text Contrast >= 4.5:1 (crimson-neon)",
+      "category": "Theme Contrast",
+      "status": "PASS",
+      "details": {
+        "theme": "crimson-neon",
+        "bg_rgb": "[13, 3, 9]",
+        "fg_rgb": "[194, 177, 198]",
+        "contrast_ratio": "10.06:1",
+        "wcag_aa_target": ">= 4.5:1"
+      }
+    },
+    {
+      "name": "Muted Text Contrast >= 4.5:1 (dark)",
+      "category": "Theme Contrast",
+      "status": "PASS",
+      "details": {
+        "theme": "dark",
+        "bg_rgb": "[10, 10, 10]",
+        "fg_rgb": "[183, 183, 183]",
+        "contrast_ratio": "9.87:1",
+        "wcag_aa_target": ">= 4.5:1"
+      }
+    },
+    {
+      "name": "Muted Text Contrast >= 4.5:1 (light)",
+      "category": "Theme Contrast",
+      "status": "PASS",
+      "details": {
+        "theme": "light",
+        "bg_rgb": "[255, 255, 255]",
+        "fg_rgb": "[115, 115, 115]",
+        "contrast_ratio": "4.74:1",
+        "wcag_aa_target": ">= 4.5:1"
+      }
+    },
+    {
+      "name": "VLC Button Shows Loading State and Disabled on Launch",
+      "category": "Playback Controls",
+      "status": "PASS",
+      "details": {
+        "disabled": true,
+        "spinner_present": true,
+        "button_text": "Launching..."
+      }
+    },
+    {
+      "name": "Duplicate VLC Click Prevented While Launching",
+      "category": "Playback Controls",
+      "status": "PASS",
+      "details": {
+        "button_disabled": true
+      }
+    },
+    {
+      "name": "Video Timeline ARIA Slider Attributes Compliant",
+      "category": "Video Player Accessibility",
+      "status": "PASS",
+      "details": {
+        "role": "slider",
+        "orientation": "horizontal",
+        "valuenow": "0",
+        "valuemin": "0",
+        "valuemax": "3.2",
+        "valuetext": "0:00 of 0:03"
+      }
+    },
+    {
+      "name": "Video Timeline Keyboard Navigation Handled (Home, End, PageUp, PageDown)",
+      "category": "Video Player Accessibility",
+      "status": "PASS",
+      "details": {
+        "found": true,
+        "defaultPreventedHome": true,
+        "defaultPreventedEnd": true,
+        "defaultPreventedPageUp": true,
+        "defaultPreventedPageDown": true
+      }
+    },
+    {
+      "name": "Video Player Modal Restores Focus on Close",
+      "category": "Video Player Accessibility",
+      "status": "PASS",
+      "details": {
+        "trigger_aria": "Stream Celebrity Master Chef in browser",
+        "restored_aria": "Stream Celebrity Master Chef in browser"
+      }
+    }
+  ]
+}

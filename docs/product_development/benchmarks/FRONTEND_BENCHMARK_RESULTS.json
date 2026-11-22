@@ -1,0 +1,18 @@
+{
+  "100": {
+    "median_render": 0.5,
+    "avg_dom_nodes": 104
+  },
+  "1000": {
+    "median_render": 3.099999997764826,
+    "avg_dom_nodes": 1004
+  },
+  "5000": {
+    "median_render": 22.199999999254942,
+    "avg_dom_nodes": 5004
+  },
+  "10000": {
+    "median_render": 17.300000000745058,
+    "avg_dom_nodes": 10004
+  }
+}

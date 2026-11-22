@@ -51,10 +51,33 @@ jobs:
           push: false
           tags: myselfnandha/tg-power-suite:${{ github.ref_name }}
 
+  build-rust-core:
+    name: Build TG Rust Core (GitHub Actions)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Build Release Binary
+        working-directory: rust_core
+        run: cargo build --release
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tg-rust-core-linux-x86_64
+          path: rust_core/target/release/tg-rust-core
+
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [test, docker-build]
+    needs: [test, docker-build, build-rust-core]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -63,6 +86,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Download Rust Core Binary Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tg-rust-core-linux-x86_64
+          path: dist/
 
       - name: Package Linux Standalone Tarball
         run: |
@@ -85,3 +114,4 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/*.zip
+            dist/tg-rust-core

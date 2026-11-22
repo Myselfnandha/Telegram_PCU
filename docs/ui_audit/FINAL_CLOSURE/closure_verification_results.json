@@ -1,0 +1,1229 @@
+{
+  "title": "TG Power Suite - Final UI Verification Closure",
+  "timestamp": "2026-11-16T14:24:45Z",
+  "suites": [
+    {
+      "id": "1",
+      "title": "Telegram Logout Safety (Non-Destructive State Machine)",
+      "scenarios": [
+        {
+          "id": "1.1",
+          "title": "Account Modal Opening Behavior",
+          "assertions": [
+            {
+              "name": "Account modal opens without issuing logout HTTP request",
+              "status": "PASS",
+              "details": {
+                "logout_requests_fired": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "1.2",
+          "title": "Log Out Button State Machine Progression",
+          "assertions": [
+            {
+              "name": "Confirm Disconnect button is rendered and visible",
+              "status": "PASS",
+              "details": {
+                "confirm_button_visible": true
+              }
+            },
+            {
+              "name": "Cancel button is rendered and visible",
+              "status": "PASS",
+              "details": {
+                "cancel_button_visible": true
+              }
+            },
+            {
+              "name": "Zero logout HTTP requests issued on entering confirmation state",
+              "status": "PASS",
+              "details": {
+                "logout_requests_fired": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "1.3",
+          "title": "Cancellation of Logout Action",
+          "assertions": [
+            {
+              "name": "Original Log Out button is restored after cancel",
+              "status": "PASS",
+              "details": {
+                "logout_button_restored": true
+              }
+            },
+            {
+              "name": "Confirm Disconnect button is hidden after cancel",
+              "status": "PASS",
+              "details": {
+                "confirm_button_visible": false
+              }
+            },
+            {
+              "name": "Zero logout HTTP requests issued during entire cancel sequence",
+              "status": "PASS",
+              "details": {
+                "logout_requests_fired": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "title": "Settings Actions & Cache Flushing Two-Step Confirmation",
+      "scenarios": [
+        {
+          "id": "2.1",
+          "title": "Flush Cache Two-Step Confirmation Reveal",
+          "assertions": [
+            {
+              "name": "Confirm Flush and Cancel buttons are revealed",
+              "status": "PASS",
+              "details": {
+                "confirm_visible": true,
+                "cancel_visible": true
+              }
+            },
+            {
+              "name": "Zero cache clear HTTP requests issued upon entering confirmation",
+              "status": "PASS",
+              "details": {
+                "cache_clear_requests": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "2.2",
+          "title": "Flush Cache Cancellation Reversion",
+          "assertions": [
+            {
+              "name": "Flush Cache button restored after cancel",
+              "status": "PASS",
+              "details": {
+                "flush_button_visible": true
+              }
+            },
+            {
+              "name": "Zero cache clear requests fired during cancellation",
+              "status": "PASS",
+              "details": {
+                "cache_clear_requests": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "2.3",
+          "title": "Reset All Settings Confirmation Reveal",
+          "assertions": [
+            {
+              "name": "Confirm Reset button is revealed",
+              "status": "PASS",
+              "details": {
+                "confirm_reset_visible": true
+              }
+            },
+            {
+              "name": "Cancel Reset button is revealed",
+              "status": "PASS",
+              "details": {
+                "cancel_reset_visible": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "2.4",
+          "title": "Reset Settings Cancellation Preserves Values",
+          "assertions": [
+            {
+              "name": "Player preference preserved as 'web'",
+              "status": "PASS",
+              "details": {
+                "player_pref": "web"
+              }
+            },
+            {
+              "name": "Buffer size preserved as '16'",
+              "status": "PASS",
+              "details": {
+                "buffer_mb": "16"
+              }
+            }
+          ]
+        },
+        {
+          "id": "2.5",
+          "title": "Reset Settings Confirmation Restores Defaults",
+          "assertions": [
+            {
+              "name": "Player preference reset to default 'vlc'",
+              "status": "PASS",
+              "details": {
+                "player_pref": "vlc"
+              }
+            },
+            {
+              "name": "Buffer size reset to default '4'",
+              "status": "PASS",
+              "details": {
+                "buffer_mb": "4"
+              }
+            },
+            {
+              "name": "Theme reset to default 'cyber-emerald'",
+              "status": "PASS",
+              "details": {
+                "theme": "cyber-emerald"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "title": "Mobile Drawers Responsive, Mutual Exclusivity & Accessibility Trap",
+      "scenarios": [
+        {
+          "id": "3.1.1",
+          "title": "Initial State Clean (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer initially closed on mobile (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_drawer_visible": false
+              }
+            },
+            {
+              "name": "Continue Watching drawer initially closed on mobile (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_drawer_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.2",
+          "title": "Channel Drawer Independent Opening (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer is visible (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": true
+              }
+            },
+            {
+              "name": "Continue Watching drawer remains hidden (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.3",
+          "title": "Channel Drawer Escape Dismiss (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Escape key dismisses Channel drawer (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.4",
+          "title": "Channel Drawer Close Button Dismiss (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Close button dismisses Channel drawer (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.5",
+          "title": "Channel Drawer Backdrop Dismiss (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Backdrop tap dismisses Channel drawer (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.6",
+          "title": "Continue Watching Drawer Independent Opening (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Continue Watching drawer is visible (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": true
+              }
+            },
+            {
+              "name": "Channel drawer remains hidden (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.7",
+          "title": "Continue Watching Drawer Escape Dismiss (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Escape key dismisses Continue Watching drawer (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.8",
+          "title": "Mutual Exclusivity: Channel Closes CW (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer opened successfully (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": true
+              }
+            },
+            {
+              "name": "Continue Watching drawer closed automatically (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.9",
+          "title": "Mutual Exclusivity: CW Closes Channel (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Continue Watching drawer opened successfully (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": true
+              }
+            },
+            {
+              "name": "Channel drawer closed automatically (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.1.10",
+          "title": "Drawer Accessibility Trap & Background Inert (320x640 Small Mobile)",
+          "assertions": [
+            {
+              "name": "Background catalog has 'inert' attribute (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "catalog_inert": true
+              }
+            },
+            {
+              "name": "Background catalog has aria-hidden='true' (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "catalog_aria_hidden": "true"
+              }
+            },
+            {
+              "name": "Background content blocked from keyboard focus (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "background_button_focused": false
+              }
+            },
+            {
+              "name": "Shift+Tab from first element loops within drawer (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "focus_contained_in_drawer": true
+              }
+            },
+            {
+              "name": "Tab from last element loops to first element within drawer (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "focus_contained_in_drawer": true
+              }
+            },
+            {
+              "name": "Focus returns to initiating trigger button upon Escape (320x640 Small Mobile)",
+              "status": "PASS",
+              "details": {
+                "active_element_aria_label": "Open Channels & Chats Sidebar"
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.1",
+          "title": "Initial State Clean (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer initially closed on mobile (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_drawer_visible": false
+              }
+            },
+            {
+              "name": "Continue Watching drawer initially closed on mobile (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_drawer_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.2",
+          "title": "Channel Drawer Independent Opening (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer is visible (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": true
+              }
+            },
+            {
+              "name": "Continue Watching drawer remains hidden (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.3",
+          "title": "Channel Drawer Escape Dismiss (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Escape key dismisses Channel drawer (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.4",
+          "title": "Channel Drawer Close Button Dismiss (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Close button dismisses Channel drawer (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.5",
+          "title": "Channel Drawer Backdrop Dismiss (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Backdrop tap dismisses Channel drawer (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.6",
+          "title": "Continue Watching Drawer Independent Opening (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Continue Watching drawer is visible (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": true
+              }
+            },
+            {
+              "name": "Channel drawer remains hidden (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.7",
+          "title": "Continue Watching Drawer Escape Dismiss (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Escape key dismisses Continue Watching drawer (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.8",
+          "title": "Mutual Exclusivity: Channel Closes CW (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer opened successfully (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": true
+              }
+            },
+            {
+              "name": "Continue Watching drawer closed automatically (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.9",
+          "title": "Mutual Exclusivity: CW Closes Channel (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Continue Watching drawer opened successfully (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": true
+              }
+            },
+            {
+              "name": "Channel drawer closed automatically (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.2.10",
+          "title": "Drawer Accessibility Trap & Background Inert (375x812 Standard Mobile)",
+          "assertions": [
+            {
+              "name": "Background catalog has 'inert' attribute (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "catalog_inert": true
+              }
+            },
+            {
+              "name": "Background catalog has aria-hidden='true' (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "catalog_aria_hidden": "true"
+              }
+            },
+            {
+              "name": "Background content blocked from keyboard focus (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "background_button_focused": false
+              }
+            },
+            {
+              "name": "Shift+Tab from first element loops within drawer (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "focus_contained_in_drawer": true
+              }
+            },
+            {
+              "name": "Tab from last element loops to first element within drawer (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "focus_contained_in_drawer": true
+              }
+            },
+            {
+              "name": "Focus returns to initiating trigger button upon Escape (375x812 Standard Mobile)",
+              "status": "PASS",
+              "details": {
+                "active_element_aria_label": "Open Channels & Chats Sidebar"
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.1",
+          "title": "Initial State Clean (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer initially closed on mobile (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_drawer_visible": false
+              }
+            },
+            {
+              "name": "Continue Watching drawer initially closed on mobile (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_drawer_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.2",
+          "title": "Channel Drawer Independent Opening (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer is visible (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": true
+              }
+            },
+            {
+              "name": "Continue Watching drawer remains hidden (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.3",
+          "title": "Channel Drawer Escape Dismiss (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Escape key dismisses Channel drawer (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.4",
+          "title": "Channel Drawer Close Button Dismiss (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Close button dismisses Channel drawer (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.5",
+          "title": "Channel Drawer Backdrop Dismiss (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Backdrop tap dismisses Channel drawer (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.6",
+          "title": "Continue Watching Drawer Independent Opening (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Continue Watching drawer is visible (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": true
+              }
+            },
+            {
+              "name": "Channel drawer remains hidden (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.7",
+          "title": "Continue Watching Drawer Escape Dismiss (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Escape key dismisses Continue Watching drawer (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.8",
+          "title": "Mutual Exclusivity: Channel Closes CW (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Channel drawer opened successfully (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": true
+              }
+            },
+            {
+              "name": "Continue Watching drawer closed automatically (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.9",
+          "title": "Mutual Exclusivity: CW Closes Channel (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Continue Watching drawer opened successfully (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "cw_visible": true
+              }
+            },
+            {
+              "name": "Channel drawer closed automatically (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "channel_visible": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "3.3.10",
+          "title": "Drawer Accessibility Trap & Background Inert (430x932 Large Mobile)",
+          "assertions": [
+            {
+              "name": "Background catalog has 'inert' attribute (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "catalog_inert": true
+              }
+            },
+            {
+              "name": "Background catalog has aria-hidden='true' (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "catalog_aria_hidden": "true"
+              }
+            },
+            {
+              "name": "Background content blocked from keyboard focus (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "background_button_focused": false
+              }
+            },
+            {
+              "name": "Shift+Tab from first element loops within drawer (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "focus_contained_in_drawer": true
+              }
+            },
+            {
+              "name": "Tab from last element loops to first element within drawer (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "focus_contained_in_drawer": true
+              }
+            },
+            {
+              "name": "Focus returns to initiating trigger button upon Escape (430x932 Large Mobile)",
+              "status": "PASS",
+              "details": {
+                "active_element_aria_label": "Open Channels & Chats Sidebar"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "title": "Design System Touch Targets, Typography & WCAG AA Contrast",
+      "scenarios": [
+        {
+          "id": "4.1",
+          "title": "Category Filter Pills Minimum Touch Height",
+          "assertions": [
+            {
+              "name": "Category filter tab height >= 36px",
+              "status": "PASS",
+              "details": {
+                "rendered_height_px": 36,
+                "target_min_px": 36
+              }
+            }
+          ]
+        },
+        {
+          "id": "4.2",
+          "title": "Layout Mode Buttons Touch Target Boundaries",
+          "assertions": [
+            {
+              "name": "Layout button width >= 36px",
+              "status": "PASS",
+              "details": {
+                "rendered_width_px": 36,
+                "target_min_px": 36
+              }
+            },
+            {
+              "name": "Layout button height >= 36px",
+              "status": "PASS",
+              "details": {
+                "rendered_height_px": 36,
+                "target_min_px": 36
+              }
+            }
+          ]
+        },
+        {
+          "id": "4.3",
+          "title": "Media Card Title Font Size",
+          "assertions": [
+            {
+              "name": "Card title font size >= 13px",
+              "status": "PASS",
+              "details": {
+                "rendered_font_size_px": 13,
+                "target_min_px": 13
+              }
+            }
+          ]
+        },
+        {
+          "id": "4.4",
+          "title": "Media Card Metadata Font Size",
+          "assertions": [
+            {
+              "name": "Card metadata font size >= 11px",
+              "status": "PASS",
+              "details": {
+                "rendered_font_size_px": 11,
+                "target_min_px": 11
+              }
+            }
+          ]
+        },
+        {
+          "id": "4.5",
+          "title": "Theme Contrast Verification: Midnight Emerald (cyber-emerald)",
+          "assertions": [
+            {
+              "name": "Muted text contrast ratio >= 4.5:1 (Midnight Emerald)",
+              "status": "PASS",
+              "details": {
+                "theme": "cyber-emerald",
+                "contrast_ratio": "10.25:1",
+                "target_standard": "WCAG AA (>= 4.5:1)",
+                "background_rgb": "[0, 7, 14]",
+                "text_rgb": "[166, 189, 188]"
+              }
+            }
+          ]
+        },
+        {
+          "id": "4.6",
+          "title": "Theme Contrast Verification: Crimson Neon (crimson-neon)",
+          "assertions": [
+            {
+              "name": "Muted text contrast ratio >= 4.5:1 (Crimson Neon)",
+              "status": "PASS",
+              "details": {
+                "theme": "crimson-neon",
+                "contrast_ratio": "10.06:1",
+                "target_standard": "WCAG AA (>= 4.5:1)",
+                "background_rgb": "[13, 3, 9]",
+                "text_rgb": "[194, 177, 198]"
+              }
+            }
+          ]
+        },
+        {
+          "id": "4.7",
+          "title": "Theme Contrast Verification: Onyx Dark (dark)",
+          "assertions": [
+            {
+              "name": "Muted text contrast ratio >= 4.5:1 (Onyx Dark)",
+              "status": "PASS",
+              "details": {
+                "theme": "dark",
+                "contrast_ratio": "9.87:1",
+                "target_standard": "WCAG AA (>= 4.5:1)",
+                "background_rgb": "[10, 10, 10]",
+                "text_rgb": "[183, 183, 183]"
+              }
+            }
+          ]
+        },
+        {
+          "id": "4.8",
+          "title": "Theme Contrast Verification: Daylight (light)",
+          "assertions": [
+            {
+              "name": "Muted text contrast ratio >= 4.5:1 (Daylight)",
+              "status": "PASS",
+              "details": {
+                "theme": "light",
+                "contrast_ratio": "4.74:1",
+                "target_standard": "WCAG AA (>= 4.5:1)",
+                "background_rgb": "[255, 255, 255]",
+                "text_rgb": "[115, 115, 115]"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "title": "Video Player Timeline Scrubbing, Media Sync & ARIA Compliance",
+      "scenarios": [
+        {
+          "id": "5.1",
+          "title": "Desktop VLC Button Launch Debounce & Loading Indicator",
+          "assertions": [
+            {
+              "name": "VLC button enters disabled state on launch",
+              "status": "PASS",
+              "details": {
+                "button_disabled": true
+              }
+            },
+            {
+              "name": "VLC button displays loading spinner indicator",
+              "status": "PASS",
+              "details": {
+                "spinner_count": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.2",
+          "title": "Duplicate VLC Click Prevention During Launch",
+          "assertions": [
+            {
+              "name": "VLC button prevents duplicate clicks while launching",
+              "status": "PASS",
+              "details": {
+                "button_disabled": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.3",
+          "title": "Video Timeline Slider ARIA Accessibility Attributes",
+          "assertions": [
+            {
+              "name": "Slider role is 'slider'",
+              "status": "PASS",
+              "details": {
+                "role": "slider"
+              }
+            },
+            {
+              "name": "Slider aria-orientation is 'horizontal'",
+              "status": "PASS",
+              "details": {
+                "aria-orientation": "horizontal"
+              }
+            },
+            {
+              "name": "Slider aria-valuemin is '0' and aria-valuemax is valid media duration (> 0)",
+              "status": "PASS",
+              "details": {
+                "aria-valuemin": "0",
+                "aria-valuemax": "300"
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.4",
+          "title": "Timeline Keyboard Navigation: Home Key (Beginning of Media)",
+          "assertions": [
+            {
+              "name": "Media currentTime updated to 0s after Home",
+              "status": "PASS",
+              "details": {
+                "key": "Home",
+                "actual_currentTime": 0,
+                "expected_currentTime": 0
+              }
+            },
+            {
+              "name": "Slider aria-valuenow updated to 0 after Home",
+              "status": "PASS",
+              "details": {
+                "key": "Home",
+                "actual_valuenow": "0",
+                "expected_valuenow": 0,
+                "valuetext": "0:00 of 5:00"
+              }
+            },
+            {
+              "name": "Timestamp display updated to '0:00 / 5:00' after Home",
+              "status": "PASS",
+              "details": {
+                "key": "Home",
+                "actual_display": "0:00/5:00",
+                "expected_display": "0:00 / 5:00"
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.5",
+          "title": "Timeline Keyboard Navigation: ArrowRight Key (+5s Seek)",
+          "assertions": [
+            {
+              "name": "Media currentTime updated to 5s after ArrowRight",
+              "status": "PASS",
+              "details": {
+                "key": "ArrowRight",
+                "actual_currentTime": 5,
+                "expected_currentTime": 5
+              }
+            },
+            {
+              "name": "Slider aria-valuenow updated to 5 after ArrowRight",
+              "status": "PASS",
+              "details": {
+                "key": "ArrowRight",
+                "actual_valuenow": "5",
+                "expected_valuenow": 5,
+                "valuetext": "0:05 of 5:00"
+              }
+            },
+            {
+              "name": "Timestamp display updated to '0:05 / 5:00' after ArrowRight",
+              "status": "PASS",
+              "details": {
+                "key": "ArrowRight",
+                "actual_display": "0:05/5:00",
+                "expected_display": "0:05 / 5:00"
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.6",
+          "title": "Timeline Keyboard Navigation: PageUp Key (+60s Seek)",
+          "assertions": [
+            {
+              "name": "Media currentTime updated to 65s after PageUp",
+              "status": "PASS",
+              "details": {
+                "key": "PageUp",
+                "actual_currentTime": 65,
+                "expected_currentTime": 65
+              }
+            },
+            {
+              "name": "Slider aria-valuenow updated to 65 after PageUp",
+              "status": "PASS",
+              "details": {
+                "key": "PageUp",
+                "actual_valuenow": "65",
+                "expected_valuenow": 65,
+                "valuetext": "1:05 of 5:00"
+              }
+            },
+            {
+              "name": "Timestamp display updated to '1:05 / 5:00' after PageUp",
+              "status": "PASS",
+              "details": {
+                "key": "PageUp",
+                "actual_display": "1:05/5:00",
+                "expected_display": "1:05 / 5:00"
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.7",
+          "title": "Timeline Keyboard Navigation: ArrowLeft Key (-5s Seek)",
+          "assertions": [
+            {
+              "name": "Media currentTime updated to 60s after ArrowLeft",
+              "status": "PASS",
+              "details": {
+                "key": "ArrowLeft",
+                "actual_currentTime": 60,
+                "expected_currentTime": 60
+              }
+            },
+            {
+              "name": "Slider aria-valuenow updated to 60 after ArrowLeft",
+              "status": "PASS",
+              "details": {
+                "key": "ArrowLeft",
+                "actual_valuenow": "60",
+                "expected_valuenow": 60,
+                "valuetext": "1:00 of 5:00"
+              }
+            },
+            {
+              "name": "Timestamp display updated to '1:00 / 5:00' after ArrowLeft",
+              "status": "PASS",
+              "details": {
+                "key": "ArrowLeft",
+                "actual_display": "1:00/5:00",
+                "expected_display": "1:00 / 5:00"
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.8",
+          "title": "Timeline Keyboard Navigation: PageDown Key (-60s Seek)",
+          "assertions": [
+            {
+              "name": "Media currentTime updated to 0s after PageDown",
+              "status": "PASS",
+              "details": {
+                "key": "PageDown",
+                "actual_currentTime": 0,
+                "expected_currentTime": 0
+              }
+            },
+            {
+              "name": "Slider aria-valuenow updated to 0 after PageDown",
+              "status": "PASS",
+              "details": {
+                "key": "PageDown",
+                "actual_valuenow": "0",
+                "expected_valuenow": 0,
+                "valuetext": "0:00 of 5:00"
+              }
+            },
+            {
+              "name": "Timestamp display updated to '0:00 / 5:00' after PageDown",
+              "status": "PASS",
+              "details": {
+                "key": "PageDown",
+                "actual_display": "0:00/5:00",
+                "expected_display": "0:00 / 5:00"
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.9",
+          "title": "Timeline Keyboard Navigation: End Key (End of Media)",
+          "assertions": [
+            {
+              "name": "Media currentTime updated to 300s after End",
+              "status": "PASS",
+              "details": {
+                "key": "End",
+                "actual_currentTime": 300,
+                "expected_currentTime": 300
+              }
+            },
+            {
+              "name": "Slider aria-valuenow updated to 300 after End",
+              "status": "PASS",
+              "details": {
+                "key": "End",
+                "actual_valuenow": "300",
+                "expected_valuenow": 300,
+                "valuetext": "5:00 of 5:00"
+              }
+            },
+            {
+              "name": "Timestamp display updated to '5:00 / 5:00' after End",
+              "status": "PASS",
+              "details": {
+                "key": "End",
+                "actual_display": "5:00/5:00",
+                "expected_display": "5:00 / 5:00"
+              }
+            }
+          ]
+        },
+        {
+          "id": "5.10",
+          "title": "Video Player Modal Dismiss & Focus Restoration",
+          "assertions": [
+            {
+              "name": "Video player modal closed upon Escape",
+              "status": "PASS",
+              "details": {
+                "modal_open": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_suites": 5,
+    "total_scenarios": 56,
+    "total_assertions": 112,
+    "passed_assertions": 112,
+    "failed_assertions": 0,
+    "status": "PASS"
+  }
+}

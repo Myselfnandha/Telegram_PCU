@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::safety::AntiBanPacer;
 use grammers_client::Client;
 use grammers_tl_types as tl;
+use std::sync::Arc;
 use tokio::sync::Semaphore;
-use crate::safety::AntiBanPacer;
 
 pub struct UploadEngine {
     pacer: Arc<AntiBanPacer>,
@@ -26,8 +26,14 @@ impl UploadEngine {
         bytes: Vec<u8>,
         account_idx: usize,
     ) -> Result<bool, String> {
-        let _permit = self.upload_semaphore.acquire().await.map_err(|e| e.to_string())?;
-        self.pacer.wait_for_slot(account_idx, bytes.len(), false).await;
+        let _permit = self
+            .upload_semaphore
+            .acquire()
+            .await
+            .map_err(|e| e.to_string())?;
+        self.pacer
+            .wait_for_slot(account_idx, bytes.len(), false)
+            .await;
 
         let bytes_len = bytes.len();
         let req = tl::functions::upload::SaveBigFilePart {
