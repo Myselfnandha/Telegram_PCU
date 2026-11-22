@@ -33,8 +33,11 @@ class KeyNotFoundError(SessionEncryptionError):
 def _get_or_create_master_key() -> bytes:
     """
     Retrieves the 256-bit AES-GCM master key from environment or protected file.
+    Canonical env var: SESSION_MASTER_KEY_B64 (base64-encoded 32 bytes).
+    Compatibility alias: SESSION_VAULT_MASTER_KEY (hex-encoded 64 chars or base64).
     Never persists to Git or logs.
     """
+    # 1. Canonical: SESSION_MASTER_KEY_B64
     env_key = os.getenv("SESSION_MASTER_KEY_B64", "").strip()
     if env_key:
         try:
@@ -44,6 +47,29 @@ def _get_or_create_master_key() -> bytes:
         except Exception:
             pass
 
+    # 2. Compatibility alias: SESSION_VAULT_MASTER_KEY (hex or base64)
+    vault_key = os.getenv("SESSION_VAULT_MASTER_KEY", "").strip()
+    if vault_key:
+        # Try hex decode (64 hex characters -> 32 bytes)
+        try:
+            if len(vault_key) == 64:
+                decoded = bytes.fromhex(vault_key)
+                if len(decoded) == 32:
+                    return decoded
+        except Exception:
+            pass
+        # Try base64 decode
+        try:
+            decoded = base64.b64decode(vault_key)
+            if len(decoded) == 32:
+                return decoded
+        except Exception:
+            pass
+        # Try raw 32 bytes
+        if len(vault_key.encode("utf-8")) == 32:
+            return vault_key.encode("utf-8")
+
+    # 3. Raw legacy alias: SESSION_MASTER_KEY
     raw_env = os.getenv("SESSION_MASTER_KEY", "").strip()
     if raw_env and len(raw_env.encode("utf-8")) == 32:
         return raw_env.encode("utf-8")
@@ -56,7 +82,8 @@ def _get_or_create_master_key() -> bytes:
     )
     if is_production:
         raise SessionEncryptionError(
-            "CRITICAL: In production / Render deployment, SESSION_MASTER_KEY_B64 must be explicitly "
+            "CRITICAL: In production / Render deployment, encryption master key "
+            "(SESSION_MASTER_KEY_B64 or SESSION_VAULT_MASTER_KEY) must be explicitly "
             "provided in environment variables. Generating an ephemeral master key is strictly prohibited "
             "as it causes permanent session loss on container restart."
         )

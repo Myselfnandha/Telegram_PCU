@@ -21,6 +21,12 @@ services:
         value: "true"
       - key: SESSION_VAULT_ENABLED
         value: "true"
+      - key: MULTI_TENANT_STREAMING_ENABLED
+        value: "true"
+      - key: ADAPTIVE_MULTI_TURBO_ENABLED
+        value: "true"
+      - key: RUST_MULTI_TENANT_ENABLED
+        value: "false"
       - key: DATABASE_URL
         sync: false
       - key: SESSION_VAULT_MASTER_KEY

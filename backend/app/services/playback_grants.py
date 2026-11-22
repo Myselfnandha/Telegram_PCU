@@ -15,7 +15,7 @@ from app.config import API_HASH
 logger = logging.getLogger("playback_grants")
 
 # Use master key or API_HASH for cryptographic signing
-_RAW_KEY = os.getenv("SESSION_MASTER_KEY_B64", "") or API_HASH or "tg_power_suite_playback_master_secret"
+_RAW_KEY = os.getenv("SESSION_MASTER_KEY_B64", "") or os.getenv("SESSION_VAULT_MASTER_KEY", "") or API_HASH or "tg_power_suite_playback_master_secret"
 SIGNING_KEY = hashlib.sha256(_RAW_KEY.encode("utf-8")).digest()
 
 

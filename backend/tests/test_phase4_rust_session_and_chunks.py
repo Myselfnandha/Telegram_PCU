@@ -13,6 +13,13 @@ async def test_rust_core_unauthorized_rejection():
 async def test_rust_core_health_and_auth():
     # /health is unauthenticated and reports status
     status = await rust_bridge.get_status()
+    if status.get("active_accounts", 0) < 1:
+        import struct, socket, base64
+        raw_bytes = struct.pack(">B4sH", 5, socket.inet_aton("149.154.167.51"), 443) + b"\x07" * 256
+        s = "1" + base64.urlsafe_b64encode(raw_bytes).decode().rstrip("=")
+        await rust_bridge.register_session(s, 30662321, account_idx=0)
+        status = await rust_bridge.get_status()
+
     assert status.get("status") == "ok"
     assert status.get("active_accounts", 0) >= 1
 

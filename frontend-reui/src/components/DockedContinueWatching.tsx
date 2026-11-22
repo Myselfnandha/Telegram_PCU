@@ -102,8 +102,8 @@ export const DockedContinueWatching: React.FC<DockedContinueWatchingProps> = ({
 
       <aside
         ref={asideRef}
-        role="dialog"
-        aria-modal="true"
+        role={typeof window !== 'undefined' && window.innerWidth < 1024 ? 'dialog' : undefined}
+        aria-modal={typeof window !== 'undefined' && window.innerWidth < 1024 ? 'true' : undefined}
         aria-label="Continue Watching Drawer"
         className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] p-2 bg-background/95 backdrop-blur-xl shadow-2xl lg:static lg:z-auto lg:w-[18%] lg:min-w-[190px] lg:max-w-[260px] w-[18%] min-w-[190px] max-w-[260px] lg:p-0 lg:bg-transparent lg:shadow-none shrink-0 h-full flex flex-col min-h-0 animate-in slide-in-from-right-3 duration-200"
       >

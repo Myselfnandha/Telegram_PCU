@@ -991,175 +991,183 @@ export const CinemaView: React.FC = () => {
       <div
         inert={isMobileDrawerActive ? true : undefined}
         aria-hidden={isMobileDrawerActive ? true : undefined}
-        className="shrink-0 px-2.5 py-1.5 rounded-xl border border-border/60 bg-card/75 backdrop-blur-md shadow-xs flex items-center justify-between gap-2 min-h-[42px] overflow-x-auto scrollbar-none flex-nowrap"
+        className="shrink-0 px-2.5 py-1.5 rounded-xl border border-border/60 bg-card/75 backdrop-blur-md shadow-xs flex flex-col gap-1.5"
       >
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Row 1: Brand & Channel Title on Left, Controls (Sort, Search, Sync) on Right */}
+        <div className="flex items-center justify-between gap-2 min-h-[38px] flex-nowrap">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-inner">
+                <Clapperboard className="w-3.5 h-3.5" />
+              </div>
+              <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 shrink-0">
+                <span className="truncate hidden md:inline">Cinema Video Catalog</span>
+                <span className="truncate md:hidden">Cinema</span>
+                <Badge variant="secondary" className="text-[10px] h-3.5 px-1 py-0 font-mono shrink-0">
+                  {videos.length} Videos
+                </Badge>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!isChannelDockOpen) {
+                  handleOpenChannelDock();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-full border border-border/80 bg-muted/40 hover:bg-muted/70 hover:border-primary/50 transition-all text-xs font-semibold text-foreground shadow-2xs cursor-pointer max-w-[160px] sm:max-w-[220px] lg:max-w-[280px] group shrink-0"
+              title="Click to view channels & chats"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <Hash className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="truncate group-hover:text-primary transition-colors">{selectedChat.name}</span>
+            </button>
+          </div>
+
           <div className="flex items-center gap-1.5 shrink-0">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-inner">
-              <Clapperboard className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-1.5 px-2.5 h-9 rounded-lg border border-border bg-background text-xs">
+              <ArrowDownUp className="w-3 h-3 text-muted-foreground" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                aria-label="Sort videos by"
+                className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="newest" className="bg-card text-foreground">Date: Newest</option>
+                <option value="oldest" className="bg-card text-foreground">Date: Oldest</option>
+                <option value="size" className="bg-card text-foreground">Largest Size</option>
+                <option value="title" className="bg-card text-foreground">Title (A-Z)</option>
+              </select>
             </div>
-            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 shrink-0">
-              <span className="truncate hidden md:inline">Cinema Video Catalog</span>
-              <span className="truncate md:hidden">Cinema</span>
-              <Badge variant="secondary" className="text-[10px] h-3.5 px-1 py-0 font-mono shrink-0">
-                {videos.length} Videos
-              </Badge>
+
+            <div className="relative w-28 md:w-36 lg:w-44">
+              <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                placeholder="Search archive..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search video archive titles"
+                className="pl-7 h-7 text-xs bg-background/60"
+              />
             </div>
-          </div>
 
-          <button
-            onClick={() => {
-              if (!isChannelDockOpen) {
-                handleOpenChannelDock();
-              }
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-full border border-border/80 bg-muted/40 hover:bg-muted/70 hover:border-primary/50 transition-all text-xs font-semibold text-foreground shadow-2xs cursor-pointer max-w-[160px] sm:max-w-[220px] lg:max-w-[280px] group shrink-0"
-            title="Click to view channels & chats"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <Hash className="w-3.5 h-3.5 text-primary shrink-0" />
-            <span className="truncate group-hover:text-primary transition-colors">{selectedChat.name}</span>
-          </button>
-        </div>
-
-        <div className="flex items-center justify-center shrink-0">
-          <div
-            ref={navDragRef}
-            onMouseDown={handleNavMouseDown}
-            onMouseMove={handleNavMouseMove}
-            onMouseUp={handleNavMouseUp}
-            onMouseLeave={handleNavMouseLeave}
-            role="tablist"
-            aria-label="Video category filters"
-            className={`inline-flex items-center gap-0.5 p-0.5 rounded-full bg-muted/40 border border-border/60 shadow-2xs backdrop-blur-md select-none touch-pan-x transition-colors shrink-0 ${
-              isNavDragging ? 'cursor-grabbing select-none' : 'cursor-grab'
-            }`}
-          >
-            {(
-              [
-                { id: 'all', label: 'All Videos' },
-                { id: 'movies', label: 'Movies' },
-                { id: 'series', label: 'Series / Episodes' },
-              ] as const
-            ).map((tab) => {
-              const isActive = filter === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={(e) => {
-                    if (navDragState.current.hasMoved) {
-                      e.preventDefault();
-                      return;
-                    }
-                    setFilter(tab.id);
-                  }}
-                  className={`text-xs px-3.5 py-1.5 min-h-[36px] flex items-center justify-center rounded-full transition-all shrink-0 select-none cursor-pointer ${
-                    isActive
-                      ? 'bg-foreground text-background font-bold shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => loadVideos(true)}
+              disabled={loading}
+              className="h-7 px-2 text-xs cursor-pointer"
+              title="Sync Channel Archive"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0 ml-auto justify-end">
-          <div role="group" aria-label="View display mode" className="flex items-center p-0.5 rounded-lg border border-border bg-background">
-            <button
-              onClick={() => handleSetViewMode('large')}
-              aria-label="Switch to large grid layout"
-              aria-pressed={viewMode === 'large'}
-              className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
-                viewMode === 'large'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
+        {/* Row 2: Category Filter Tabs Centered, View Mode Toggle on Right */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 relative min-h-[38px]">
+          <div className="flex items-center justify-center shrink-0 sm:absolute sm:left-1/2 sm:-translate-x-1/2 pointer-events-auto">
+            <div
+              ref={navDragRef}
+              onMouseDown={handleNavMouseDown}
+              onMouseMove={handleNavMouseMove}
+              onMouseUp={handleNavMouseUp}
+              onMouseLeave={handleNavMouseLeave}
+              role="tablist"
+              aria-label="Video category filters"
+              className={`inline-flex items-center gap-0.5 p-0.5 rounded-full bg-muted/40 border border-border/60 shadow-2xs backdrop-blur-md select-none touch-pan-x transition-colors shrink-0 ${
+                isNavDragging ? 'cursor-grabbing select-none' : 'cursor-grab'
               }`}
-              title="Large Poster Grid"
             >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleSetViewMode('dense')}
-              aria-label="Switch to dense grid layout"
-              aria-pressed={viewMode === 'dense'}
-              className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
-                viewMode === 'dense'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Dense Media Grid"
-            >
-              <Grid3x3 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleSetViewMode('fit')}
-              aria-label="Switch to screen-fit compact grid"
-              aria-pressed={viewMode === 'fit'}
-              className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
-                viewMode === 'fit'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Fit Screen (Compact View)"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleSetViewMode('files')}
-              aria-label="Switch to files table layout"
-              aria-pressed={viewMode === 'files'}
-              className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
-                viewMode === 'files'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Files Explorer Table"
-            >
-              <List className="w-4 h-4" />
-            </button>
+              {(
+                [
+                  { id: 'all', label: 'All Videos' },
+                  { id: 'movies', label: 'Movies' },
+                  { id: 'series', label: 'Series / Episodes' },
+                ] as const
+              ).map((tab) => {
+                const isActive = filter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={(e) => {
+                      if (navDragState.current.hasMoved) {
+                        e.preventDefault();
+                        return;
+                      }
+                      setFilter(tab.id);
+                    }}
+                    className={`text-xs px-3.5 py-1.5 min-h-[36px] flex items-center justify-center rounded-full transition-all shrink-0 select-none cursor-pointer ${
+                      isActive
+                        ? 'bg-foreground text-background font-bold shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2.5 h-9 rounded-lg border border-border bg-background text-xs">
-            <ArrowDownUp className="w-3 h-3 text-muted-foreground" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              aria-label="Sort videos by"
-              className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer"
-            >
-              <option value="newest" className="bg-card text-foreground">Date: Newest</option>
-              <option value="oldest" className="bg-card text-foreground">Date: Oldest</option>
-              <option value="size" className="bg-card text-foreground">Largest Size</option>
-              <option value="title" className="bg-card text-foreground">Title (A-Z)</option>
-            </select>
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto justify-end">
+            <div role="group" aria-label="View display mode" className="flex items-center p-0.5 rounded-lg border border-border bg-background">
+              <button
+                onClick={() => handleSetViewMode('large')}
+                aria-label="Switch to large grid layout"
+                aria-pressed={viewMode === 'large'}
+                className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
+                  viewMode === 'large'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Large Poster Grid"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleSetViewMode('dense')}
+                aria-label="Switch to dense grid layout"
+                aria-pressed={viewMode === 'dense'}
+                className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
+                  viewMode === 'dense'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Dense Media Grid"
+              >
+                <Grid3x3 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleSetViewMode('fit')}
+                aria-label="Switch to screen-fit compact grid"
+                aria-pressed={viewMode === 'fit'}
+                className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
+                  viewMode === 'fit'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Fit Screen (Compact View)"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleSetViewMode('files')}
+                aria-label="Switch to files table layout"
+                aria-pressed={viewMode === 'files'}
+                className={`p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-md transition-all cursor-pointer ${
+                  viewMode === 'files'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Files Explorer Table"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-
-          <div className="relative w-28 md:w-36 lg:w-44">
-            <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input
-              placeholder="Search archive..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search video archive titles"
-              className="pl-7 h-7 text-xs bg-background/60"
-            />
-          </div>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => loadVideos(true)}
-            disabled={loading}
-            className="h-7 px-2 text-xs cursor-pointer"
-            title="Sync Channel Archive"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
         </div>
       </div>
 
