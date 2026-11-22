@@ -22,6 +22,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { SecondaryAuthModal } from '@/components/SecondaryAuthModal';
+import { AccountManagerCard } from '@/components/v3/AccountManagerCard';
+import { TrustedDevicesCard } from '@/components/v3/TrustedDevicesCard';
 import type { SecondaryAuthStatus } from '@/types';
 
 export const SettingsView: React.FC = () => {
@@ -748,6 +750,15 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+        {/* v3 Multi-Tenant Linked Accounts */}
+        <div className="md:col-span-2">
+          <AccountManagerCard />
+        </div>
+
+        {/* v3 Trusted Devices */}
+        <div className="md:col-span-2">
+          <TrustedDevicesCard />
         </div>
       </div>
 

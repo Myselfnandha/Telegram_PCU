@@ -21,6 +21,7 @@ bidict==0.24.1
 boolean.py==5.0
 bottle==0.13.4
 Brlapi==0.8.8
+cbor2==6.3.0
 certifi==2026.10.23
 cffi==2.1.1
 charset-normalizer==3.5.1
@@ -111,6 +112,7 @@ pwquality==1.4.5
 pyaes==1.6.1
 pyalpm==0.12.0
 pyasn1==0.6.4
+pyasn1_modules==0.4.2
 pycairo==1.29.2
 pycparser==3.12
 pydantic==2.13.5
@@ -187,6 +189,7 @@ uvicorn==0.52.4
 uvloop==0.22.1
 VapourSynth==81
 watchfiles==1.2.0
+webauthn==3.0.1
 websockets==17.1
 wheel==0.48.0
 woeusb-ng==0.2.12

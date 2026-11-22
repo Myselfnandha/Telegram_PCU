@@ -31,6 +31,11 @@ from app.routes.sniffer import router as sniffer_router
 from app.routes.settings import router as settings_router
 from app.routes.system import router as system_router, get_system_telemetry
 from app.routes.tgweb import router as tgweb_router
+from app.routes.auth_v3 import router as auth_v3_router
+from app.routes.devices_v3 import router as devices_v3_router
+from app.routes.telegram_link_v3 import router as telegram_link_v3_router
+from app.telegram.client_manager import multi_tenant_manager
+from app.db.session import init_db as init_db_v3, close_db as close_db_v3
 from app.telegram_client import TelegramClientManager
 
 # Configure root logger with file handler
@@ -179,8 +184,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.debug(f"Initial stream cache sweep notice: {e}")
 
-    # 2. Initialize SQLite Database
+    # 2. Initialize SQLite Database & v3 Multi-Tenant Schema
     await init_db()
+    try:
+        await init_db_v3()
+        await multi_tenant_manager.start()
+    except Exception as dbe:
+        logger.warning(f"v3 Database initialization warning: {dbe}")
 
     # 3. Wire Callbacks to Socket.IO and SQLite DB
     queue_manager.set_callbacks(
@@ -307,6 +317,11 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
     try:
+        await multi_tenant_manager.stop()
+        await close_db_v3()
+    except Exception as e:
+        logger.debug(f"v3 shutdown notice: {e}")
+    try:
         import aiosqlite
         from app.config import DB_PATH
         if DB_PATH.exists():
@@ -426,6 +441,7 @@ class GlobalAuthEnforcementMiddleware:
         "/assets/",
         "/css/",
         "/js/",
+        "/api/v3/",
     )
     PUBLIC_PATHS = {
         "/",
@@ -548,6 +564,9 @@ app.include_router(chats_router)
 app.include_router(history_router)
 app.include_router(system_router)
 app.include_router(tgweb_router)
+app.include_router(auth_v3_router)
+app.include_router(devices_v3_router)
+app.include_router(telegram_link_v3_router)
 
 # Mount Frontend Static Assets
 if FRONTEND_DIR.exists():

@@ -2,7 +2,7 @@ import uuid
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, and_
+from sqlalchemy import select, update, delete, and_, func
 from app.db.models.telegram import TelegramAccount, TelegramSessionVault, TelegramClientLease
 from app.db.repositories.base_repo import BaseRepository
 from app.db.base import utc_now
@@ -96,6 +96,49 @@ class TelegramAccountRepository(BaseRepository[TelegramAccount]):
         res = await self.session.execute(stmt)
         await self.session.flush()
         return res.rowcount > 0
+
+    async def count_user_accounts(self, owner_user_id: uuid.UUID) -> int:
+        stmt = select(func.count(TelegramAccount.id)).where(
+            TelegramAccount.owner_user_id == owner_user_id,
+            TelegramAccount.status.in_(("linked", "active", "relink_required"))
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar() or 0
+
+    async def delete_account(self, account_id: uuid.UUID, owner_user_id: uuid.UUID) -> bool:
+        stmt = (
+            delete(TelegramAccount)
+            .where(
+                TelegramAccount.id == account_id,
+                TelegramAccount.owner_user_id == owner_user_id
+            )
+        )
+        res = await self.session.execute(stmt)
+        await self.session.flush()
+        return res.rowcount > 0
+
+    async def set_primary(self, account_id: uuid.UUID, owner_user_id: uuid.UUID) -> bool:
+        # Check target account
+        target = await self.get_scoped(account_id, owner_user_id)
+        if not target:
+            return False
+        
+        # Demote existing primary account to turbo
+        demote_stmt = (
+            update(TelegramAccount)
+            .where(
+                TelegramAccount.owner_user_id == owner_user_id,
+                TelegramAccount.role == "primary"
+            )
+            .values(role="turbo", updated_at=utc_now())
+        )
+        await self.session.execute(demote_stmt)
+
+        # Promote target account to primary
+        target.role = "primary"
+        target.updated_at = utc_now()
+        await self.session.flush()
+        return True
 
     async def acquire_lease(
         self,

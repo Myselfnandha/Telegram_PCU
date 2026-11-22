@@ -512,6 +512,115 @@ class ApiService {
   async getSystemNetwork(): Promise<SystemNetworkInfo> {
     return this.request<SystemNetworkInfo>('/api/system/network');
   }
+
+  // ==================== TG Power Suite v3.0 Multi-Tenant API ====================
+
+  async v3Register(payload: {
+    username: string;
+    password?: string;
+    device_name?: string;
+    device_fingerprint?: string;
+    bootstrap_token?: string;
+  }): Promise<import('@/types').V3RegisterResponse> {
+    const res = await this.request<import('@/types').V3RegisterResponse>('/api/v3/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res?.session_token) {
+      this.setStoredToken(res.session_token);
+    }
+    return res;
+  }
+
+  async v3Login(payload: {
+    username: string;
+    password: string;
+    device_name?: string;
+    device_fingerprint?: string;
+  }): Promise<import('@/types').V3LoginResponse> {
+    const res = await this.request<import('@/types').V3LoginResponse>('/api/v3/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res?.session_token) {
+      this.setStoredToken(res.session_token);
+    }
+    return res;
+  }
+
+  async v3Logout(): Promise<void> {
+    try {
+      await this.request('/api/v3/auth/logout', { method: 'POST' });
+    } finally {
+      this.setStoredToken('');
+    }
+  }
+
+  async v3GetMe(): Promise<import('@/types').V3UserProfile> {
+    return this.request<import('@/types').V3UserProfile>('/api/v3/auth/me');
+  }
+
+  async v3GetDevices(): Promise<import('@/types').V3DeviceInfo[]> {
+    return this.request<import('@/types').V3DeviceInfo[]>('/api/v3/devices');
+  }
+
+  async v3ApproveDevice(deviceId: string, challengeCode?: string): Promise<{ message: string }> {
+    return this.request(`/api/v3/devices/${encodeURIComponent(deviceId)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challenge_code: challengeCode }),
+    });
+  }
+
+  async v3RevokeDevice(deviceId: string): Promise<{ message: string }> {
+    return this.request(`/api/v3/devices/${encodeURIComponent(deviceId)}/revoke`, {
+      method: 'POST',
+    });
+  }
+
+  async v3StartLinkAttempt(role: 'primary' | 'turbo' = 'primary'): Promise<import('@/types').V3LinkAttempt> {
+    return this.request<import('@/types').V3LinkAttempt>('/api/v3/telegram/link-attempts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  async v3GetLinkAttempt(attemptId: string): Promise<import('@/types').V3LinkAttempt> {
+    return this.request<import('@/types').V3LinkAttempt>(`/api/v3/telegram/link-attempts/${encodeURIComponent(attemptId)}`);
+  }
+
+  async v3Submit2FA(attemptId: string, password: string): Promise<{ message: string }> {
+    return this.request(`/api/v3/telegram/link-attempts/${encodeURIComponent(attemptId)}/2fa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  async v3CancelLinkAttempt(attemptId: string): Promise<{ message: string }> {
+    return this.request(`/api/v3/telegram/link-attempts/${encodeURIComponent(attemptId)}/cancel`, {
+      method: 'POST',
+    });
+  }
+
+  async v3GetAccounts(): Promise<import('@/types').V3TelegramAccount[]> {
+    return this.request<import('@/types').V3TelegramAccount[]>('/api/v3/telegram/accounts');
+  }
+
+  async v3UnlinkAccount(accountId: string): Promise<{ message: string }> {
+    return this.request(`/api/v3/telegram/accounts/${encodeURIComponent(accountId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async v3SetPrimaryAccount(accountId: string): Promise<{ message: string }> {
+    return this.request(`/api/v3/telegram/accounts/${encodeURIComponent(accountId)}/set-primary`, {
+      method: 'POST',
+    });
+  }
 }
 
 export const api = new ApiService();

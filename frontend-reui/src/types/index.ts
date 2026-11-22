@@ -230,3 +230,73 @@ export interface SystemNetworkInfo {
 }
 
 export type ThemeType = 'cyber-emerald' | 'crimson-neon' | 'dark' | 'light';
+
+// ==================== TG Power Suite v3.0 Multi-Tenant Types ====================
+
+export interface V3UserProfile {
+  user_id: string;
+  username: string;
+  role: string;
+  status: string;
+  device_id?: string;
+  is_admin: boolean;
+}
+
+export interface V3RegisterResponse {
+  user_id: string;
+  username: string;
+  role: string;
+  session_token: string;
+  recovery_codes: string[];
+  device_id?: string;
+  device_verified: boolean;
+}
+
+export interface V3LoginResponse {
+  user_id: string;
+  username: string;
+  role: string;
+  session_token: string;
+  device_id?: string;
+  device_verified: boolean;
+  approval_code?: string;
+}
+
+export interface V3DeviceInfo {
+  id: string;
+  display_name: string;
+  device_fingerprint?: string;
+  verified: boolean;
+  is_current: boolean;
+  last_seen_at?: string;
+  created_at: string;
+}
+
+export interface V3TelegramAccount {
+  id: string;
+  telegram_user_id: number;
+  role: 'primary' | 'turbo';
+  status: 'linked' | 'active' | 'relink_required' | 'unlinked';
+  username?: string;
+  first_name?: string;
+  phone_number?: string;
+  created_at: string;
+}
+
+export interface V3LinkAttempt {
+  id: string;
+  user_id: string;
+  role: string;
+  state: 'CREATED' | 'QR_PENDING' | 'TELEGRAM_AUTHENTICATING' | '2FA_REQUIRED' | 'IDENTITY_VERIFIED' | 'PERSISTING' | 'LINKED' | 'EXPIRED' | 'CANCELLED' | 'FAILED' | 'RELINK_REQUIRED' | string;
+  created_at: number;
+  expires_at: number;
+  expires_in: number;
+  qr_url?: string;
+  qr_data_uri?: string;
+  error_message?: string;
+  telegram_user_id?: number;
+  username?: string;
+  first_name?: string;
+  account_id?: string;
+}
+
