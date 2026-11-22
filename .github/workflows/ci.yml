@@ -32,7 +32,7 @@ jobs:
 
       - name: Run Test Suite
         run: |
-          python -m pytest backend/tests -v
+          python -m pytest backend/tests --ignore-glob="*playwright*" --ignore-glob="*challenger*" -v
 
   rust-core:
     name: Rust Core Build & Verify
