@@ -75,6 +75,7 @@ COPY --from=frontend-builder /app/frontend-reui/dist /app/frontend
 # Copy backend application and assets
 COPY backend /app/backend
 COPY assets /app/assets
+COPY alembic.ini /app/alembic.ini
 
 # Create required runtime directories with secure permissions and nonroot ownership
 RUN mkdir -p /app/backend/data /app/backend/sessions /app/backend/temp_uploads /app/backend/downloads && \

@@ -37,5 +37,3 @@ services:
         sync: false
       - key: TG_API_HASH
         sync: false
-      - key: TG_SESSION_STRING
-        sync: false

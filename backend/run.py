@@ -290,6 +290,21 @@ def run_server(enable_tray: bool = False):
     if enable_tray:
         start_tray_service(port=PORT)
 
+    # Single-owner Alembic migration procedure for Render / Container startup
+    if os.getenv("TG_TEST_MODE") != "1":
+        try:
+            from alembic.config import Config
+            from alembic import command
+            from app.db.session import DATABASE_URL
+            alembic_ini = ROOT_DIR / "alembic.ini"
+            if alembic_ini.exists():
+                cfg = Config(str(alembic_ini))
+                cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
+                command.upgrade(cfg, "head")
+                print("  🗄️  Alembic database migrations applied to head.")
+        except Exception as e:
+            print(f"  ⚠️  Alembic migration notice: {e}")
+
     try:
         uvicorn.run(
             "app.main:socket_app",

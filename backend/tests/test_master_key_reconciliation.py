@@ -38,6 +38,44 @@ def test_compatibility_alias_b64(monkeypatch):
     assert key == raw_key
     assert len(key) == 32
 
+def test_all_aliases_decode_to_same_key_success(monkeypatch):
+    raw_key = os.urandom(32)
+    b64_key = base64.b64encode(raw_key).decode("utf-8")
+    hex_key = raw_key.hex()
+    
+    # Both canonical b64 and vault hex are set and match
+    monkeypatch.setenv("SESSION_MASTER_KEY_B64", b64_key)
+    monkeypatch.setenv("SESSION_VAULT_MASTER_KEY", hex_key)
+    monkeypatch.delenv("SESSION_MASTER_KEY", raising=False)
+    
+    key = _get_or_create_master_key()
+    assert key == raw_key
+    assert len(key) == 32
+
+def test_aliases_reject_conflicting_configuration(monkeypatch):
+    raw_key_1 = os.urandom(32)
+    raw_key_2 = os.urandom(32)
+    b64_key_1 = base64.b64encode(raw_key_1).decode("utf-8")
+    hex_key_2 = raw_key_2.hex()
+    
+    # Conflicting keys
+    monkeypatch.setenv("SESSION_MASTER_KEY_B64", b64_key_1)
+    monkeypatch.setenv("SESSION_VAULT_MASTER_KEY", hex_key_2)
+    monkeypatch.delenv("SESSION_MASTER_KEY", raising=False)
+    
+    with pytest.raises(SessionEncryptionError) as exc_info:
+        _get_or_create_master_key()
+    assert "Conflicting master key configuration" in str(exc_info.value)
+
+def test_invalid_key_encoding_rejected(monkeypatch):
+    monkeypatch.setenv("SESSION_MASTER_KEY_B64", "not_valid_base64_or_wrong_len")
+    monkeypatch.delenv("SESSION_VAULT_MASTER_KEY", raising=False)
+    monkeypatch.delenv("SESSION_MASTER_KEY", raising=False)
+    
+    with pytest.raises(SessionEncryptionError) as exc_info:
+        _get_or_create_master_key()
+    assert "Invalid SESSION_MASTER_KEY_B64" in str(exc_info.value)
+
 def test_production_fails_closed_when_keys_missing(monkeypatch):
     monkeypatch.delenv("SESSION_MASTER_KEY_B64", raising=False)
     monkeypatch.delenv("SESSION_VAULT_MASTER_KEY", raising=False)

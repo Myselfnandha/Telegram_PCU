@@ -30,49 +30,86 @@ class KeyNotFoundError(SessionEncryptionError):
     pass
 
 
+def _parse_candidate_key(var_name: str, val: str) -> bytes:
+    """Parses and validates a candidate master key from an environment variable."""
+    clean = val.strip()
+    if not clean:
+        raise SessionEncryptionError(f"{var_name} is set but empty.")
+
+    if var_name == "SESSION_MASTER_KEY_B64":
+        try:
+            decoded = base64.b64decode(clean, validate=True)
+            if len(decoded) == 32:
+                return decoded
+        except Exception:
+            pass
+        raise SessionEncryptionError(
+            f"Invalid {var_name}: must be valid Base64 decoding to exactly 32 bytes (256 bits)."
+        )
+
+    if var_name == "SESSION_VAULT_MASTER_KEY":
+        # 1. 64-character hex string
+        if len(clean) == 64:
+            try:
+                decoded = bytes.fromhex(clean)
+                if len(decoded) == 32:
+                    return decoded
+            except Exception:
+                pass
+        # 2. Base64 string
+        try:
+            decoded = base64.b64decode(clean, validate=True)
+            if len(decoded) == 32:
+                return decoded
+        except Exception:
+            pass
+        # 3. Raw 32 UTF-8 bytes
+        if len(clean.encode("utf-8")) == 32:
+            return clean.encode("utf-8")
+        raise SessionEncryptionError(
+            f"Invalid {var_name}: must be 64-character hex or Base64 decoding to exactly 32 bytes."
+        )
+
+    if var_name == "SESSION_MASTER_KEY":
+        if len(clean.encode("utf-8")) == 32:
+            return clean.encode("utf-8")
+        try:
+            decoded = base64.b64decode(clean, validate=True)
+            if len(decoded) == 32:
+                return decoded
+        except Exception:
+            pass
+        raise SessionEncryptionError(
+            f"Invalid {var_name}: must be exactly 32 bytes."
+        )
+
+    raise SessionEncryptionError(f"Unknown key variable: {var_name}")
+
+
 def _get_or_create_master_key() -> bytes:
     """
     Retrieves the 256-bit AES-GCM master key from environment or protected file.
     Canonical env var: SESSION_MASTER_KEY_B64 (base64-encoded 32 bytes).
     Compatibility alias: SESSION_VAULT_MASTER_KEY (hex-encoded 64 chars or base64).
+    Enforces that if multiple aliases are set, they must decode to the same key;
+    conflicting configurations are strictly rejected.
     Never persists to Git or logs.
     """
-    # 1. Canonical: SESSION_MASTER_KEY_B64
-    env_key = os.getenv("SESSION_MASTER_KEY_B64", "").strip()
-    if env_key:
-        try:
-            decoded = base64.b64decode(env_key)
-            if len(decoded) == 32:
-                return decoded
-        except Exception:
-            pass
+    candidates = {}
+    for var in ("SESSION_MASTER_KEY_B64", "SESSION_VAULT_MASTER_KEY", "SESSION_MASTER_KEY"):
+        val = os.getenv(var, "").strip()
+        if val:
+            candidates[var] = _parse_candidate_key(var, val)
 
-    # 2. Compatibility alias: SESSION_VAULT_MASTER_KEY (hex or base64)
-    vault_key = os.getenv("SESSION_VAULT_MASTER_KEY", "").strip()
-    if vault_key:
-        # Try hex decode (64 hex characters -> 32 bytes)
-        try:
-            if len(vault_key) == 64:
-                decoded = bytes.fromhex(vault_key)
-                if len(decoded) == 32:
-                    return decoded
-        except Exception:
-            pass
-        # Try base64 decode
-        try:
-            decoded = base64.b64decode(vault_key)
-            if len(decoded) == 32:
-                return decoded
-        except Exception:
-            pass
-        # Try raw 32 bytes
-        if len(vault_key.encode("utf-8")) == 32:
-            return vault_key.encode("utf-8")
-
-    # 3. Raw legacy alias: SESSION_MASTER_KEY
-    raw_env = os.getenv("SESSION_MASTER_KEY", "").strip()
-    if raw_env and len(raw_env.encode("utf-8")) == 32:
-        return raw_env.encode("utf-8")
+    if candidates:
+        first_var, first_key = next(iter(candidates.items()))
+        for other_var, other_key in candidates.items():
+            if other_key != first_key:
+                raise SessionEncryptionError(
+                    f"Conflicting master key configuration: {first_var} and {other_var} "
+                    f"decode to different 32-byte keys. Aliases must decode to the same key or only one must be configured."
+                )
+        return first_key
 
     # Production gate: Enforce externally injected master key on production / Render
     is_production = (
