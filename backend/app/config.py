@@ -85,6 +85,11 @@ SESSION_FILE_PATH_2 = SESSION_DIR / SESSION_NAME_2
 SESSION_STRING_2 = os.getenv("TG_SESSION_STRING_2", "").strip()
 ENABLE_MULTI_ACCOUNT_TURBO = os.getenv("ENABLE_MULTI_ACCOUNT_TURBO", "true").lower() in ("1", "true", "yes")
 
+# TG Power Suite v3.0 Feature Flags (default false for 100% v2.0.0 backward compatibility)
+MULTI_TENANT_ENABLED = os.getenv("MULTI_TENANT_ENABLED", "false").lower() in ("1", "true", "yes")
+SESSION_VAULT_ENABLED = os.getenv("SESSION_VAULT_ENABLED", "false").lower() in ("1", "true", "yes")
+DEVICE_VERIFICATION_REQUIRED = os.getenv("DEVICE_VERIFICATION_REQUIRED", "false").lower() in ("1", "true", "yes")
+
 STREAMING_RELAY_CHANNEL_ID_RAW = os.getenv("STREAMING_RELAY_CHANNEL_ID", "").strip()
 try:
     STREAMING_RELAY_CHANNEL_ID = int(STREAMING_RELAY_CHANNEL_ID_RAW) if STREAMING_RELAY_CHANNEL_ID_RAW else 0

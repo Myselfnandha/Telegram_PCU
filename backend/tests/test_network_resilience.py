@@ -17,7 +17,7 @@ async def test_client_manager_preserves_auth_on_network_failure():
     TelegramClientManager._is_ready = True
     TelegramClientManager._cached_me = {"id": 12345, "name": "Test User"}
 
-    mock_client = MagicMock()
+    mock_client = MagicMock(loop=asyncio.get_running_loop())
     mock_client.is_connected.return_value = False
     mock_client.connect = AsyncMock(side_effect=OSError("Network is unreachable"))
     TelegramClientManager._client = mock_client

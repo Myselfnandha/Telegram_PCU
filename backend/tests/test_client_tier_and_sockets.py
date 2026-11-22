@@ -200,11 +200,12 @@ async def test_autonomous_secondary_streaming_clients():
     orig_env_sec = os.environ.get("TG_SESSION_STRING_2")
 
     try:
-        primary = MagicMock()
+        cur_loop = asyncio.get_running_loop()
+        primary = MagicMock(loop=cur_loop)
         primary.is_connected = MagicMock(return_value=True)
         primary.is_user_authorized = AsyncMock(return_value=True)
 
-        secondary = MagicMock()
+        secondary = MagicMock(loop=cur_loop)
         secondary.is_connected = MagicMock(return_value=True)
         secondary.is_user_authorized = AsyncMock(return_value=True)
 
@@ -240,7 +241,8 @@ async def test_get_me_info_populates_premium():
     orig_me = TelegramClientManager._cached_me
 
     try:
-        client = MagicMock()
+        cur_loop = asyncio.get_running_loop()
+        client = MagicMock(loop=cur_loop)
         client.is_connected = MagicMock(return_value=True)
         client.is_user_authorized = AsyncMock(return_value=True)
         user_mock = MagicMock()

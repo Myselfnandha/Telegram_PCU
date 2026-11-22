@@ -46,6 +46,10 @@ backend/data/subtitles/*
 backend/data/bin/*
 !backend/data/bin/.gitkeep
 backend/backups/
+backend/backup/
+*.key
+backend/data/.session_master_key
+backend/data/*.db
 *.db
 *.sqlite3
 *.log*

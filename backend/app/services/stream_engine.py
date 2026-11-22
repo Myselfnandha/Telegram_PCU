@@ -946,11 +946,10 @@ class StreamEngine:
                                 t.cancel()
                     in_flight_clients.clear()
                     client_active_chunks.clear()
-                    if not stop_event.is_set():
-                        try:
-                            queue.put_nowait(None)
-                        except Exception:
-                            pass
+                    try:
+                        queue.put_nowait(None)
+                    except Exception:
+                        pass
 
             producer_task = asyncio.create_task(pipelined_chunk_producer())
 
@@ -964,7 +963,16 @@ class StreamEngine:
         try:
             feed_pos = aligned_offset
             while bytes_sent < length:
-                chunk = await queue.get()
+                if stop_event.is_set() and queue.empty():
+                    raise ConnectionResetError(f"Stream aborted before full length: sent {bytes_sent}/{length} bytes")
+                try:
+                    chunk = await asyncio.wait_for(queue.get(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    if stop_event.is_set() or producer_task.done():
+                        if bytes_sent < length:
+                            raise ConnectionResetError(f"Stream aborted before full length: sent {bytes_sent}/{length} bytes")
+                        break
+                    continue
                 if isinstance(chunk, Exception):
                     raise chunk
                 if chunk is None:
