@@ -19,8 +19,8 @@ class Principal:
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=64, description="User display name / username")
-    password: Optional[str] = Field(None, min_length=8, description="Password (optional if using passkey-only)")
+    username: str = Field(..., min_length=1, max_length=64, description="User display name / username")
+    password: Optional[str] = Field(None, min_length=4, description="Password (optional if using passkey-only)")
     device_name: Optional[str] = Field("Primary Device", max_length=128)
     device_fingerprint: Optional[str] = Field(None, max_length=255)
     bootstrap_token: Optional[str] = Field(None, description="Optional admin bootstrap token")

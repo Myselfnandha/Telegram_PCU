@@ -112,8 +112,18 @@ class ApiService {
       let errorMsg = `HTTP Error ${res.status}`;
       try {
         const errorData = await res.json();
-        if (errorData.detail) errorMsg = errorData.detail;
-        else if (errorData.message) errorMsg = errorData.message;
+        if (Array.isArray(errorData.detail)) {
+          errorMsg = errorData.detail
+            .map((d: any) => {
+              const field = d.loc ? d.loc[d.loc.length - 1] : '';
+              return field ? `${field}: ${d.msg}` : d.msg;
+            })
+            .join('; ');
+        } else if (typeof errorData.detail === 'string') {
+          errorMsg = errorData.detail;
+        } else if (errorData.message) {
+          errorMsg = errorData.message;
+        }
       } catch {
         // Fallback
       }

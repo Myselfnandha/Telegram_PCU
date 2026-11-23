@@ -201,7 +201,8 @@ export const MultiTenantAuthModal: React.FC<MultiTenantAuthModalProps> = ({
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
+                  placeholder="Password (min 4 characters)"
+                  minLength={4}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                   required
                 />
