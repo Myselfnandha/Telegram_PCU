@@ -1,5 +1,6 @@
+from __future__ import annotations
 import uuid
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from datetime import datetime
 from sqlalchemy import (
     String,
@@ -15,6 +16,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from app.db.base import Base, utc_now
+
+if TYPE_CHECKING:
+    from app.db.models.user import AppUser
 
 
 class TelegramAccount(Base):

@@ -72,6 +72,10 @@ def test_normalize_database_url_neon_tls():
     sqlite_url = "sqlite+aiosqlite:///path/to/test.db"
     assert normalize_database_url(sqlite_url) == sqlite_url
 
+    # 4. Neon URL with channel_binding and endpoint (which trigger asyncpg TypeError if unstripped)
+    neon_url_cb = "postgresql://user:pass@ep-cool-flower-123.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=disable&endpoint=ep-cool-flower-123"
+    assert normalize_database_url(neon_url_cb) == "postgresql+asyncpg://user:pass@ep-cool-flower-123.ap-southeast-1.aws.neon.tech/neondb?ssl=require"
+
 
 def test_postgres_advisory_lock_env_syntax():
     env_code = (TEST_DIR.parent / "alembic" / "env.py").read_text(encoding="utf-8")

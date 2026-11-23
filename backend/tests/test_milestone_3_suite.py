@@ -147,6 +147,16 @@ async def test_untrusted_device_cannot_approve_itself():
         # 3rd pending device (to test unverified approver)
         dev3, _, _ = await DeviceService.register_or_resolve_device(session, user.id, "Pending Laptop", "fp-pending-2")
 
+        # Test get_pending_devices permissions and output schema
+        with pytest.raises(PermissionError, match="Only verified devices can review pending device approval requests"):
+            await DeviceService.get_pending_devices(session, user.id, approver_device_id=dev3.id)
+
+        pending_list = await DeviceService.get_pending_devices(session, user.id, approver_device_id=dev1.id)
+        assert len(pending_list) == 2
+        pending_ids = [d["id"] for d in pending_list]
+        assert str(dev2.id) in pending_ids
+        assert str(dev3.id) in pending_ids
+
         # Untrusted device attempting to approve itself is rejected
         with pytest.raises(PermissionError, match="An unverified device cannot approve itself"):
             await DeviceService.approve_device(

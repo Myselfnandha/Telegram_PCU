@@ -1,5 +1,6 @@
 import os
 import logging
+import urllib.parse
 from typing import AsyncGenerator, Optional
 from pathlib import Path
 from sqlalchemy.ext.asyncio import (
@@ -23,6 +24,7 @@ def normalize_database_url(url: str) -> str:
     Normalizes database URL for asyncpg and Neon PostgreSQL compatibility.
     - Replaces postgres:// or postgresql:// with postgresql+asyncpg://
     - Translates ?sslmode= to ?ssl= (avoiding asyncpg TypeError: connect() got unexpected keyword 'sslmode')
+    - Strips unsupported query parameters (e.g. channel_binding, endpoint) that trigger asyncpg TypeError
     """
     if not url:
         return url
@@ -32,8 +34,35 @@ def normalize_database_url(url: str) -> str:
     elif clean.startswith("postgresql://") and not clean.startswith("postgresql+"):
         clean = clean.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-    if "sslmode=" in clean:
-        clean = clean.replace("sslmode=", "ssl=")
+    if clean.startswith("postgresql+asyncpg://"):
+        parsed = urllib.parse.urlsplit(clean)
+        query_params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        valid_asyncpg_keys = {
+            "ssl",
+            "timeout",
+            "command_timeout",
+            "statement_cache_size",
+            "max_cached_statement_lifetime",
+            "max_cacheable_statement_size",
+            "direct_tls",
+            "server_settings",
+            "target_session_attrs",
+            "krbsrvname",
+            "gsslib",
+            "prepared_statement_cache_size",
+        }
+        filtered = []
+        has_ssl = any(k == "ssl" for k, _ in query_params)
+        for k, v in query_params:
+            if k == "sslmode" and not has_ssl:
+                filtered.append(("ssl", v))
+                has_ssl = True
+            elif k in valid_asyncpg_keys:
+                filtered.append((k, v))
+        new_query = urllib.parse.urlencode(filtered)
+        clean = urllib.parse.urlunsplit(
+            (parsed.scheme, parsed.netloc, parsed.path, new_query, parsed.fragment)
+        )
     return clean
 
 
