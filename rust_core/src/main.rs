@@ -161,13 +161,19 @@ async fn register_session_handler(
 ) -> Result<Json<RegisterSessionResponse>, (StatusCode, String)> {
     let acc_idx = payload.account_idx.unwrap_or(0);
     let info = session::decode_telethon_string_session(&payload.session_string)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+        .map_err(|e| {
+            tracing::error!("register_session_handler: failed to decode session string: {e}");
+            (StatusCode::BAD_REQUEST, e)
+        })?;
     let home_dc = info.dc_id;
 
     let client =
         session::create_client_from_string(&payload.session_string, payload.api_id, acc_idx)
             .await
-            .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+            .map_err(|e| {
+                tracing::error!("register_session_handler: failed to create client: {e}");
+                (StatusCode::BAD_REQUEST, e)
+            })?;
 
     let total = if let Some(idx) = payload.account_idx {
         state.pool.set_client(idx, client).await
@@ -175,6 +181,7 @@ async fn register_session_handler(
         state.pool.add_client(client).await
     };
     state.stream_engine.mark_dc_authed(acc_idx, home_dc).await;
+    tracing::info!("register_session_handler: successfully registered account {acc_idx} (home DC {home_dc})");
     Ok(Json(RegisterSessionResponse {
         success: true,
         active_accounts: total,

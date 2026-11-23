@@ -53,6 +53,11 @@ class RateGovernor:
 
     def configure_for_tier(self, is_premium: bool, secondary_premium: Optional[bool] = None):
         """Auto-tunes token bucket and AIMD limits based on account tier(s) to maximize throughput and prevent FloodWaits."""
+        tier_state = (bool(is_premium), bool(secondary_premium) if secondary_premium is not None else None)
+        if getattr(self, "_current_tier_state", None) == tier_state:
+            return
+        self._current_tier_state = tier_state
+
         if secondary_premium is not None:
             # Multi-Account Turbo Pooling: Combine capacity from both accounts
             r1 = 24.0 if is_premium else 4.5

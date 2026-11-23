@@ -17,7 +17,7 @@ pub struct TelethonSessionInfo {
 }
 
 pub fn decode_telethon_string_session(raw: &str) -> Result<TelethonSessionInfo, String> {
-    let clean = raw.trim();
+    let clean = raw.trim().trim_matches('"').trim_matches('\'').trim();
     if clean.is_empty() {
         return Err("Empty session string".to_string());
     }
@@ -53,15 +53,29 @@ pub async fn create_client_from_string(
     account_idx: usize,
 ) -> Result<Client, String> {
     let info = decode_telethon_string_session(session_str)?;
-    let db_dir = std::path::Path::new("/home/nandha/Desktop/TG_TOOL/backend/data");
-    if !db_dir.exists() {
-        let _ = std::fs::create_dir_all(db_dir);
+    let db_dir = std::env::var("TG_DATA_DIR")
+        .or_else(|_| std::env::var("DATA_DIR"))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            let p = std::path::Path::new("backend/data");
+            if p.exists() {
+                p.to_path_buf()
+            } else {
+                std::path::PathBuf::from("data")
+            }
+        });
+    if let Err(e) = std::fs::create_dir_all(&db_dir) {
+        eprintln!("Warning: could not create db_dir {db_dir:?}: {e}");
     }
-    let db_path = db_dir.join(format!("rust_session_{account_idx}.db"));
+    let db_path = if db_dir.exists() {
+        db_dir.join(format!("rust_session_{account_idx}.db"))
+    } else {
+        std::env::temp_dir().join(format!("rust_session_{account_idx}.db"))
+    };
     let session = Arc::new(
         SqliteSession::open(&db_path)
             .await
-            .map_err(|e| format!("SqliteSession error: {e:?}"))?,
+            .map_err(|e| format!("SqliteSession error on {db_path:?}: {e:?}"))?,
     );
 
     let _ = session.set_home_dc_id(info.dc_id).await;

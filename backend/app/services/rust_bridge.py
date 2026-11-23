@@ -9,7 +9,7 @@ from typing import Optional, Union, Dict, Any, List
 from pathlib import Path
 import httpx
 
-from app.config import ROOT_DIR, API_ID, SESSION_STRING, SESSION_STRING_2
+from app.config import ROOT_DIR, DATA_DIR, API_ID, SESSION_STRING, SESSION_STRING_2
 
 logger = logging.getLogger("rust_bridge")
 
@@ -172,7 +172,9 @@ class RustBridge:
             try:
                 env = os.environ.copy()
                 env["TG_RUST_CORE_AUTH_TOKEN"] = _RUST_CORE_AUTH_TOKEN
-                log_path = ROOT_DIR / "backend" / "data" / "rust_core.log"
+                env["TG_DATA_DIR"] = str(DATA_DIR)
+                env["DATA_DIR"] = str(DATA_DIR)
+                log_path = DATA_DIR / "rust_core.log"
                 log_path.parent.mkdir(parents=True, exist_ok=True)
                 if self._log_file and not self._log_file.closed:
                     try:
@@ -225,7 +227,7 @@ class RustBridge:
             return False
         try:
             client = self._get_client()
-            payload = {"session_string": session_string, "api_id": api_id}
+            payload = {"session_string": session_string.strip(), "api_id": int(api_id)}
             if account_idx is not None:
                 payload["account_idx"] = account_idx
             resp = await client.post(
@@ -235,6 +237,8 @@ class RustBridge:
             )
             if resp.status_code == 200:
                 return resp.json().get("success", False)
+            else:
+                logger.warning(f"Rust core rejected session registration (status {resp.status_code}): {resp.text}")
         except Exception as e:
             logger.debug(f"register_session error: {e}")
         return False
