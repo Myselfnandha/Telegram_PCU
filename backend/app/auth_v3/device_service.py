@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import time
 import uuid
 import secrets
@@ -60,7 +61,8 @@ class DeviceService:
         session: AsyncSession,
         user_id: uuid.UUID,
         display_name: str,
-        device_fingerprint: Optional[str] = None
+        device_fingerprint: Optional[str] = None,
+        auto_verify: bool = False
     ) -> Tuple[TrustedDevice, bool, Optional[str]]:
         """
         Registers a new device or matches an existing trusted device.
@@ -75,25 +77,29 @@ class DeviceService:
             for dev in existing_devices:
                 if dev.device_fingerprint == device_fingerprint:
                     await user_repo.update_device_seen(dev.id)
+                    if auto_verify and dev.verified_at is None:
+                        await user_repo.verify_device(dev.id, user_id)
+                        cls._pending_approvals.pop(f"{user_id}:{dev.id}", None)
+                        return dev, True, None
                     is_verified = dev.verified_at is not None
                     code = None
                     if not is_verified:
                         code = cls._save_approval_code(user_id, dev.id)
                     return dev, is_verified, code
 
-        # If user has no existing verified devices, auto-verify this initial device
+        # If user has no existing verified devices or auto_verify is requested, verify this device
         verified_count = sum(1 for d in existing_devices if d.verified_at is not None)
-        auto_verify = (verified_count == 0)
+        is_device_verified = auto_verify or (verified_count == 0)
 
         device = await user_repo.create_device(
             user_id=user_id,
             display_name=display_name or "Unknown Device",
             device_fingerprint=device_fingerprint,
-            verified=auto_verify
+            verified=is_device_verified
         )
 
         approval_code = None
-        if not auto_verify:
+        if not is_device_verified:
             approval_code = cls._save_approval_code(user_id, device.id)
             await audit_repo.log_event(
                 event_type="device.pending_verification",
@@ -107,7 +113,7 @@ class DeviceService:
                 metadata={"device_id": str(device.id), "display_name": display_name}
             )
 
-        return device, auto_verify, approval_code
+        return device, is_device_verified, approval_code
 
     @classmethod
     async def approve_device(

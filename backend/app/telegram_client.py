@@ -413,11 +413,16 @@ class TelegramClientManager:
             pass
 
     @classmethod
-    async def get_client(cls) -> TelegramClient:
+    async def get_client(cls, principal: Optional[Any] = None) -> TelegramClient:
         """
-        Retrieves the singleton user Telethon client instance.
-        If no user session is authorized but BOT_TOKEN is present, falls back to bot client.
+        Retrieves the Telethon client instance.
+        If a tenant Principal is provided, resolves the tenant-scoped client from MultiTenantTelegramManager.
+        Otherwise falls back to the singleton user Telethon client instance.
         """
+        if principal is not None:
+            from app.telegram.client_manager import multi_tenant_manager
+            return await multi_tenant_manager.get_client(principal)
+
         running_loop = asyncio.get_running_loop()
         if cls._client is not None and cls._is_loop_mismatched(cls._client, running_loop):
             logger.info("Active event loop changed; rebinding primary Telethon client...")

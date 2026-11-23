@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import type { TabType } from '@/types';
+import { api } from '@/services/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Clapperboard,
   Download,
   Flame,
+  LogOut,
   Moon,
   Radio,
   Send,
@@ -14,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
+  User,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -25,6 +28,9 @@ export const Header: React.FC = () => {
     theme,
     toggleTheme,
     uploadQueue,
+    v3User,
+    setMultiTenantModalOpen,
+    refreshV3User,
   } = useApp();
 
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -282,27 +288,66 @@ export const Header: React.FC = () => {
             )}
           </Button>
 
-          {/* Telegram MTProto Auth Status Button */}
-          <button
-            onClick={() => setAuthModalOpen(true)}
-            aria-label={
-              authStatus?.authenticated
-                ? `Telegram account connected as ${authStatus.first_name || authStatus.username || 'user'}. Click to manage session`
-                : 'Connect Telegram account via QR or phone'
-            }
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
-              authStatus?.authenticated
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                : 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate max-w-[130px]">
-              {authStatus?.authenticated
-                ? authStatus.first_name || authStatus.username || 'Authorized'
-                : 'Connect Telegram'}
-            </span>
-          </button>
+          {/* v3 Identity Account Pill or Sign In Button */}
+          {v3User ? (
+            <div className="flex items-center gap-1.5 pl-2.5 py-1 pr-1 rounded-xl border border-border/60 bg-muted/40 text-xs shadow-xs">
+              <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="font-semibold text-foreground max-w-[100px] truncate" title={`Signed in as ${v3User.username}`}>
+                {v3User.username}
+              </span>
+              {v3User.role === 'admin' && (
+                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-primary/15 text-primary font-mono font-bold tracking-wider">
+                  Admin
+                </span>
+              )}
+              <button
+                onClick={async () => {
+                  try {
+                    await api.v3Logout();
+                  } finally {
+                    await refreshV3User();
+                  }
+                }}
+                title="Sign Out"
+                aria-label="Sign Out"
+                className="p-1 rounded-lg hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors ml-0.5 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setMultiTenantModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-primary/40 text-primary hover:bg-primary/10 text-xs font-medium transition-all cursor-pointer shadow-xs"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </button>
+          )}
+
+          {/* Telegram MTProto Auth Status Button (Visible when logged into v3) */}
+          {v3User && (
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              aria-label={
+                authStatus?.authenticated
+                  ? `Telegram account connected as ${authStatus.first_name || authStatus.username || 'user'}. Click to manage session`
+                  : 'Connect Telegram account via QR or phone'
+              }
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+                authStatus?.authenticated
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 shadow-xs'
+                  : 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate max-w-[130px]">
+                {authStatus?.authenticated
+                  ? authStatus.first_name || authStatus.username || 'Authorized'
+                  : 'Connect Telegram'}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 

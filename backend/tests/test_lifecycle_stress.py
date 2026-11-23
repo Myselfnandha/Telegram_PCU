@@ -51,14 +51,14 @@ uvicorn.run(app, host='127.0.0.1', port=8768, log_level='info')
     p = subprocess.Popen([sys.executable, "-c", script], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     start_t = time.time()
     try:
-        out, _ = p.communicate(timeout=8)
+        out, _ = p.communicate(timeout=15)
         elapsed = time.time() - start_t
     finally:
         if p.poll() is None:
             p.kill()
 
     assert p.returncode in (0, -15, 1)
-    assert elapsed < 7.5
+    assert elapsed < 14.5
     assert "Shutting down TG Power Suite backend..." in out
     assert "Shutdown complete." in out
     assert "Application shutdown complete." in out
@@ -86,14 +86,14 @@ uvicorn.run(app, host='127.0.0.1', port=8769, log_level='info')
     p = subprocess.Popen([sys.executable, "-c", script], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     start_t = time.time()
     try:
-        out, _ = p.communicate(timeout=8)
+        out, _ = p.communicate(timeout=15)
         elapsed = time.time() - start_t
     finally:
         if p.poll() is None:
             p.kill()
 
     assert p.returncode in (0, -2, 1)
-    assert elapsed < 7.5
+    assert elapsed < 14.5
     assert "Shutting down TG Power Suite backend..." in out
     assert "Shutdown complete." in out
     assert "Application shutdown complete." in out

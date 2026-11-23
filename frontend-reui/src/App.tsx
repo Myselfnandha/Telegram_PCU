@@ -5,8 +5,9 @@ import { NetworkWatchdogBanner } from '@/components/NetworkWatchdogBanner';
 import { FloodWaitBanner } from '@/components/FloodWaitBanner';
 import { AuthModal } from '@/components/AuthModal';
 import { DeviceAuthGateModal } from '@/components/DeviceAuthGateModal';
+import { MultiTenantAuthModal } from '@/components/v3/MultiTenantAuthModal';
 import { ToastContainer } from '@/components/ToastContainer';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldCheck, User } from 'lucide-react';
 import { api } from '@/services/api';
 import { socketService } from '@/services/socket';
 
@@ -32,11 +33,21 @@ const ViewLoadingFallback: React.FC = () => (
 );
 
 const MainLayout: React.FC = () => {
-  const { activeTab, theme } = useApp();
+  const {
+    activeTab,
+    theme,
+    v3User,
+    isMultiTenantModalOpen,
+    setMultiTenantModalOpen,
+    refreshV3User,
+    isAuthLoading,
+  } = useApp();
   const [isDeviceGateOpen, setIsDeviceGateOpen] = useState(false);
 
   useEffect(() => {
-    // 1. Check device auth on initial mount with automatic silent session recovery
+    // 1. Check legacy device auth only if user is authenticated with v3
+    if (!v3User) return;
+
     const checkDeviceAuth = async () => {
       try {
         const storedToken = api.getStoredToken();
@@ -49,7 +60,6 @@ const MainLayout: React.FC = () => {
               return;
             }
           } catch {
-            // Stored token was rejected by server, clear and prompt
             api.setStoredToken('');
           }
         }
@@ -72,7 +82,16 @@ const MainLayout: React.FC = () => {
     return () => {
       unsubAuth();
     };
-  }, []);
+  }, [v3User]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="h-screen w-screen bg-background text-foreground flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <p className="text-xs font-mono text-muted-foreground animate-pulse">Initializing TG Power Suite...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen max-h-screen bg-background text-foreground flex flex-col antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">
@@ -105,37 +124,66 @@ const MainLayout: React.FC = () => {
           aria-label="Main Workspace Content"
           className="flex-1 min-h-0 min-w-0 w-full relative focus:outline-none flex flex-col overflow-hidden"
         >
-          <Suspense fallback={<ViewLoadingFallback />}>
-            {activeTab === 'dashboard' && (
-              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
-                <ManagementDashboardView />
+          {!v3User ? (
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 text-center p-6 animate-in fade-in">
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-lg shadow-primary/5">
+                <ShieldCheck className="w-7 h-7" />
               </div>
-            )}
-            {activeTab === 'uploader' && (
-              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
-                <ManagementDashboardView initialSubTab="uploader" />
+              <div className="space-y-1.5 max-w-sm">
+                <h2 className="text-xl font-bold tracking-tight">Identity Authentication Required</h2>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Sign in or register an account to access private Telegram channels, encrypted turbo cloud media, and device controls.
+                </p>
               </div>
-            )}
-            {activeTab === 'sniffer' && (
-              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
-                <ManagementDashboardView initialSubTab="sniffer" />
-              </div>
-            )}
-            {activeTab === 'history' && (
-              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
-                <ManagementDashboardView initialSubTab="history" />
-              </div>
-            )}
-            {activeTab === 'cinema' && <CinemaView />}
-            {activeTab === 'settings' && (
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <SettingsView />
-              </div>
-            )}
-          </Suspense>
+              <button
+                onClick={() => setMultiTenantModalOpen(true)}
+                className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-md hover:opacity-95 transition-all cursor-pointer"
+              >
+                <User className="w-4 h-4" />
+                <span>Sign In / Register</span>
+              </button>
+            </div>
+          ) : (
+            <Suspense fallback={<ViewLoadingFallback />}>
+              {activeTab === 'dashboard' && (
+                <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+                  <ManagementDashboardView />
+                </div>
+              )}
+              {activeTab === 'uploader' && (
+                <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+                  <ManagementDashboardView initialSubTab="uploader" />
+                </div>
+              )}
+              {activeTab === 'sniffer' && (
+                <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+                  <ManagementDashboardView initialSubTab="sniffer" />
+                </div>
+              )}
+              {activeTab === 'history' && (
+                <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+                  <ManagementDashboardView initialSubTab="history" />
+                </div>
+              )}
+              {activeTab === 'cinema' && <CinemaView />}
+              {activeTab === 'settings' && (
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <SettingsView />
+                </div>
+              )}
+            </Suspense>
+          )}
         </main>
       </div>
 
+      <MultiTenantAuthModal
+        isOpen={!v3User || isMultiTenantModalOpen}
+        canClose={Boolean(v3User)}
+        onClose={() => setMultiTenantModalOpen(false)}
+        onSuccess={async () => {
+          await refreshV3User();
+        }}
+      />
       <AuthModal />
       <DeviceAuthGateModal
         isOpen={isDeviceGateOpen}

@@ -63,12 +63,13 @@ async def register(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    # Register initial device
+    # Register initial device (auto-verify initial registration device)
     device, is_verified, _ = await DeviceService.register_or_resolve_device(
         session=db,
         user_id=user.id,
         display_name=req.device_name or "Primary Device",
-        device_fingerprint=req.device_fingerprint
+        device_fingerprint=req.device_fingerprint,
+        auto_verify=True
     )
 
     # Issue session
@@ -79,6 +80,58 @@ async def register(
     )
 
     SessionService.set_session_cookie(response, raw_token)
+    from app.auth import API_AUTH_TOKEN
+    if API_AUTH_TOKEN:
+        is_https = (
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto", "").lower() == "https"
+        )
+        response.set_cookie(
+            key="tg_api_token",
+            value=API_AUTH_TOKEN,
+            max_age=31536000,
+            path="/",
+            httponly=True,
+            samesite="lax",
+            secure=is_https
+        )
+
+    # Auto-adopt legacy Telegram session if one is currently active on the server
+    try:
+        from app.telegram_client import TelegramClientManager
+        from app.config import SESSION_STRING
+        if await TelegramClientManager.is_authorized():
+            info = await TelegramClientManager.get_me_info()
+            tg_user_id = info.get("id") if info else None
+            raw_session = SESSION_STRING
+            if not raw_session and getattr(TelegramClientManager, "_client", None) and TelegramClientManager._client.session:
+                from telethon.sessions import StringSession
+                raw_session = StringSession.save(TelegramClientManager._client.session)
+
+            if tg_user_id and raw_session:
+                from app.db.repositories.telegram_repo import TelegramAccountRepository
+                from app.telegram.session_vault import SessionVaultRepository
+                acc_repo = TelegramAccountRepository(db)
+                vault_repo = SessionVaultRepository(db)
+                existing = await acc_repo.get_by_telegram_user_id(tg_user_id)
+                if not existing:
+                    acc = await acc_repo.create_account(
+                        owner_user_id=user.id,
+                        telegram_user_id=tg_user_id,
+                        role="primary",
+                        username=info.get("username"),
+                        first_name=info.get("first_name"),
+                        phone_number=info.get("phone")
+                    )
+                    await vault_repo.save_session(
+                        owner_user_id=user.id,
+                        account_id=acc.id,
+                        plaintext_session=raw_session
+                    )
+                    await db.commit()
+                    logger.info(f"Auto-adopted active server Telegram session into user {user.id} vault.")
+    except Exception as e:
+        logger.warning(f"Session auto-adoption notice: {e}")
 
     return RegisterResponse(
         user_id=str(user.id),
@@ -114,12 +167,13 @@ async def login(
     except AuthenticationError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
-    # Resolve device
+    # Resolve device (Direct Password Access: verified credentials auto-verify the device)
     device, is_verified, approval_code = await DeviceService.register_or_resolve_device(
         session=db,
         user_id=user.id,
         display_name=req.device_name or "Client Device",
-        device_fingerprint=req.device_fingerprint
+        device_fingerprint=req.device_fingerprint,
+        auto_verify=True
     )
 
     # Issue session
@@ -130,6 +184,21 @@ async def login(
     )
 
     SessionService.set_session_cookie(response, raw_token)
+    from app.auth import API_AUTH_TOKEN
+    if API_AUTH_TOKEN:
+        is_https = (
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto", "").lower() == "https"
+        )
+        response.set_cookie(
+            key="tg_api_token",
+            value=API_AUTH_TOKEN,
+            max_age=31536000,
+            path="/",
+            httponly=True,
+            samesite="lax",
+            secure=is_https
+        )
 
     return LoginResponse(
         user_id=str(user.id),
@@ -151,6 +220,7 @@ async def logout(
     if principal.session_id:
         await SessionService.revoke_session(db, principal.session_id, principal.user_id)
     SessionService.clear_session_cookie(response)
+    response.delete_cookie(key="tg_api_token", path="/")
     return {"message": "Logged out successfully."}
 
 

@@ -5,14 +5,16 @@ import { ShieldCheck, Lock, User, KeyRound, AlertCircle, CheckCircle2, X, Loader
 
 interface MultiTenantAuthModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose?: () => void;
   onSuccess: () => void;
+  canClose?: boolean;
 }
 
 export const MultiTenantAuthModal: React.FC<MultiTenantAuthModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  canClose = true,
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -43,7 +45,9 @@ export const MultiTenantAuthModal: React.FC<MultiTenantAuthModalProps> = ({
           setRecoveryCodes(res.recovery_codes);
         } else {
           onSuccess();
-          onClose();
+          if (canClose && onClose) {
+            onClose();
+          }
         }
       } else {
         const res = await api.v3Login({
@@ -55,7 +59,9 @@ export const MultiTenantAuthModal: React.FC<MultiTenantAuthModalProps> = ({
           setApprovalCode(res.approval_code);
         } else {
           onSuccess();
-          onClose();
+          if (canClose && onClose) {
+            onClose();
+          }
         }
       }
     } catch (err: any) {
@@ -86,12 +92,14 @@ export const MultiTenantAuthModal: React.FC<MultiTenantAuthModalProps> = ({
               <p className="text-xs text-neutral-400">TG Power Suite v3.0 Multi-Tenant Access</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {canClose && onClose && (
+            <button
+              onClick={onClose}
+              className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Recovery codes display */}
@@ -112,7 +120,9 @@ export const MultiTenantAuthModal: React.FC<MultiTenantAuthModalProps> = ({
               onClick={() => {
                 navigator.clipboard.writeText(recoveryCodes.join('\n'));
                 onSuccess();
-                onClose();
+                if (canClose && onClose) {
+                  onClose();
+                }
               }}
             >
               <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -134,7 +144,9 @@ export const MultiTenantAuthModal: React.FC<MultiTenantAuthModalProps> = ({
               className="w-full text-xs"
               onClick={() => {
                 onSuccess();
-                onClose();
+                if (canClose && onClose) {
+                  onClose();
+                }
               }}
             >
               Got it

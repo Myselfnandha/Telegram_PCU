@@ -154,9 +154,60 @@ def _attach_sniffer():
 
 
 @router.get("/status", response_model=AuthStatus)
-async def check_auth():
+async def check_auth(request: Request):
     """Returns the current Telegram MTProto authentication status."""
     try:
+        from app.auth import is_authenticated, is_loopback_request, API_AUTH_TOKEN, ENABLE_API_AUTH
+        from app.config import MULTI_TENANT_ENABLED
+
+        # 1. Check for authenticated v3 multi-tenant principal
+        raw_v3_token = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            raw_v3_token = auth_header[7:].strip()
+        elif "tg_session" in request.cookies:
+            raw_v3_token = request.cookies["tg_session"]
+        elif "session_token" in request.query_params:
+            raw_v3_token = request.query_params["session_token"]
+
+        principal = None
+        if raw_v3_token:
+            try:
+                from app.auth_v3.session_service import SessionService
+                from app.db.session import get_sessionmaker
+                session_maker = get_sessionmaker()
+                async with session_maker() as db_session:
+                    principal = await SessionService.validate_session(db_session, raw_v3_token)
+            except Exception:
+                pass
+
+        if principal:
+            from app.db.session import get_sessionmaker
+            from app.db.repositories.telegram_repo import TelegramAccountRepository
+            session_maker = get_sessionmaker()
+            async with session_maker() as db_session:
+                repo = TelegramAccountRepository(db_session)
+                primary = await repo.get_primary_account(principal.user_id)
+                if primary and primary.status in ("linked", "active"):
+                    return AuthStatus(
+                        authenticated=True,
+                        phone=primary.phone_number,
+                        username=primary.username,
+                        user_id=primary.telegram_user_id,
+                        first_name=primary.first_name,
+                        last_name=None,
+                        session_string=None
+                    )
+                else:
+                    return AuthStatus(authenticated=False)
+
+        # 2. If not a v3 principal, enforce zero-trust for unauthenticated remote visitors
+        is_loopback = is_loopback_request(request)
+        must_auth = bool(API_AUTH_TOKEN) or ENABLE_API_AUTH or not is_loopback or MULTI_TENANT_ENABLED
+        if must_auth and not is_authenticated(request):
+            return AuthStatus(authenticated=False)
+
+        # 3. Local loopback / legacy authenticated single-user fallback
         from app.config import PHONE_NUMBER, SESSION_STRING
         is_auth = await TelegramClientManager.is_authorized()
         if not is_auth:

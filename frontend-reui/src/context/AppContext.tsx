@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useMemo, useContext, useEffect, useRef, useState } from 'react';
-import type { AuthStatus, ChatItem, TabType, TelemetryStats, ThemeType, UploadTask } from '@/types';
+import type { AuthStatus, ChatItem, TabType, TelemetryStats, ThemeType, UploadTask, V3UserProfile } from '@/types';
 import { api } from '@/services/api';
 import { socketService } from '@/services/socket';
 
@@ -18,6 +18,11 @@ interface AppContextValue {
   refreshAuth: () => Promise<void>;
   isAuthModalOpen: boolean;
   setAuthModalOpen: (open: boolean) => void;
+  v3User: V3UserProfile | null;
+  refreshV3User: () => Promise<void>;
+  isMultiTenantModalOpen: boolean;
+  setMultiTenantModalOpen: (open: boolean) => void;
+  isAuthLoading: boolean;
   selectedChat: ChatItem;
   setSelectedChat: (chat: ChatItem) => void;
   telemetry?: TelemetryStats | null;
@@ -183,6 +188,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 
 
+  const [v3User, setV3User] = useState<V3UserProfile | null>(null);
+  const [isMultiTenantModalOpen, setMultiTenantModalOpen] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
   const refreshAuth = async () => {
     try {
       const status = await api.getAuthStatus();
@@ -190,6 +199,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.debug('Auth check failed:', e);
       setAuthStatus({ authenticated: false });
+    }
+  };
+
+  const refreshV3User = async () => {
+    try {
+      const me = await api.v3GetMe();
+      setV3User(me);
+      await refreshAuth();
+    } catch {
+      setV3User(null);
+      setAuthStatus({ authenticated: false });
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
@@ -246,7 +268,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     });
 
-    refreshAuth();
+    refreshV3User();
 
     return () => {
       unsubConn();
@@ -265,6 +287,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshAuth,
         isAuthModalOpen,
         setAuthModalOpen,
+        v3User,
+        refreshV3User,
+        isMultiTenantModalOpen,
+        setMultiTenantModalOpen,
+        isAuthLoading,
         selectedChat,
         setSelectedChat,
         telemetry: null,

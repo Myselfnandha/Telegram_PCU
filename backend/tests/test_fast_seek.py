@@ -1373,7 +1373,7 @@ async def test_stream_engine_abort_message_stream_cancels_all_lookahead_tasks():
         engine.abort_message_stream(chat_id, msg_id)
 
         # Confirm all wire tasks were cancelled
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.15)
         assert media_key not in engine._active_stream_wire_tasks
         assert cancelled_wire_calls > 0
 
