@@ -70,12 +70,30 @@ def do_run_migrations(connection: Connection) -> None:
         connection.execute(text(f"SELECT pg_advisory_lock({lock_id})"))
 
     try:
+        from sqlalchemy import inspect
+        inspector = inspect(connection)
+        table_names = inspector.get_table_names()
+
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
-            context.run_migrations()
+            # If tables were pre-created by create_all but alembic_version is not set, stamp initial revision
+            if "app_users" in table_names and "alembic_version" not in table_names:
+                context.stamp(context.script, "ae9b4dcc8a72")
+            else:
+                context.run_migrations()
+    except Exception:
+        if is_postgres:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+        raise
     finally:
         if is_postgres:
-            connection.execute(text(f"SELECT pg_advisory_unlock({lock_id})"))
+            try:
+                connection.execute(text(f"SELECT pg_advisory_unlock({lock_id})"))
+            except Exception:
+                pass
 
 
 async def run_async_migrations() -> None:
