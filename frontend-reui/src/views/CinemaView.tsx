@@ -410,6 +410,25 @@ export const CinemaView: React.FC = () => {
     const key = `${video.chat_id}_${video.message_id}`;
     if (launchingVlcId === key) return;
     setLaunchingVlcId(key);
+
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const fullStreamUrl = `${window.location.origin}/stream/${encodeURIComponent(String(video.chat_id))}/${video.message_id}/${encodeURIComponent(video.filename)}`;
+
+    if (isMobile || isRemote) {
+      try {
+        await navigator.clipboard.writeText(fullStreamUrl);
+      } catch {}
+      window.location.href = `vlc://${fullStreamUrl}`;
+      addToast({
+        type: 'success',
+        title: 'Opening in VLC...',
+        message: 'Dispatched to VLC App. Direct stream URL copied to clipboard!',
+      });
+      setTimeout(() => setLaunchingVlcId(null), 2500);
+      return;
+    }
+
     addToast({
       type: 'info',
       title: 'Opening in VLC...',
@@ -421,12 +440,24 @@ export const CinemaView: React.FC = () => {
       }
       const result = await api.launchVlc(video.chat_id, video.message_id, video.filename);
       addToast({ type: 'success', title: 'VLC launched', message: result.message || `Playing ${cleanFileName(video.filename)} in VLC.` });
-    } catch (error) {
-      addToast({
-        type: 'error',
-        title: 'Could not launch VLC',
-        message: error instanceof Error ? error.message : 'Check that VLC is installed on the TG Power Suite desktop.',
-      });
+    } catch (error: any) {
+      if (error?.message?.includes('local machine') || error?.message?.includes('403')) {
+        try {
+          await navigator.clipboard.writeText(fullStreamUrl);
+        } catch {}
+        window.location.href = `vlc://${fullStreamUrl}`;
+        addToast({
+          type: 'success',
+          title: 'Opening in VLC...',
+          message: 'Dispatched to VLC App. Direct stream URL copied to clipboard!',
+        });
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Could not launch VLC',
+          message: error instanceof Error ? error.message : 'Check that VLC is installed on the TG Power Suite desktop.',
+        });
+      }
     } finally {
       setTimeout(() => setLaunchingVlcId(null), 2500);
     }
@@ -498,6 +529,11 @@ export const CinemaView: React.FC = () => {
   // Web Series Season Binge Action
   const handleBingeSeason = async (showTitle: string, season: WebSeriesSeason) => {
     if (!season.episodes.length) return;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (isMobile || isRemote) {
+      return handleDownloadSeasonM3u(showTitle, season);
+    }
     try {
       addToast({
         type: 'info',
@@ -602,6 +638,11 @@ export const CinemaView: React.FC = () => {
   // Movie Collection Binge Action
   const handleBingeMovieCollection = async (collection: MovieCollectionDraft) => {
     if (!collection.movies.length) return;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (isMobile || isRemote) {
+      return handleDownloadMovieCollectionM3u(collection);
+    }
     try {
       addToast({
         type: 'info',
