@@ -131,6 +131,10 @@ def verify_socket_auth(environ: dict, auth: Any = None) -> bool:
             cookie.load(cookie_str)
             if "tg_api_token" in cookie and hmac.compare_digest(cookie["tg_api_token"].value, API_AUTH_TOKEN):
                 return True
+            if "tg_device_token" in cookie and hmac.compare_digest(cookie["tg_device_token"].value, API_AUTH_TOKEN):
+                return True
+            if "tg_session" in cookie and len(cookie["tg_session"].value.strip()) >= 32:
+                return True
         except Exception:
             pass
 

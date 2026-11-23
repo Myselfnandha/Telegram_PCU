@@ -45,13 +45,17 @@ const MainLayout: React.FC = () => {
   const [isDeviceGateOpen, setIsDeviceGateOpen] = useState(false);
 
   useEffect(() => {
-    // 1. Check legacy device auth only if user is authenticated with v3
-    if (!v3User) return;
+    // If authenticated with v3, legacy device gate is never needed
+    if (v3User) {
+      setIsDeviceGateOpen(false);
+      return;
+    }
 
     const checkDeviceAuth = async () => {
       try {
         const storedToken = api.getStoredToken();
-        if (storedToken) {
+        // Never send 64-char v3 session tokens to legacy deviceLogin
+        if (storedToken && storedToken.length !== 64) {
           try {
             const loginRes = await api.deviceLogin(storedToken);
             if (loginRes.success) {
@@ -74,9 +78,11 @@ const MainLayout: React.FC = () => {
     };
     checkDeviceAuth();
 
-    // 2. Listen for 401s across the application
+    // 2. Listen for 401s across the application only for non-v3
     const unsubAuth = api.onAuthRequired(() => {
-      setIsDeviceGateOpen(true);
+      if (!v3User) {
+        setIsDeviceGateOpen(true);
+      }
     });
 
     return () => {

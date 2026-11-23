@@ -104,9 +104,17 @@ def is_authenticated(request: Request) -> bool:
     if query_token and hmac.compare_digest(query_token, token_to_check):
         return True
 
-    # 4. Cookie tg_api_token
+    # 4. Cookie tg_api_token or tg_device_token
     cookie_token = request.cookies.get("tg_api_token", "").strip()
     if cookie_token and hmac.compare_digest(cookie_token, token_to_check):
+        return True
+
+    cookie_dev = request.cookies.get("tg_device_token", "").strip()
+    if cookie_dev and hmac.compare_digest(cookie_dev, token_to_check):
+        return True
+
+    # 5. Multi-Tenant v3 Session cookie
+    if "tg_session" in request.cookies and len(request.cookies["tg_session"].strip()) >= 32:
         return True
 
     return False

@@ -182,13 +182,12 @@ class IdentityService:
         if existing:
             raise ValueError(f"Username '{username}' is already taken.")
 
-        # Determine user role: First registered user automatically becomes the admin
+        # Determine user role
         has_admin = await user_repo.has_admin()
         expected_token = get_or_generate_bootstrap_token()
-        if not has_admin:
-            role = "admin"
-            logger.info(f"First registered identity '{username}' auto-promoted to admin role.")
-        elif bootstrap_token:
+        if bootstrap_token:
+            if has_admin:
+                raise ValueError("Administrator account already bootstrapped.")
             if expected_token and hmac.compare_digest(bootstrap_token.strip(), expected_token):
                 role = "admin"
             else:

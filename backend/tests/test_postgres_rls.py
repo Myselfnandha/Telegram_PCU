@@ -50,7 +50,7 @@ async def test_postgres_rls_ddl_and_tenant_session_sql():
         async_session = async_sessionmaker(pg_engine, expire_on_commit=False)
         async with async_session() as session:
             test_uid = str(uuid.uuid4())
-            await session.execute(text("SET LOCAL app.current_user_id = :uid"), {"uid": test_uid})
+            await session.execute(text("SELECT set_config('app.current_user_id', :uid, true)"), {"uid": test_uid})
             res = await session.execute(text("SELECT current_setting('app.current_user_id', true)"))
             assert res.scalar() == test_uid
         await pg_engine.dispose()

@@ -132,10 +132,11 @@ async def set_tenant_context(session: AsyncSession, user_id: str) -> None:
     engine = get_engine()
     if not str(engine.url).startswith("sqlite"):
         try:
-            await session.execute(
-                text("SET LOCAL app.current_user_id = :uid"),
-                {"uid": str(user_id)}
-            )
+            async with session.begin_nested():
+                await session.execute(
+                    text("SELECT set_config('app.current_user_id', :uid, true)"),
+                    {"uid": str(user_id)}
+                )
         except Exception as e:
             logger.debug(f"Could not set tenant context in non-Postgres or unprivileged DB: {e}")
 
