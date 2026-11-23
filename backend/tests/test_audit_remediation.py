@@ -260,3 +260,13 @@ def test_device_auth_and_render_csrf(monkeypatch):
     # 5. Device logout clears the cookie
     r_logout = client.post("/api/auth/device/logout")
     assert r_logout.status_code == 200
+
+    # 6. Remote device login without API_AUTH_TOKEN configured raises 403
+    monkeypatch.setattr(auth_mod, "API_AUTH_TOKEN", "")
+    r_no_token = client.post(
+        "/api/auth/device/login",
+        json={"token": "some-token"},
+        headers={"X-Forwarded-For": "203.0.113.195"}
+    )
+    assert r_no_token.status_code == 403
+    assert "Remote access requires API_AUTH_TOKEN" in r_no_token.json()["detail"]

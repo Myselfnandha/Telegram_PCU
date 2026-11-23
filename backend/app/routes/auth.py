@@ -68,6 +68,12 @@ async def device_login(body: DeviceLoginRequest, request: Request, response: Res
 
     client_token = (body.token or "").strip()
     if not API_AUTH_TOKEN:
+        from app.auth import is_loopback_request
+        if not is_loopback_request(request):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Remote access requires API_AUTH_TOKEN to be configured in server environment variables."
+            )
         return {"success": True, "message": "No server authentication required.", "token": client_token}
 
     # Constant-time comparison defeats character-by-character timing leak attacks

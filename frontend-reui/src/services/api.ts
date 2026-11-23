@@ -104,7 +104,7 @@ class ApiService {
       },
     });
 
-    if (res.status === 401 && !endpoint.includes('/api/auth/device/')) {
+    if (res.status === 401 && !endpoint.includes('/api/auth/device/') && !endpoint.startsWith('/api/v3/')) {
       this.authErrorListeners.forEach((fn) => fn());
     }
 
